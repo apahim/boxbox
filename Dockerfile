@@ -23,7 +23,6 @@ WORKDIR /app
 
 COPY app/ app/
 COPY scripts/ scripts/
-COPY data/tracks.yaml data/tracks.yaml
 COPY migrations/ migrations/
 # Note: migrations/ must exist before building. Run `flask db init` locally first.
 

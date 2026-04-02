@@ -3,17 +3,16 @@
 import os
 
 import pytest
-import yaml
 
 from app import db
 from app.models import (
     User, Track, TrackCorner, Session, Team, TeamMember, ChartData,
 )
 from app.sessions.ingest import ingest_session
+from tests.app.conftest import seed_test_track
 
 
 RACE_DIR = os.path.join(os.path.dirname(__file__), '..', '..', 'data', 'races', '2026-03-08-Kiltorcan')
-TRACKS_FILE = os.path.join(os.path.dirname(__file__), '..', '..', 'data', 'tracks.yaml')
 
 
 def _has_test_data():
@@ -28,33 +27,7 @@ def setup_session(app):
         user.set_password('test123')
         db.session.add(user)
 
-        with open(TRACKS_FILE) as f:
-            tracks_data = yaml.safe_load(f)
-        td = tracks_data['kiltorcan_raceway']
-        track = Track(slug='kiltorcan_raceway', name=td['name'],
-                      lat=td['lat'], lon=td['lon'], timezone=td.get('timezone', 'UTC'))
-        db.session.add(track)
-        db.session.flush()
-
-        offset = 0.00005
-        for i, c in enumerate(td.get('corners', [])):
-            db.session.add(TrackCorner(
-                track_id=track.id, name=c['name'], sort_order=i,
-                trap_lat1=c['lat'] + offset, trap_lon1=c['lon'] - offset,
-                trap_lat2=c['lat'] - offset, trap_lon2=c['lon'] + offset,
-            ))
-        db.session.flush()
-
-        corners = TrackCorner.query.filter_by(track_id=track.id).order_by(TrackCorner.sort_order).all()
-        track_corners = [
-            {
-                'name': c.name, 'lat': c.lat, 'lon': c.lon,
-                'trap_lat1': c.trap_lat1, 'trap_lon1': c.trap_lon1,
-                'trap_lat2': c.trap_lat2, 'trap_lon2': c.trap_lon2,
-            }
-            for c in corners
-        ]
-        track_coords = (track.lat, track.lon, track.timezone)
+        track, track_coords, track_corners = seed_test_track()
 
         from datetime import date
         session = Session(user_id=user.id, track_id=track.id, date=date(2026, 3, 8),

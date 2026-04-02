@@ -119,7 +119,7 @@ class TestTrack:
 
     def test_seed_tracks_cli(self, app):
         runner = app.test_cli_runner()
-        result = runner.invoke(args=['seed-tracks', '--file', 'data/tracks.yaml'])
+        result = runner.invoke(args=['seed-tracks', '--file', 'tests/data/tracks.yaml'])
         assert 'Imported "Kiltorcan Raceway"' in result.output
         assert '6 corners' in result.output
 
@@ -131,7 +131,7 @@ class TestTrack:
 
     def test_seed_tracks_idempotent(self, app):
         runner = app.test_cli_runner()
-        runner.invoke(args=['seed-tracks', '--file', 'data/tracks.yaml'])
-        result = runner.invoke(args=['seed-tracks', '--file', 'data/tracks.yaml'])
+        runner.invoke(args=['seed-tracks', '--file', 'tests/data/tracks.yaml'])
+        result = runner.invoke(args=['seed-tracks', '--file', 'tests/data/tracks.yaml'])
         assert 'Skipping' in result.output
         assert Track.query.count() == 1

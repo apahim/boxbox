@@ -8,7 +8,6 @@ from summary_generated.yaml.
 import os
 
 import pytest
-import yaml
 
 from app import db
 from app.models import (
@@ -16,10 +15,10 @@ from app.models import (
     CornerRecord, CornerSummary, SectorTime, ChartData, SessionUpload,
 )
 from app.sessions.ingest import ingest_session
+from tests.app.conftest import seed_test_track
 
 
 RACE_DIR = os.path.join(os.path.dirname(__file__), '..', '..', 'data', 'races', '2026-03-08-Kiltorcan')
-TRACKS_FILE = os.path.join(os.path.dirname(__file__), '..', '..', 'data', 'tracks.yaml')
 
 
 def _has_test_data():
@@ -35,43 +34,7 @@ def ingested_session(app):
         user.set_password('test123')
         db.session.add(user)
 
-        # Load track from tracks.yaml
-        with open(TRACKS_FILE) as f:
-            tracks_data = yaml.safe_load(f)
-        track_data = tracks_data['kiltorcan_raceway']
-        track = Track(
-            slug='kiltorcan_raceway',
-            name=track_data['name'],
-            lat=track_data['lat'],
-            lon=track_data['lon'],
-            timezone=track_data.get('timezone', 'UTC'),
-        )
-        db.session.add(track)
-        db.session.flush()
-
-        # Add corners
-        offset = 0.00005
-        for i, c in enumerate(track_data.get('corners', [])):
-            corner = TrackCorner(
-                track_id=track.id,
-                name=c['name'],
-                sort_order=i,
-                trap_lat1=c['lat'] + offset, trap_lon1=c['lon'] - offset,
-                trap_lat2=c['lat'] - offset, trap_lon2=c['lon'] + offset,
-            )
-            db.session.add(corner)
-        db.session.flush()
-
-        corners = TrackCorner.query.filter_by(track_id=track.id).order_by(TrackCorner.sort_order).all()
-        track_corners = [
-            {
-                'name': c.name, 'lat': c.lat, 'lon': c.lon,
-                'trap_lat1': c.trap_lat1, 'trap_lon1': c.trap_lon1,
-                'trap_lat2': c.trap_lat2, 'trap_lon2': c.trap_lon2,
-            }
-            for c in corners
-        ]
-        track_coords = (track.lat, track.lon, track.timezone)
+        track, track_coords, track_corners = seed_test_track()
 
         # Create session
         from datetime import date

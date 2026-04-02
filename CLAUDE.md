@@ -34,7 +34,6 @@ venv/bin/podman-compose exec web python -m pytest tests/ -x -q # run tests in co
 - `scripts/analysis/` — shared analysis modules (from kart repo)
 - `scripts/load_data.py` — telemetry and metadata loading functions
 - `migrations/` — Flask-Migrate (Alembic) database migrations
-- `data/tracks.yaml` — track corner definitions and coordinates
 - `tests/app/` — app test suite
 
 ## Data Conventions

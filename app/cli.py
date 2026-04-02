@@ -31,11 +31,11 @@ def create_user(email, password, name):
 
 
 @click.command('seed-tracks')
-@click.option('--file', 'tracks_file', default='data/tracks.yaml',
+@click.option('--file', 'tracks_file', required=True,
               help='Path to tracks YAML file')
 @with_appcontext
 def seed_tracks(tracks_file):
-    """Import tracks from data/tracks.yaml into the database."""
+    """Import tracks from a YAML file into the database."""
     if not os.path.exists(tracks_file):
         click.echo(f'Error: {tracks_file} not found.')
         raise SystemExit(1)
