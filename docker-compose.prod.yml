@@ -1,0 +1,13 @@
+services:
+  db:
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}
+
+  web:
+    environment:
+      DATABASE_URL: ${DATABASE_URL:?Set DATABASE_URL}
+      SECRET_KEY: ${SECRET_KEY:?Set SECRET_KEY}
+      FLASK_ENV: production
+      MAPKIT_TOKEN: ${MAPKIT_TOKEN:-}
+    volumes: []
+    command: []

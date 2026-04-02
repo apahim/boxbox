@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+
+{% block title %}Tracks - Kart Telemetry{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2>Tracks</h2>
+    <a href="{{ url_for('tracks.create') }}" class="btn btn-primary">Add Track</a>
+</div>
+
+{% if tracks %}
+<div class="table-responsive">
+    <table class="table table-hover">
+        <thead>
+            <tr>
+                <th>Track Name</th>
+                <th>Corners</th>
+                <th>Timezone</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for item in tracks %}
+            <tr>
+                <td>{{ item.track.name }}</td>
+                <td>{{ item.corner_count }}</td>
+                <td>{{ item.track.timezone }}</td>
+                <td>
+                    <a href="{{ url_for('tracks.edit', slug=item.track.slug) }}" class="btn btn-sm btn-outline-primary">Edit Corners</a>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+<div class="alert alert-info">No tracks yet. Add one to get started.</div>
+{% endif %}
+{% endblock %}

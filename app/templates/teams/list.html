@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+
+{% block title %}Teams - Kart Telemetry{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2>My Teams</h2>
+    <a href="{{ url_for('teams.create') }}" class="btn btn-primary">Create Team</a>
+</div>
+
+{% if teams %}
+<div class="table-responsive">
+    <table class="table table-hover">
+        <thead>
+            <tr>
+                <th>Team Name</th>
+                <th>Your Role</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for team in teams %}
+            <tr>
+                <td>{{ team.name }}</td>
+                <td><span class="badge bg-{{ 'primary' if memberships[team.id] == 'owner' else 'secondary' }}">{{ memberships[team.id] }}</span></td>
+                <td>
+                    {% if memberships[team.id] == 'owner' %}
+                    <a href="{{ url_for('teams.manage', slug=team.slug) }}" class="btn btn-sm btn-outline-primary">Manage</a>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+<div class="alert alert-info">You are not a member of any teams yet.</div>
+{% endif %}
+{% endblock %}

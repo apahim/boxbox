@@ -1,0 +1,252 @@
+{% extends "base.html" %}
+
+{% block title %}Edit {{ track.name }} - Kart Telemetry{% endblock %}
+
+{% block extra_head %}
+{% if mapkit_token %}
+<script src="https://cdn.apple-mapkit.com/mk/5.x.x/mapkit.js" crossorigin></script>
+{% endif %}
+<style>
+    #map-container { width: 100%; height: 500px; position: relative; background: #e0e0e0; border-radius: 8px; overflow: hidden; }
+    #map-container .mk-map { width: 100%; height: 100%; }
+    #map-fallback { display: flex; align-items: center; justify-content: center; height: 100%; color: #666; }
+    .corner-row { display: flex; align-items: center; gap: 6px; margin-bottom: 8px; padding: 8px; background: #f8f9fa; border-radius: 4px; flex-wrap: wrap; }
+    .corner-row .badge { width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; font-size: 0.75rem; flex-shrink: 0; }
+    .corner-row input { flex: 1; min-width: 80px; }
+    .corner-coords { font-size: 0.75rem; color: #666; white-space: nowrap; }
+    .corner-row .btn { flex-shrink: 0; }
+</style>
+{% endblock %}
+
+{% block content %}
+<h2>{{ track.name }} — Corner Editor</h2>
+<p class="text-muted">Click the map to add a corner trap line. Drag the red endpoints to position the line across the track.</p>
+
+<div class="row mt-3">
+    <div class="col-lg-8">
+        <div id="map-container">
+            <div id="map-fallback">
+                <p>Map requires a MapKit token. Corners can still be managed via the list below.</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-4">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">Corners</h5>
+                <div id="corner-list"></div>
+                <button type="button" class="btn btn-sm btn-outline-secondary mt-2" onclick="addCornerManual()">Add Corner Manually</button>
+                <hr>
+                <form method="POST" id="save-form">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <input type="hidden" name="corners_json" id="corners-json" value="">
+                    <button type="submit" class="btn btn-primary w-100">Save Corners</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script src="{{ url_for('static', filename='js/mapkit-helpers.js') }}"></script>
+<script>
+(function() {
+    var corners = {{ corners_json | safe }};
+    var trackLat = {{ track.lat }};
+    var trackLon = {{ track.lon }};
+    var mapkitToken = "{{ mapkit_token }}";
+    var map = null;
+    var overlays = []; // per corner: {polyline, ann1, ann2, label}
+
+    function midpoint(c) {
+        return {
+            lat: (c.trap_lat1 + c.trap_lat2) / 2,
+            lon: (c.trap_lon1 + c.trap_lon2) / 2,
+        };
+    }
+
+    function renderCornerList() {
+        var list = document.getElementById('corner-list');
+        list.innerHTML = '';
+        corners.forEach(function(c, i) {
+            var mid = midpoint(c);
+            var row = document.createElement('div');
+            row.className = 'corner-row';
+            row.innerHTML =
+                '<span class="badge bg-primary rounded-circle">' + (i + 1) + '</span>' +
+                '<input type="text" class="form-control form-control-sm" value="' + (c.name || 'T' + (i+1)) + '" ' +
+                    'onchange="updateCornerName(' + i + ', this.value)">' +
+                '<span class="corner-coords">' + mid.lat.toFixed(5) + ', ' + mid.lon.toFixed(5) + '</span>' +
+                '<button type="button" class="btn btn-sm btn-outline-danger" onclick="removeCorner(' + i + ')">&times;</button>';
+            list.appendChild(row);
+        });
+        document.getElementById('corners-json').value = JSON.stringify(corners);
+    }
+
+    window.updateCornerName = function(i, name) {
+        corners[i].name = name;
+        document.getElementById('corners-json').value = JSON.stringify(corners);
+    };
+
+    window.removeCorner = function(i) {
+        corners.splice(i, 1);
+        renderCornerList();
+        if (map) updateMapOverlays();
+    };
+
+    window.addCornerManual = function() {
+        var offset = 0.00005;
+        corners.push({
+            name: 'T' + (corners.length + 1),
+            trap_lat1: trackLat + offset, trap_lon1: trackLon - offset,
+            trap_lat2: trackLat - offset, trap_lon2: trackLon + offset,
+        });
+        renderCornerList();
+        if (map) updateMapOverlays();
+    };
+
+    function clearOverlays() {
+        overlays.forEach(function(o) {
+            if (o.polyline) map.removeOverlay(o.polyline);
+            if (o.ann1) map.removeAnnotation(o.ann1);
+            if (o.ann2) map.removeAnnotation(o.ann2);
+            if (o.label) map.removeAnnotation(o.label);
+        });
+        overlays = [];
+    }
+
+    function updateMapOverlays() {
+        if (!map) return;
+        clearOverlays();
+
+        corners.forEach(function(c, i) {
+            var coord1 = new mapkit.Coordinate(c.trap_lat1, c.trap_lon1);
+            var coord2 = new mapkit.Coordinate(c.trap_lat2, c.trap_lon2);
+            var mid = midpoint(c);
+            var midCoord = new mapkit.Coordinate(mid.lat, mid.lon);
+
+            // Trap line
+            var polyline = new mapkit.PolylineOverlay([coord1, coord2], {
+                style: new mapkit.Style({
+                    lineWidth: 3,
+                    strokeColor: '#e74c3c',
+                    strokeOpacity: 0.9,
+                }),
+            });
+            map.addOverlay(polyline);
+
+            // Endpoint 1 (draggable)
+            var ann1 = new mapkit.MarkerAnnotation(coord1, {
+                color: '#e74c3c',
+                glyphText: '\u2022',
+                draggable: true,
+                displayPriority: mapkit.Annotation.DisplayPriority.Required,
+            });
+            ann1.addEventListener('drag-end', function(e) {
+                corners[i].trap_lat1 = e.target.coordinate.latitude;
+                corners[i].trap_lon1 = e.target.coordinate.longitude;
+                renderCornerList();
+                updateMapOverlays();
+            });
+
+            // Endpoint 2 (draggable)
+            var ann2 = new mapkit.MarkerAnnotation(coord2, {
+                color: '#e74c3c',
+                glyphText: '\u2022',
+                draggable: true,
+                displayPriority: mapkit.Annotation.DisplayPriority.Required,
+            });
+            ann2.addEventListener('drag-end', function(e) {
+                corners[i].trap_lat2 = e.target.coordinate.latitude;
+                corners[i].trap_lon2 = e.target.coordinate.longitude;
+                renderCornerList();
+                updateMapOverlays();
+            });
+
+            // Corner name label at midpoint (non-interactive text)
+            var labelText = c.name || 'T' + (i + 1);
+            var label = new mapkit.Annotation(midCoord, function(coordinate, options) {
+                var el = document.createElement('div');
+                el.textContent = labelText;
+                el.style.cssText = 'font-size:12px;font-weight:bold;color:#fff;background:#3498db;padding:1px 5px;border-radius:3px;white-space:nowrap;pointer-events:none;';
+                return el;
+            }, {
+                draggable: false,
+                enabled: false,
+                displayPriority: mapkit.Annotation.DisplayPriority.Required,
+            });
+
+            map.addAnnotation(ann1);
+            map.addAnnotation(ann2);
+            map.addAnnotation(label);
+
+            overlays.push({polyline: polyline, ann1: ann1, ann2: ann2, label: label});
+        });
+    }
+
+    function initMap() {
+        if (!mapkitToken) return;
+
+        var fallback = document.getElementById('map-fallback');
+        if (fallback) fallback.style.display = 'none';
+
+        var container = document.getElementById('map-container');
+        var mapDiv = document.createElement('div');
+        mapDiv.className = 'mk-map';
+        container.appendChild(mapDiv);
+
+        var center = new mapkit.Coordinate(trackLat, trackLon);
+        map = new mapkit.Map(mapDiv, {
+            center: center,
+            mapType: mapkit.Map.MapTypes.Satellite,
+            showsCompass: mapkit.FeatureVisibility.Hidden,
+            showsMapTypeControl: false,
+            showsZoomControl: true,
+            isRotationEnabled: false,
+        });
+
+        // Zoom to fit corners or default span
+        if (corners.length > 0) {
+            var lats = [];
+            corners.forEach(function(c) { lats.push(c.trap_lat1, c.trap_lat2); });
+            var lons = [];
+            corners.forEach(function(c) { lons.push(c.trap_lon1, c.trap_lon2); });
+            var pad = 0.001;
+            var region = new mapkit.BoundingRegion(
+                Math.max.apply(null, lats) + pad, Math.max.apply(null, lons) + pad,
+                Math.min.apply(null, lats) - pad, Math.min.apply(null, lons) - pad
+            );
+            map.region = region.toCoordinateRegion();
+        } else {
+            map.region = new mapkit.CoordinateRegion(center, new mapkit.CoordinateSpan(0.005, 0.005));
+        }
+
+        // Click to add corner trap line
+        map.addEventListener('single-tap', function(e) {
+            var point = new DOMPoint(e.pointOnPage.x, e.pointOnPage.y);
+            var coord = map.convertPointOnPageToCoordinate(point);
+            var offset = 0.00005; // ~5m
+            corners.push({
+                name: 'T' + (corners.length + 1),
+                trap_lat1: coord.latitude + offset,
+                trap_lon1: coord.longitude - offset,
+                trap_lat2: coord.latitude - offset,
+                trap_lon2: coord.longitude + offset,
+            });
+            renderCornerList();
+            updateMapOverlays();
+        });
+
+        updateMapOverlays();
+    }
+
+    renderCornerList();
+
+    if (mapkitToken) {
+        MapHelpers.initMapKit(mapkitToken);
+        MapHelpers.waitForMapKit(initMap);
+    }
+})();
+</script>
+{% endblock %}

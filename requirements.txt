@@ -1,0 +1,16 @@
+pandas
+plotly
+scipy
+jinja2
+pyyaml
+PyJWT[crypto]
+flask
+flask-login
+flask-sqlalchemy
+flask-migrate
+flask-wtf
+email-validator
+psycopg2-binary
+gunicorn
+bcrypt
+pytest

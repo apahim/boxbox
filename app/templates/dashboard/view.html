@@ -1,0 +1,166 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - {{ session.track.name if session.track else 'Session' }} {{ session.date }}{% endblock %}
+
+{% block extra_head %}
+<script src="https://cdn.plot.ly/plotly-3.4.0.min.js"></script>
+{% if config.MAPKIT_TOKEN %}
+<script src="https://cdn.apple-mapkit.com/mk/5.x.x/mapkit.js" crossorigin></script>
+{% endif %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/dashboard.css') }}">
+{% endblock %}
+
+{% block content %}
+<meta id="session-meta"
+      data-session-id="{{ session.id }}"
+      data-mapkit-token="{{ config.MAPKIT_TOKEN or '' }}"
+      data-api-base="{{ url_for('api.session_summary', session_id=session.id) | replace('/summary', '') }}">
+
+<div class="row mb-4">
+    <div class="col">
+        <h1 id="dashTitle">{{ session.track.name if session.track else 'Session' }} &mdash; {{ session.date }}</h1>
+        <p class="text-muted" id="dashSubtitle"></p>
+        <div class="d-flex gap-2 flex-wrap" id="dashBadges">
+            {% if session.kart_number %}
+            <span class="badge bg-primary metadata-badge">Kart #{{ session.kart_number }}</span>
+            {% endif %}
+            {% if session.driver_weight_kg %}
+            <span class="badge bg-secondary metadata-badge">{{ session.driver_weight_kg }} kg</span>
+            {% endif %}
+            {% if session.session_type %}
+            <span class="badge bg-warning text-dark metadata-badge">{{ session.session_type }}</span>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<ul class="nav nav-tabs mt-1" id="dashboardTabs" role="tablist">
+    <li class="nav-item" role="presentation">
+        <button class="nav-link active" id="overview-tab" data-bs-toggle="tab" data-bs-target="#tab-overview" type="button" role="tab">Session Overview</button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" id="deepdive-tab" data-bs-toggle="tab" data-bs-target="#tab-deepdive" type="button" role="tab">Lap Deep Dive</button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" id="raceline-tab" data-bs-toggle="tab" data-bs-target="#tab-raceline" type="button" role="tab">Racing Line</button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" id="corners-tab" data-bs-toggle="tab" data-bs-target="#tab-corners" type="button" role="tab">Corner Analysis</button>
+    </li>
+</ul>
+
+<div class="tab-content" id="dashboardTabContent">
+
+<!-- Overview Tab -->
+<div class="tab-pane fade show active" id="tab-overview" role="tabpanel">
+    <h3 class="section-title">Session Overview</h3>
+    <div class="row" id="statCards">
+        <div class="col-md-3 col-sm-6 col-6">
+            <div class="card text-center p-3">
+                <div class="stat-value" id="statBestLap">--</div>
+                <div class="stat-label" id="statBestLapLabel">Best Lap</div>
+            </div>
+        </div>
+        <div class="col-md-3 col-sm-6 col-6">
+            <div class="card text-center p-3">
+                <div class="stat-value" id="statAverage">--</div>
+                <div class="stat-label">Average</div>
+            </div>
+        </div>
+        <div class="col-md-3 col-sm-6 col-6">
+            <div class="card text-center p-3">
+                <div class="stat-value" id="statConsistency">--</div>
+                <div class="stat-label">Consistency</div>
+            </div>
+        </div>
+        <div class="col-md-3 col-sm-6 col-6">
+            <div class="card text-center p-3">
+                <div class="stat-value" id="statTotalLaps">--</div>
+                <div class="stat-label">Total Laps</div>
+            </div>
+        </div>
+    </div>
+    <div id="coachingPlan"></div>
+    <div class="row"><div class="col-12"><div class="card p-2"><div id="laptimeBarDiv" style="width:100%;height:350px;"></div></div></div></div>
+    <div class="row"><div class="col-12"><div class="card p-2"><div id="deltaTobestDiv" style="width:100%;height:350px;"></div></div></div></div>
+    <div class="row">
+        <div class="col-md-6"><div class="card p-2"><div id="ggDiagramDiv" style="width:100%;height:400px;"></div></div></div>
+        <div class="col-md-6"><div class="card p-2"><div id="brakeReleaseDiv" style="width:100%;height:400px;"></div></div></div>
+    </div>
+    <div id="excludedLapsAlert"></div>
+</div>
+
+<!-- Deep Dive Tab -->
+<div class="tab-pane fade" id="tab-deepdive" role="tabpanel">
+    <h3 class="section-title">Lap Deep Dive</h3>
+    <p class="section-desc">Track maps show speed and braking zones. The delta trace shows time gained/lost vs the median. The phases chart shows throttle/brake inputs.</p>
+    <div class="d-flex align-items-center gap-2 mb-3">
+        <label for="lapDeepDiveSelect" class="form-label mb-0 fw-bold" style="white-space: nowrap;">Select Lap:</label>
+        <select id="lapDeepDiveSelect" class="form-select" style="width: auto;"></select>
+    </div>
+    <div class="row">
+        <div class="col-md-4"><div class="card p-2"><div class="mapkit-wrap" id="speedMapWrap"><div class="mk-map" id="speedMap"></div><canvas id="speedCanvas"></canvas></div></div></div>
+        <div class="col-md-4"><div class="card p-2"><div class="mapkit-wrap" id="brakingMapWrap"><div class="mk-map" id="brakingMap"></div><canvas id="brakingCanvas"></canvas></div></div></div>
+        <div class="col-md-4"><div class="card p-2"><div class="mapkit-wrap" id="sectorMapWrap"><div class="mk-map" id="sectorMap"></div><canvas id="sectorCanvas"></canvas></div></div></div>
+    </div>
+    <div class="row" id="lateralGRow" style="display:none;">
+        <div class="col-md-6 offset-md-3"><div class="card p-2"><div class="mapkit-wrap" id="lateralGMapWrap" style="height:500px;"><div class="mk-map" id="lateralGMap"></div><canvas id="lateralGCanvas"></canvas></div></div></div>
+    </div>
+    <div class="row"><div class="col-12"><div class="card p-2"><div id="cumulativeDeltaDiv" style="width:100%;height:350px;"></div></div></div></div>
+    <div class="row"><div class="col-12"><div class="card p-2"><div id="throttleBrakeDiv" style="width:100%;height:400px;"></div></div></div></div>
+</div>
+
+<!-- Racing Line Tab -->
+<div class="tab-pane fade" id="tab-raceline" role="tabpanel">
+    <h3 class="section-title">Racing Line Comparison</h3>
+    <p class="section-desc">A/B comparison of two racing lines. Lap A (green) is from this session, Lap B (blue) can be from any session.</p>
+    <div class="card p-3 mb-2">
+        <div class="d-flex flex-wrap align-items-end gap-2 gap-md-3">
+            <div style="min-width: 0; flex: 1 1 140px; max-width: 220px;">
+                <label for="rlSelectA" class="form-label fw-semibold mb-1" style="font-size: 0.85rem; color: #22c55e;">Lap A</label>
+                <select id="rlSelectA" class="form-select form-select-sm" style="border-left: 3px solid #22c55e;"></select>
+            </div>
+            <div style="min-width: 0; flex: 2 1 280px;">
+                <label class="form-label fw-semibold mb-1" style="font-size: 0.85rem; color: #3b82f6;">Lap B</label>
+                <div class="d-flex flex-column flex-sm-row gap-1">
+                    <select id="rlSelectBSession" class="form-select form-select-sm" style="border-left: 3px solid #3b82f6;">
+                        <option value="">&mdash; Session &mdash;</option>
+                    </select>
+                    <select id="rlSelectB" class="form-select form-select-sm" style="border-left: 3px solid #3b82f6;" disabled>
+                        <option value="">&mdash; Lap &mdash;</option>
+                    </select>
+                </div>
+            </div>
+            <div id="rlDeltaDisplay" class="d-flex align-items-end" style="font-size: 0.85rem; font-variant-numeric: tabular-nums; padding-bottom: 4px;"></div>
+        </div>
+    </div>
+    <div class="row"><div class="col-12"><div class="card p-2">
+        <div class="mapkit-wrap" id="racelineWrap" style="height: 600px;"><div class="mk-map" id="racelineMap"></div><canvas id="racelineCanvas"></canvas></div>
+        <div id="racelinePlayback" class="d-flex align-items-center gap-2 mt-2 px-2" style="font-size: 0.85rem;">
+            <button id="rlPlayBtn" class="btn btn-sm btn-outline-primary" title="Play/Pause" style="min-width: 36px;">&#9654;</button>
+            <input id="rlTimeline" type="range" class="form-range flex-grow-1" min="0" max="100" step="0.1" value="0" style="height: 20px;">
+            <span id="rlTimeDisplay" style="min-width: 55px; text-align: right; font-variant-numeric: tabular-nums;">0.0s</span>
+            <select id="rlSpeedSelect" class="form-select form-select-sm" style="width: auto;">
+                <option value="1">1x</option><option value="2" selected>2x</option><option value="5">5x</option><option value="10">10x</option>
+            </select>
+        </div>
+        <div id="racelineLegend" class="d-flex flex-wrap gap-2 mt-2 px-2" style="font-size: 0.8rem;"></div>
+    </div></div></div>
+</div>
+
+<!-- Corner Analysis Tab -->
+<div class="tab-pane fade" id="tab-corners" role="tabpanel">
+    <h3 class="section-title">Corner Analysis</h3>
+    <p class="section-desc">Each corner as a performance unit — ranked by time loss with root cause classification and corner archetypes.</p>
+    <div id="cornerMapContainer"></div>
+    <div id="cornerTableContainer"></div>
+    <div class="row mt-3"><div class="col-12"><div class="card p-2"><div id="brakingConsistencyDiv" style="width:100%;height:400px;"></div></div></div></div>
+    <div id="sectorTableContainer"></div>
+</div>
+
+</div><!-- /tab-content -->
+
+<script src="{{ url_for('static', filename='js/mapkit-helpers.js') }}"></script>
+<script src="{{ url_for('static', filename='js/raceline.js') }}"></script>
+<script src="{{ url_for('static', filename='js/dashboard.js') }}"></script>
+{% endblock %}

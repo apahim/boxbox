@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+
+{% block title %}Sessions - Kart Telemetry{% endblock %}
+
+{% block extra_head %}
+<style>
+    @keyframes rowFadeOut {
+        from { opacity: 1; transform: translateX(0); }
+        to   { opacity: 0; transform: translateX(40px); }
+    }
+    tr.deleting { animation: rowFadeOut 0.4s ease forwards; pointer-events: none; }
+    .spinner-border-sm { width: 1rem; height: 1rem; border-width: 0.15em; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2>Sessions</h2>
+    <a href="{{ url_for('sessions.create') }}" class="btn btn-primary">Upload Session</a>
+</div>
+
+{% if sessions %}
+<div class="table-responsive">
+    <table class="table table-hover">
+        <thead>
+            <tr>
+                <th>Date</th>
+                <th>Track</th>
+                <th>Best Lap</th>
+                <th>Clean Laps</th>
+                <th>Consistency</th>
+                <th>Type</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for s in sessions %}
+            <tr>
+                <td>{{ s.date }}</td>
+                <td>{{ s.track.name if s.track else '—' }}</td>
+                <td>{{ "%.3f"|format(s.best_lap_time) if s.best_lap_time else '—' }}s</td>
+                <td>{{ s.clean_laps or '—' }} / {{ s.total_laps or '—' }}</td>
+                <td>{{ "%.1f"|format(s.consistency_pct) if s.consistency_pct else '—' }}%</td>
+                <td><span class="badge bg-secondary">{{ s.session_type or '—' }}</span></td>
+                <td class="text-nowrap">
+                    <a href="{{ url_for('dashboard.view', session_id=s.id) }}" class="btn btn-sm btn-outline-primary">Dashboard</a>
+                    {% if s.user_id == current_user.id %}
+                    <a href="{{ url_for('sessions.edit', session_id=s.id) }}" class="btn btn-sm btn-outline-secondary">Edit</a>
+                    <form method="POST" action="{{ url_for('sessions.delete', session_id=s.id) }}" class="d-inline"
+                          onsubmit="return handleDelete(this)">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <button type="submit" class="btn btn-sm btn-outline-danger">Delete</button>
+                    </form>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+<div class="alert alert-info">No sessions yet. Upload a RaceChrono CSV to get started.</div>
+{% endif %}
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+function handleDelete(form) {
+    if (!confirm('Delete this session? This cannot be undone.')) return false;
+    var btn = form.querySelector('button');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
+    var row = form.closest('tr');
+    row.classList.add('deleting');
+    setTimeout(function() { form.submit(); }, 400);
+    return false;
+}
+</script>
+{% endblock %}

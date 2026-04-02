@@ -1,0 +1,13 @@
+venv/
+__pycache__/
+*.pyc
+.DS_Store
+*.egg-info/
+.idea/
+.vscode/
+config/apple_mapkit.yaml
+config/*.p8
+*.db
+instance/
+.env
+.pytest_cache/

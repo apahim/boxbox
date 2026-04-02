@@ -1,0 +1,57 @@
+.stat-value { font-size: 2rem; font-weight: bold; color: #2c3e50; }
+.stat-label { font-size: 0.85rem; color: #7f8c8d; text-transform: uppercase; }
+.section-title { border-left: 4px solid #3498db; padding-left: 12px; margin: 2rem 0 1rem; }
+.metadata-badge { font-size: 0.9rem; }
+.section-desc { color: #6c757d; margin-bottom: 1rem; }
+
+.sector-best { background-color: rgba(46,204,113,0.3) !important; --bs-table-bg-state: rgba(46,204,113,0.3); }
+.sector-slow { background-color: rgba(231,76,60,0.2) !important; --bs-table-bg-state: rgba(231,76,60,0.2); }
+
+.action-plan .action-item { padding: 0.75rem 1rem; border-bottom: 1px solid #e9ecef; }
+.action-plan .action-item:last-child { border-bottom: none; }
+.action-icon { width: 28px; height: 28px; display: inline-flex; align-items: center; justify-content: center; border-radius: 50%; margin-right: 0.75rem; font-size: 0.85rem; flex-shrink: 0; }
+.action-icon.target { background-color: #e74c3c; color: white; }
+.action-icon.consistency { background-color: #f39c12; color: white; }
+.action-icon.trending-up { background-color: #2ecc71; color: white; }
+.action-icon.trending-down { background-color: #e67e22; color: white; }
+.action-icon.zap { background-color: #9b59b6; color: white; }
+.action-icon.brake { background-color: #e74c3c; color: white; }
+.action-icon.check { background-color: #2ecc71; color: white; }
+
+/* MapKit JS map containers */
+.mapkit-wrap { position: relative; height: 600px; border-radius: 4px; overflow: hidden; }
+.mapkit-wrap .mk-map { width: 100%; height: 100%; }
+.mapkit-wrap canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 1; }
+.mapkit-wrap .corner-label { position: absolute; background: rgba(0,0,0,0.7); color: white; padding: 1px 5px; border-radius: 3px; font-size: 11px; font-weight: bold; border: 1px solid white; white-space: nowrap; z-index: 5; pointer-events: none; transform: translate(-50%, -100%); }
+.mapkit-wrap .map-tooltip { position: absolute; display: none; background: rgba(0,0,0,0.8); color: white; padding: 3px 8px; border-radius: 4px; font-size: 0.75rem; pointer-events: none; z-index: 20; white-space: nowrap; }
+.map-title { position: absolute; top: 8px; left: 8px; background: rgba(0,0,0,0.6); color: white; padding: 2px 8px; border-radius: 4px; font-size: 0.8rem; font-weight: bold; z-index: 10; }
+.map-colorbar { position: absolute; right: 12px; top: 50%; transform: translateY(-50%); width: 18px; height: 180px; border-radius: 3px; border: 1px solid rgba(255,255,255,0.6); z-index: 10; }
+.map-colorbar .cb-label { position: absolute; right: 24px; color: white; font-size: 0.7rem; text-shadow: 0 0 3px black; white-space: nowrap; }
+.map-colorbar .cb-label.top { top: -2px; }
+.map-colorbar .cb-label.mid { top: 50%; transform: translateY(-50%); }
+.map-colorbar .cb-label.bottom { bottom: -2px; }
+.map-colorbar .cb-title { position: absolute; right: 24px; top: -18px; color: white; font-size: 0.7rem; font-weight: bold; text-shadow: 0 0 3px black; white-space: nowrap; }
+.map-wind { position: absolute; bottom: 8px; left: 8px; background: rgba(255,255,255,0.85); border: 1px solid #999; border-radius: 4px; padding: 4px 6px; font-size: 0.7rem; z-index: 10; text-align: center; line-height: 1.2; }
+.map-wind .arrow { font-size: 1.1rem; display: block; }
+
+@media (max-width: 576px) {
+    h1 { font-size: 1.4rem; }
+    .stat-value { font-size: 1.3rem; }
+    .stat-label { font-size: 0.7rem; }
+    .section-title { font-size: 1.1rem; margin: 1.5rem 0 0.75rem; }
+    .section-desc { font-size: 0.8rem; }
+    .card { margin-bottom: 1rem; }
+    .card.text-center.p-3 { padding: 0.75rem !important; }
+    .card.p-2 { padding: 0.25rem !important; }
+    .metadata-badge { font-size: 0.75rem; }
+    .action-plan .action-item { padding: 0.5rem 0.75rem; font-size: 0.85rem; }
+    .action-icon { width: 24px; height: 24px; font-size: 0.75rem; margin-right: 0.5rem; }
+    .mapkit-wrap { height: 400px; }
+    #racelineWrap { height: 400px; }
+    .rl-selector { max-height: none !important; overflow-y: visible !important; }
+    .accordion-button { font-size: 0.8rem !important; padding: 0.4rem 0.5rem !important; }
+    .form-check { margin-bottom: 0.1rem; }
+    .js-plotly-plot { min-height: 0 !important; }
+    #dashboardTabs { flex-wrap: nowrap; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+    #dashboardTabs .nav-link { white-space: nowrap; font-size: 0.85rem; padding: 0.4rem 0.75rem; }
+}
