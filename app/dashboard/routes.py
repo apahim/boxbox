@@ -1,4 +1,4 @@
-from flask import render_template, abort
+from flask import render_template, abort, flash, current_app
 from flask_login import login_required, current_user
 from sqlalchemy import or_
 
@@ -24,10 +24,20 @@ def view(session_id):
         if not is_member:
             abort(403)
 
-    return render_template('dashboard/view.html', session=session)
+    if session.needs_reingest:
+        from app.sessions.reingest import reingest_session
+        success = reingest_session(session)
+        if success:
+            flash('Session data has been refreshed with updated track corners.', 'info')
+        else:
+            flash('Could not refresh session data (original telemetry file not available).', 'warning')
+
+    mapkit_token = current_app.config.get('MAPKIT_TOKEN', '')
+    return render_template('dashboard/view.html', session=session, mapkit_token=mapkit_token)
 
 
 @bp.route('/evolution')
 @login_required
 def evolution():
-    return render_template('dashboard/evolution.html')
+    mapkit_token = current_app.config.get('MAPKIT_TOKEN', '')
+    return render_template('dashboard/evolution.html', mapkit_token=mapkit_token)

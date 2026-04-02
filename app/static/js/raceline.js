@@ -67,15 +67,38 @@ window.Raceline = (function() {
         }
     }
 
+    function setMapInteraction(enabled) {
+        if (!rlMap) return;
+        rlMap.isScrollEnabled = enabled;
+        rlMap.isZoomEnabled = enabled;
+        rlMap.isRotationEnabled = enabled;
+    }
+
+    function panToMarkers() {
+        if (!rlMap || markerMeta.length === 0) return;
+        var sumLat = 0, sumLon = 0, n = 0;
+        for (var i = 0; i < markerMeta.length; i++) {
+            var pos = interpPos(markerMeta[i].lap, animTime);
+            if (!pos) continue;
+            sumLat += pos.lat;
+            sumLon += pos.lon;
+            n++;
+        }
+        if (n === 0) return;
+        rlMap.setCenterAnimated(new mapkit.Coordinate(sumLat / n, sumLon / n), false);
+    }
+
     function stopAnim() {
         animPlaying = false;
         var btn = document.getElementById("rlPlayBtn");
         if (btn) btn.innerHTML = "&#9654;";
         if (animRAF) cancelAnimationFrame(animRAF);
         animRAF = null;
+        setMapInteraction(true);
     }
 
     function updateMarkers() {
+        if (animPlaying) panToMarkers();
         drawMarkers();
         var slider = document.getElementById("rlTimeline");
         var display = document.getElementById("rlTimeDisplay");
@@ -96,6 +119,7 @@ window.Raceline = (function() {
 
     function startAnim() {
         if (markerMeta.length === 0) return;
+        setMapInteraction(false);
         animPlaying = true; animLastTS = null;
         var btn = document.getElementById("rlPlayBtn");
         if (btn) btn.innerHTML = "&#9646;&#9646;";
@@ -115,7 +139,20 @@ window.Raceline = (function() {
         var allLat = [].concat(lapA.lat), allLon = [].concat(lapA.lon);
         if (lapB) { allLat = allLat.concat(lapB.lat); allLon = allLon.concat(lapB.lon); }
 
-        if (!rlMap) rlMap = MapHelpers.initSatMap("racelineMap", allLat, allLon);
+        if (!rlMap) {
+            rlMap = MapHelpers.initSatMap("racelineMap", allLat, allLon);
+            rlMap.isScrollEnabled = true;
+            rlMap.isZoomEnabled = true;
+            rlMap.isRotationEnabled = true;
+            rlMap.showsZoomControl = true;
+            rlMap.addEventListener("region-change-start", function() {
+                if (!animPlaying) document.getElementById("racelineCanvas").style.visibility = "hidden";
+            });
+            rlMap.addEventListener("region-change-end", function() {
+                document.getElementById("racelineCanvas").style.visibility = "visible";
+                drawMarkers();
+            });
+        }
 
         addPolyline(lapA, rlColorA, 1.0);
         if (lapB) addPolyline(lapB, rlColorB, 0.6);

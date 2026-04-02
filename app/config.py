@@ -14,3 +14,4 @@ class TestingConfig(Config):
     SQLALCHEMY_DATABASE_URI = 'sqlite:///:memory:'
     WTF_CSRF_ENABLED = False
     SECRET_KEY = 'test-secret'
+    MAPKIT_TOKEN = 'test-token'  # skip validation in tests

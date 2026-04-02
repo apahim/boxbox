@@ -115,18 +115,20 @@ window.MapHelpers = (function() {
             titleEl.textContent = d.title;
             overlayContainer.appendChild(titleEl);
             var cb = d.colorbar;
-            var stops = SCALES[d.colorscale] || SCALES.RdYlGn;
-            var gradStops = stops.map(function(s) { return s[1] + " " + (s[0]*100) + "%"; }).reverse();
-            var bar = document.createElement("div");
-            bar.className = "map-colorbar";
-            bar.style.background = "linear-gradient(to bottom," + gradStops.join(",") + ")";
-            bar.innerHTML = '<div class="cb-title">' + cb.title + '</div>'
-                + '<div class="cb-label top">' + cb.max + '</div>'
-                + '<div class="cb-label bottom">' + cb.min + '</div>';
-            if (d.cmid !== null && d.cmid !== undefined) {
-                bar.innerHTML += '<div class="cb-label mid">' + d.cmid + '</div>';
+            if (d.show_colorbar !== false) {
+                var stops = SCALES[d.colorscale] || SCALES.RdYlGn;
+                var gradStops = stops.map(function(s) { return s[1] + " " + (s[0]*100) + "%"; });
+                var bar = document.createElement("div");
+                bar.className = "map-colorbar";
+                bar.style.background = "linear-gradient(to top," + gradStops.join(",") + ")";
+                bar.innerHTML = '<div class="cb-title">' + cb.title + '</div>'
+                    + '<div class="cb-label top">' + cb.max + '</div>'
+                    + '<div class="cb-label bottom">' + cb.min + '</div>';
+                if (d.cmid !== null && d.cmid !== undefined) {
+                    bar.innerHTML += '<div class="cb-label mid">' + d.cmid + '</div>';
+                }
+                overlayContainer.appendChild(bar);
             }
-            overlayContainer.appendChild(bar);
             var labels = [];
             if (d.corners) {
                 d.corners.forEach(function(c) {

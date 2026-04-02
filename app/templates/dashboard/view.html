@@ -4,7 +4,7 @@
 
 {% block extra_head %}
 <script src="https://cdn.plot.ly/plotly-3.4.0.min.js"></script>
-{% if config.MAPKIT_TOKEN %}
+{% if mapkit_token %}
 <script src="https://cdn.apple-mapkit.com/mk/5.x.x/mapkit.js" crossorigin></script>
 {% endif %}
 <link rel="stylesheet" href="{{ url_for('static', filename='css/dashboard.css') }}">
@@ -13,7 +13,7 @@
 {% block content %}
 <meta id="session-meta"
       data-session-id="{{ session.id }}"
-      data-mapkit-token="{{ config.MAPKIT_TOKEN or '' }}"
+      data-mapkit-token="{{ mapkit_token }}"
       data-api-base="{{ url_for('api.session_summary', session_id=session.id) | replace('/summary', '') }}">
 
 <div class="row mb-4">
@@ -54,40 +54,37 @@
 <!-- Overview Tab -->
 <div class="tab-pane fade show active" id="tab-overview" role="tabpanel">
     <h3 class="section-title">Session Overview</h3>
-    <div class="row" id="statCards">
-        <div class="col-md-3 col-sm-6 col-6">
-            <div class="card text-center p-3">
+    <div class="row mb-3" id="statCards">
+        <div class="col-md-3 col-sm-6 col-6 mb-3">
+            <div class="card text-center p-3 h-100">
                 <div class="stat-value" id="statBestLap">--</div>
                 <div class="stat-label" id="statBestLapLabel">Best Lap</div>
             </div>
         </div>
-        <div class="col-md-3 col-sm-6 col-6">
-            <div class="card text-center p-3">
+        <div class="col-md-3 col-sm-6 col-6 mb-3">
+            <div class="card text-center p-3 h-100">
                 <div class="stat-value" id="statAverage">--</div>
                 <div class="stat-label">Average</div>
             </div>
         </div>
-        <div class="col-md-3 col-sm-6 col-6">
-            <div class="card text-center p-3">
+        <div class="col-md-3 col-sm-6 col-6 mb-3">
+            <div class="card text-center p-3 h-100">
                 <div class="stat-value" id="statConsistency">--</div>
                 <div class="stat-label">Consistency</div>
             </div>
         </div>
-        <div class="col-md-3 col-sm-6 col-6">
-            <div class="card text-center p-3">
+        <div class="col-md-3 col-sm-6 col-6 mb-3">
+            <div class="card text-center p-3 h-100">
                 <div class="stat-value" id="statTotalLaps">--</div>
                 <div class="stat-label">Total Laps</div>
             </div>
         </div>
     </div>
-    <div id="coachingPlan"></div>
-    <div class="row"><div class="col-12"><div class="card p-2"><div id="laptimeBarDiv" style="width:100%;height:350px;"></div></div></div></div>
-    <div class="row"><div class="col-12"><div class="card p-2"><div id="deltaTobestDiv" style="width:100%;height:350px;"></div></div></div></div>
-    <div class="row">
-        <div class="col-md-6"><div class="card p-2"><div id="ggDiagramDiv" style="width:100%;height:400px;"></div></div></div>
-        <div class="col-md-6"><div class="card p-2"><div id="brakeReleaseDiv" style="width:100%;height:400px;"></div></div></div>
-    </div>
     <div id="excludedLapsAlert"></div>
+    <div id="coachingPlan"></div>
+    <div class="row mb-3"><div class="col-12"><div class="card p-2"><div id="laptimeBarDiv" style="width:100%;height:350px;"></div></div></div></div>
+    <div class="row mb-3"><div class="col-12"><div class="card p-2"><div id="deltaTobestDiv" style="width:100%;height:350px;"></div></div></div></div>
+    <div id="sectorTableContainer"></div>
 </div>
 
 <!-- Deep Dive Tab -->
@@ -98,16 +95,13 @@
         <label for="lapDeepDiveSelect" class="form-label mb-0 fw-bold" style="white-space: nowrap;">Select Lap:</label>
         <select id="lapDeepDiveSelect" class="form-select" style="width: auto;"></select>
     </div>
-    <div class="row">
+    <div class="row mb-3">
         <div class="col-md-4"><div class="card p-2"><div class="mapkit-wrap" id="speedMapWrap"><div class="mk-map" id="speedMap"></div><canvas id="speedCanvas"></canvas></div></div></div>
         <div class="col-md-4"><div class="card p-2"><div class="mapkit-wrap" id="brakingMapWrap"><div class="mk-map" id="brakingMap"></div><canvas id="brakingCanvas"></canvas></div></div></div>
         <div class="col-md-4"><div class="card p-2"><div class="mapkit-wrap" id="sectorMapWrap"><div class="mk-map" id="sectorMap"></div><canvas id="sectorCanvas"></canvas></div></div></div>
     </div>
-    <div class="row" id="lateralGRow" style="display:none;">
-        <div class="col-md-6 offset-md-3"><div class="card p-2"><div class="mapkit-wrap" id="lateralGMapWrap" style="height:500px;"><div class="mk-map" id="lateralGMap"></div><canvas id="lateralGCanvas"></canvas></div></div></div>
-    </div>
-    <div class="row"><div class="col-12"><div class="card p-2"><div id="cumulativeDeltaDiv" style="width:100%;height:350px;"></div></div></div></div>
-    <div class="row"><div class="col-12"><div class="card p-2"><div id="throttleBrakeDiv" style="width:100%;height:400px;"></div></div></div></div>
+    <div class="row mb-3"><div class="col-12"><div class="card p-2"><div id="cumulativeDeltaDiv" style="width:100%;height:350px;"></div></div></div></div>
+    <div class="row mb-3"><div class="col-12"><div class="card p-2"><div id="throttleBrakeDiv" style="width:100%;height:400px;"></div></div></div></div>
 </div>
 
 <!-- Racing Line Tab -->
@@ -155,12 +149,15 @@
     <div id="cornerMapContainer"></div>
     <div id="cornerTableContainer"></div>
     <div class="row mt-3"><div class="col-12"><div class="card p-2"><div id="brakingConsistencyDiv" style="width:100%;height:400px;"></div></div></div></div>
-    <div id="sectorTableContainer"></div>
+
 </div>
 
 </div><!-- /tab-content -->
 
+{% endblock %}
+
+{% block extra_scripts %}
 <script src="{{ url_for('static', filename='js/mapkit-helpers.js') }}"></script>
 <script src="{{ url_for('static', filename='js/raceline.js') }}"></script>
-<script src="{{ url_for('static', filename='js/dashboard.js') }}"></script>
+<script src="{{ url_for('static', filename='js/dashboard.js') }}?v=3"></script>
 {% endblock %}

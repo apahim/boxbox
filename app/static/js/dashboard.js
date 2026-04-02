@@ -29,7 +29,7 @@
 
     // ---- Tab lazy loading ----
     var tabsLoaded = { overview: false, deepdive: false, raceline: false, corners: false };
-    var speedMapRef = null, brakingMapRef = null, sectorMapRef = null, lateralGMapRef = null;
+    var speedMapRef = null, brakingMapRef = null, sectorMapRef = null;
     var lapList = [];
 
     // Load overview immediately
@@ -118,11 +118,39 @@
         api("/charts/delta_to_best").then(function(data) {
             if (data) Plotly.react("deltaTobestDiv", data.data, data.layout, {responsive: true});
         });
-        api("/charts/gg_diagram").then(function(data) {
-            if (data) Plotly.react("ggDiagramDiv", data.data, data.layout, {responsive: true});
-        });
-        api("/charts/brake_release").then(function(data) {
-            if (data) Plotly.react("brakeReleaseDiv", data.data, data.layout, {responsive: true});
+
+        // Sector table
+        api("/sectors").then(function(data) {
+            if (!data || !data.rows) return;
+            var container = document.getElementById("sectorTableContainer");
+            var headers = data.headers || [];
+            var sectorNames = headers;
+
+            var html = '<div class="row mt-3"><div class="col-12"><div class="card p-2">';
+            html += '<h6 class="card-title text-center mb-2">Sector Times</h6>';
+            html += '<div class="table-responsive"><table class="table table-sm table-hover text-center mb-0" style="font-size:0.85rem;">';
+            html += '<thead class="table-primary"><tr><th>Lap</th>';
+            sectorNames.forEach(function(h) { html += '<th>' + h + '</th>'; });
+            html += '<th>Total</th><th>Delta</th></tr></thead><tbody>';
+
+            if (data.rows) {
+                data.rows.forEach(function(row) {
+                    html += '<tr' + (row.is_best ? ' class="fw-bold"' : '') + '><td>L' + row.lap + '</td>';
+                    row.sectors.forEach(function(s) {
+                        html += '<td class="' + (s.css_class || '') + '">' + s.value + '</td>';
+                    });
+                    html += '<td>' + row.total + '</td><td>' + row.delta + '</td></tr>';
+                });
+            }
+
+            if (data.theoretical_row) {
+                html += '<tr class="table-success fw-bold"><td>Ideal</td>';
+                data.theoretical_row.sectors.forEach(function(s) { html += '<td>' + s.value + '</td>'; });
+                html += '<td>' + data.theoretical_row.total + '</td><td>-</td></tr>';
+            }
+
+            html += '</tbody></table></div></div></div></div>';
+            container.innerHTML = html;
         });
     }
 
@@ -150,31 +178,23 @@
 
     function loadLapData(lap) {
         // Maps (if MapKit available)
-        if (mapkitToken && typeof mapkit !== "undefined") {
-            api("/charts/speed_map/" + lap).then(function(data) {
-                if (!data) return;
-                if (speedMapRef) speedMapRef.update(data);
-                else speedMapRef = MapHelpers.setupTrackMap("speedMap", "speedCanvas", "speedMapWrap", data);
-            });
-            api("/charts/braking_map/" + lap).then(function(data) {
-                if (!data) return;
-                if (brakingMapRef) brakingMapRef.update(data);
-                else brakingMapRef = MapHelpers.setupTrackMap("brakingMap", "brakingCanvas", "brakingMapWrap", data);
-            });
-            api("/charts/sector_map/" + lap).then(function(data) {
-                if (!data) return;
-                if (sectorMapRef) sectorMapRef.update(data);
-                else sectorMapRef = MapHelpers.setupTrackMap("sectorMap", "sectorCanvas", "sectorMapWrap", data);
-            });
-            api("/charts/lateral_g_map/" + lap).then(function(data) {
-                var row = document.getElementById("lateralGRow");
-                if (data) {
-                    row.style.display = "";
-                    if (lateralGMapRef) lateralGMapRef.update(data);
-                    else lateralGMapRef = MapHelpers.setupTrackMap("lateralGMap", "lateralGCanvas", "lateralGMapWrap", data);
-                } else {
-                    row.style.display = "none";
-                }
+        if (mapkitToken) {
+            MapHelpers.waitForMapKit(function() {
+                api("/charts/speed_map/" + lap).then(function(data) {
+                    if (!data) return;
+                    if (speedMapRef) speedMapRef.update(data);
+                    else speedMapRef = MapHelpers.setupTrackMap("speedMap", "speedCanvas", "speedMapWrap", data);
+                });
+                api("/charts/braking_map/" + lap).then(function(data) {
+                    if (!data) return;
+                    if (brakingMapRef) brakingMapRef.update(data);
+                    else brakingMapRef = MapHelpers.setupTrackMap("brakingMap", "brakingCanvas", "brakingMapWrap", data);
+                });
+                api("/charts/sector_map/" + lap).then(function(data) {
+                    if (!data) return;
+                    if (sectorMapRef) sectorMapRef.update(data);
+                    else sectorMapRef = MapHelpers.setupTrackMap("sectorMap", "sectorCanvas", "sectorMapWrap", data);
+                });
             });
         }
 
@@ -291,65 +311,6 @@
             if (data) Plotly.react("brakingConsistencyDiv", data.data, data.layout, {responsive: true});
         });
 
-        // Sector table
-        api("/sectors").then(function(data) {
-            if (!data || !data.sector_times) return;
-            var container = document.getElementById("sectorTableContainer");
-            var headers = data.headers || [];
-            var sectorNames = headers.slice(1);
-
-            // Build sector table similar to static template
-            var html = '<div class="row mt-3"><div class="col-12"><div class="card p-2">';
-            html += '<h6 class="card-title text-center mb-2">Sector Times</h6>';
-            html += '<div class="table-responsive"><table class="table table-sm table-hover text-center mb-0" style="font-size:0.85rem;">';
-            html += '<thead class="table-primary"><tr><th>Lap</th>';
-            sectorNames.forEach(function(h) { html += '<th>' + h + '</th>'; });
-            html += '<th>Total</th><th>Delta</th></tr></thead><tbody>';
-
-            // Find best times per sector and best total
-            var bestSector = [];
-            var bestTotal = Infinity;
-            var lapTotals = {};
-            sectorNames.forEach(function() { bestSector.push(Infinity); });
-
-            for (var lap in data.sector_times) {
-                var times = data.sector_times[lap];
-                var total = 0;
-                times.forEach(function(t, i) {
-                    if (t < bestSector[i]) bestSector[i] = t;
-                    total += t;
-                });
-                lapTotals[lap] = total;
-                if (total < bestTotal) bestTotal = total;
-            }
-
-            // Sort laps numerically
-            var sortedLaps = Object.keys(data.sector_times).sort(function(a, b) { return parseInt(a) - parseInt(b); });
-            sortedLaps.forEach(function(lap) {
-                var times = data.sector_times[lap];
-                var total = lapTotals[lap];
-                var isBest = Math.abs(total - bestTotal) < 0.001;
-                html += '<tr' + (isBest ? ' class="fw-bold"' : '') + '><td>L' + lap + '</td>';
-                times.forEach(function(t, i) {
-                    var cls = "";
-                    if (Math.abs(t - bestSector[i]) < 0.001) cls = "sector-best";
-                    else if (t > bestSector[i] * 1.02) cls = "sector-slow";
-                    html += '<td class="' + cls + '">' + t.toFixed(3) + '</td>';
-                });
-                var delta = total - bestTotal;
-                html += '<td>' + total.toFixed(3) + '</td><td>' + (delta < 0.001 ? '-' : '+' + delta.toFixed(3)) + '</td></tr>';
-            });
-
-            // Theoretical best
-            var theoTotal = 0;
-            bestSector.forEach(function(t) { theoTotal += t; });
-            html += '<tr class="table-success fw-bold"><td>Ideal</td>';
-            bestSector.forEach(function(t) { html += '<td>' + t.toFixed(3) + '</td>'; });
-            html += '<td>' + theoTotal.toFixed(3) + '</td><td>-</td></tr>';
-
-            html += '</tbody></table></div></div></div></div>';
-            container.innerHTML = html;
-        });
     }
 
     // Init MapKit if token present

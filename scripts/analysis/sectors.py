@@ -239,7 +239,10 @@ def create_sector_times_table(df, laptimes_df=None, time_col="seconds", metadata
         headers = [tc["name"] for tc in track_corners]
     else:
         headers = [f"S{i+1}" for i in range(n_sectors)]
-    worst_sectors = [max(sector_times[lap][si] for lap in laps) for si in range(n_sectors)]
+    # Find worst (slowest) time per sector column
+    worst_sectors = [
+        max(sector_times[lap][si] for lap in laps) for si in range(n_sectors)
+    ]
 
     rows = []
     for lap in laps:

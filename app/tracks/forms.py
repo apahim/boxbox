@@ -1,11 +1,10 @@
 from flask_wtf import FlaskForm
-from wtforms import StringField, FloatField, SubmitField
+from wtforms import StringField, HiddenField, SubmitField
 from wtforms.validators import DataRequired, Length
 
 
 class TrackForm(FlaskForm):
     name = StringField('Track Name', validators=[DataRequired(), Length(max=200)])
-    lat = FloatField('Latitude', validators=[DataRequired()])
-    lon = FloatField('Longitude', validators=[DataRequired()])
-    timezone = StringField('Timezone', default='UTC')
+    lat = HiddenField('Latitude', validators=[DataRequired()])
+    lon = HiddenField('Longitude', validators=[DataRequired()])
     submit = SubmitField('Create Track')

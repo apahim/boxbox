@@ -4,8 +4,8 @@
 .metadata-badge { font-size: 0.9rem; }
 .section-desc { color: #6c757d; margin-bottom: 1rem; }
 
-.sector-best { background-color: rgba(46,204,113,0.3) !important; --bs-table-bg-state: rgba(46,204,113,0.3); }
-.sector-slow { background-color: rgba(231,76,60,0.2) !important; --bs-table-bg-state: rgba(231,76,60,0.2); }
+.sector-best { background-color: rgba(46,204,113,0.3) !important; }
+.sector-slow { background-color: rgba(231,76,60,0.2) !important; }
 
 .action-plan .action-item { padding: 0.75rem 1rem; border-bottom: 1px solid #e9ecef; }
 .action-plan .action-item:last-child { border-bottom: none; }

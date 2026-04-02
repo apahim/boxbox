@@ -7,7 +7,7 @@ from flask_login import login_required, current_user
 from app import db
 from app.tracks import bp
 from app.tracks.forms import TrackForm
-from app.models import Track, TrackCorner
+from app.models import Track, TrackCorner, Session
 
 
 def _slugify(name):
@@ -37,14 +37,24 @@ def create():
         slug = _slugify(form.name.data)
         if Track.query.filter_by(slug=slug).first():
             flash('A track with that name already exists.', 'danger')
-            return render_template('tracks/create.html', form=form)
+            mapkit_token = current_app.config.get('MAPKIT_TOKEN', '')
+            return render_template('tracks/create.html', form=form,
+                                   mapkit_token=mapkit_token)
+
+        lat = float(form.lat.data)
+        lon = float(form.lon.data)
+
+        # Auto-resolve timezone from coordinates
+        from timezonefinder import TimezoneFinder
+        tf = TimezoneFinder()
+        tz = tf.timezone_at(lat=lat, lng=lon) or 'UTC'
 
         track = Track(
             name=form.name.data,
             slug=slug,
-            lat=form.lat.data,
-            lon=form.lon.data,
-            timezone=form.timezone.data or 'UTC',
+            lat=lat,
+            lon=lon,
+            timezone=tz,
             created_by=current_user.id,
         )
         db.session.add(track)
@@ -53,7 +63,9 @@ def create():
         flash(f'Track "{track.name}" created. Add corners below.', 'success')
         return redirect(url_for('tracks.edit', slug=slug))
 
-    return render_template('tracks/create.html', form=form)
+    mapkit_token = current_app.config.get('MAPKIT_TOKEN', '')
+    return render_template('tracks/create.html', form=form,
+                           mapkit_token=mapkit_token)
 
 
 @bp.route('/<slug>/edit', methods=['GET', 'POST'])
@@ -83,6 +95,11 @@ def edit(slug):
                 trap_lon2=float(c['trap_lon2']),
             )
             db.session.add(corner)
+
+        # Mark all sessions for this track as needing re-ingestion
+        Session.query.filter_by(track_id=track.id).update(
+            {'needs_reingest': True},
+        )
 
         db.session.commit()
         flash('Corners saved.', 'success')

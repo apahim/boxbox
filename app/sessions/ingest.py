@@ -25,7 +25,7 @@ from scripts.analysis.utils import format_laptime, fig_to_json
 from scripts.analysis.laptimes import create_laptime_bar_chart, create_delta_to_best_chart
 from scripts.analysis.track_map import (
     create_speed_track_map, create_all_laps_speed_map,
-    create_all_laps_sector_delta_map, create_lateral_g_track_map,
+    create_all_laps_sector_delta_map,
 )
 from scripts.analysis.speed import (
     create_cumulative_time_delta, create_throttle_brake_phases,
@@ -33,9 +33,7 @@ from scripts.analysis.speed import (
 )
 from scripts.analysis.braking import (
     create_braking_consistency_chart, create_all_laps_braking_map,
-    create_brake_release_chart,
 )
-from scripts.analysis.gforce import create_gg_diagram
 from scripts.analysis.sectors import create_sector_times_table
 from scripts.analysis.coaching import generate_coaching_summary
 from scripts.analysis.corner_model import (
@@ -348,8 +346,7 @@ def _store_sector_times(session_id, sector_data):
     """Store sector times from create_sector_times_table() output."""
     sector_times = sector_data.get("sector_times", {})
     headers = sector_data.get("headers", [])
-    # headers[0] is "Lap", rest are sector names
-    sector_names = headers[1:] if len(headers) > 1 else []
+    sector_names = headers
 
     for lap_num, times in sector_times.items():
         for i, seconds in enumerate(times):
@@ -391,11 +388,6 @@ def _precompute_charts(session_id, telemetry_df, laptimes_df, clean_df,
                           create_delta_to_best_chart, laptimes_df)
     _store_chart_from_fig(session_id, "braking_consistency", "overview",
                           create_braking_consistency_chart, telemetry_df, laptimes_df,
-                          track_corners=track_corners)
-    _store_chart_from_fig(session_id, "gg_diagram", "overview",
-                          create_gg_diagram, telemetry_df, best_lap)
-    _store_chart_from_fig(session_id, "brake_release", "overview",
-                          create_brake_release_chart, telemetry_df, laptimes_df,
                           track_corners=track_corners)
 
     # Per-lap charts
@@ -448,16 +440,6 @@ def _precompute_charts(session_id, telemetry_df, laptimes_df, clean_df,
             _store_chart(session_id, "throttle_brake", str(lap), fig_json)
     except Exception as e:
         print(f"  Warning: throttle/brake failed: {e}")
-
-    # Lateral G map (best lap only)
-    try:
-        lat_g_map = create_lateral_g_track_map(
-            telemetry_df, best_lap, weather=weather, track_corners=track_corners
-        )
-        if lat_g_map:
-            _store_chart(session_id, "lateral_g_map", str(best_lap), lat_g_map)
-    except Exception as e:
-        print(f"  Warning: lateral G map failed: {e}")
 
     # Corner map data
     if corner_analysis_raw:

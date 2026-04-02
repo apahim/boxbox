@@ -1,6 +1,5 @@
 import os
 import tempfile
-from datetime import date as date_type
 
 from flask import render_template, redirect, url_for, flash, request
 from flask_login import login_required, current_user
@@ -48,13 +47,7 @@ def create():
     form.team_id.choices = [(0, '— No team —')] + [(t.id, t.name) for t in teams]
 
     if form.validate_on_submit():
-        # Parse date
-        try:
-            parts = form.date.data.split('-')
-            session_date = date_type(int(parts[0]), int(parts[1]), int(parts[2]))
-        except (ValueError, IndexError):
-            flash('Invalid date format. Use YYYY-MM-DD.', 'danger')
-            return render_template('sessions/create.html', form=form)
+        session_date = form.date.data
 
         # Save CSV to temp file
         csv_file = form.csv_file.data
@@ -72,7 +65,7 @@ def create():
                 team_id=team_id,
                 date=session_date,
                 session_type=form.session_type.data or None,
-                session_start=form.session_start.data or None,
+                session_start=form.session_start.data.strftime('%H:%M') if form.session_start.data else None,
                 kart_number=form.kart_number.data,
                 driver_weight_kg=form.driver_weight_kg.data,
             )
@@ -130,23 +123,21 @@ def edit(session_id):
     form.team_id.choices = [(0, '— No team —')] + [(t.id, t.name) for t in teams]
 
     if request.method == 'GET':
-        form.date.data = str(session.date)
+        form.date.data = session.date
         form.team_id.data = session.team_id or 0
+        if session.session_start:
+            from datetime import time as time_type
+            parts = session.session_start.split(':')
+            form.session_start.data = time_type(int(parts[0]), int(parts[1]))
 
     if form.validate_on_submit():
-        try:
-            parts = form.date.data.split('-')
-            session.date = date_type(int(parts[0]), int(parts[1]), int(parts[2]))
-        except (ValueError, IndexError):
-            flash('Invalid date format. Use YYYY-MM-DD.', 'danger')
-            return render_template('sessions/edit.html', form=form, session=session)
-
+        session.date = form.date.data
         session.track_id = form.track_id.data
         session.team_id = form.team_id.data if form.team_id.data != 0 else None
         session.kart_number = form.kart_number.data
         session.driver_weight_kg = form.driver_weight_kg.data
         session.session_type = form.session_type.data or None
-        session.session_start = form.session_start.data or None
+        session.session_start = form.session_start.data.strftime('%H:%M') if form.session_start.data else None
 
         db.session.commit()
         flash('Session updated.', 'success')

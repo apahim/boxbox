@@ -20,6 +20,9 @@ def create_app(config_name=None):
         from app.config import Config
         app.config.from_object(Config)
 
+    if not app.config.get('TESTING') and not app.config.get('MAPKIT_TOKEN'):
+        raise RuntimeError('MAPKIT_TOKEN environment variable is required')
+
     db.init_app(app)
     migrate.init_app(app, db)
     login_manager.init_app(app)

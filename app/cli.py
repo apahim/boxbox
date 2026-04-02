@@ -163,53 +163,16 @@ def import_session(race_dir, user_email):
 @with_appcontext
 def reingest_session(session_id):
     """Re-process a session from its stored compressed CSV."""
-    import gzip
-    import tempfile
+    from app.sessions.reingest import reingest_session as _reingest
 
     session = db.session.get(Session, session_id)
     if not session:
         click.echo(f'Error: session {session_id} not found.')
         raise SystemExit(1)
 
-    upload = SessionUpload.query.filter_by(session_id=session_id).first()
-    if not upload or not upload.csv_compressed:
+    click.echo(f'Reingesting session {session_id}...')
+    success = _reingest(session)
+    if not success:
         click.echo(f'Error: no stored CSV for session {session_id}.')
         raise SystemExit(1)
-
-    # Delete computed data and old upload
-    Lap.query.filter_by(session_id=session_id).delete()
-    Telemetry.query.filter_by(session_id=session_id).delete()
-    CornerRecord.query.filter_by(session_id=session_id).delete()
-    CornerSummary.query.filter_by(session_id=session_id).delete()
-    SectorTime.query.filter_by(session_id=session_id).delete()
-    ChartData.query.filter_by(session_id=session_id).delete()
-    SessionUpload.query.filter_by(session_id=session_id).delete()
-    db.session.flush()
-
-    # Decompress CSV to temp file
-    csv_data = gzip.decompress(upload.csv_compressed)
-    temp_fd, temp_path = tempfile.mkstemp(suffix='.csv')
-    try:
-        with os.fdopen(temp_fd, 'wb') as f:
-            f.write(csv_data)
-
-        # Get track info
-        track = db.session.get(Track, session.track_id)
-        corners = TrackCorner.query.filter_by(track_id=track.id).order_by(TrackCorner.sort_order).all()
-        track_corners = [
-        {
-            'name': c.name, 'lat': c.lat, 'lon': c.lon,
-            'trap_lat1': c.trap_lat1, 'trap_lon1': c.trap_lon1,
-            'trap_lat2': c.trap_lat2, 'trap_lon2': c.trap_lon2,
-        }
-        for c in corners
-    ] if corners else None
-        track_coords = (track.lat, track.lon, track.timezone)
-
-        click.echo(f'Reingesting session {session_id}...')
-
-        from app.sessions.ingest import ingest_session
-        ingest_session(temp_path, session, track_coords, track_corners)
-        click.echo(f'Session {session_id} reingested successfully.')
-    finally:
-        os.unlink(temp_path)
+    click.echo(f'Session {session_id} reingested successfully.')

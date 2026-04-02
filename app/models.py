@@ -122,6 +122,7 @@ class Session(db.Model):
 
     weather = db.Column(db.JSON)
     coaching = db.Column(db.JSON)
+    needs_reingest = db.Column(db.Boolean, default=False, nullable=False)
 
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
 

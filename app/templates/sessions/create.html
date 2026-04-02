@@ -23,7 +23,7 @@
                     <div class="row">
                         <div class="col-md-6 mb-3">
                             {{ form.date.label(class="form-label") }}
-                            {{ form.date(class="form-control", placeholder="2026-03-08") }}
+                            {{ form.date(class="form-control") }}
                             {% for error in form.date.errors %}
                             <div class="text-danger small">{{ error }}</div>
                             {% endfor %}
@@ -45,7 +45,7 @@
                         </div>
                         <div class="col-md-4 mb-3">
                             {{ form.session_start.label(class="form-label") }}
-                            {{ form.session_start(class="form-control", placeholder="14:00") }}
+                            {{ form.session_start(class="form-control") }}
                         </div>
                     </div>
 
