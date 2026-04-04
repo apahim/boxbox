@@ -26,36 +26,6 @@ class User(UserMixin, db.Model):
         return bcrypt.checkpw(password.encode('utf-8'), self.password_hash)
 
 
-class Team(db.Model):
-    __tablename__ = 'teams'
-
-    id = db.Column(db.Integer, primary_key=True)
-    name = db.Column(db.String(100), nullable=False)
-    slug = db.Column(db.String(100), unique=True, nullable=False)
-    created_by = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
-    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
-
-    creator = db.relationship('User', backref='created_teams')
-    members = db.relationship('TeamMember', backref='team', lazy='dynamic',
-                              cascade='all, delete-orphan')
-
-
-class TeamMember(db.Model):
-    __tablename__ = 'team_members'
-
-    id = db.Column(db.Integer, primary_key=True)
-    team_id = db.Column(db.Integer, db.ForeignKey('teams.id'), nullable=False)
-    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
-    role = db.Column(db.String(20), nullable=False, default='member')
-    joined_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
-
-    user = db.relationship('User', backref='team_memberships')
-
-    __table_args__ = (
-        db.UniqueConstraint('team_id', 'user_id', name='uq_team_user'),
-    )
-
-
 class Track(db.Model):
     __tablename__ = 'tracks'
 
@@ -105,7 +75,6 @@ class Session(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
     track_id = db.Column(db.Integer, db.ForeignKey('tracks.id'), nullable=False)
-    team_id = db.Column(db.Integer, db.ForeignKey('teams.id'), nullable=True)
     date = db.Column(db.Date, nullable=False)
     session_start = db.Column(db.String(10))
 
@@ -130,7 +99,6 @@ class Session(db.Model):
 
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
 
-    team = db.relationship('Team', backref='sessions')
     laps = db.relationship('Lap', backref='session', lazy='dynamic',
                            cascade='all, delete-orphan')
     telemetry = db.relationship('Telemetry', backref='session', lazy='dynamic',

@@ -123,10 +123,6 @@
                                 {{ form.session_start.label(class="form-label") }}
                                 {{ form.session_start(class="form-control") }}
                             </div>
-                            <div class="col-6 mb-3">
-                                {{ form.team_id.label(class="form-label") }}
-                                {{ form.team_id(class="form-select") }}
-                            </div>
                         </div>
 
                         <div class="mb-3">
@@ -544,8 +540,6 @@ function buildReview() {
     var trackOpt = trackSelect.options[trackSelect.selectedIndex];
     addRow('Track', trackOpt ? trackOpt.text : '');
     addRow('Session Start', document.getElementById('session_start').value);
-    var teamOpt = document.getElementById('team_id').options[document.getElementById('team_id').selectedIndex];
-    if (teamOpt && parseInt(teamOpt.value) !== 0) addRow('Team', teamOpt.text);
     if (tags.length > 0) {
         addRow('Labels', tags.map(function(t) { return '<span class="badge bg-info">' + t + '</span>'; }).join(' '));
     }

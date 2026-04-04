@@ -8,7 +8,6 @@ class SessionEditForm(FlaskForm):
     date = DateField('Date', validators=[DataRequired()])
     track_id = SelectField('Track', coerce=int, validators=[DataRequired()])
     session_start = TimeField('Session Start', validators=[Optional()])
-    team_id = SelectField('Team (optional)', coerce=int, validators=[Optional()])
     labels = HiddenField('Labels', default='[]')
     submit = SubmitField('Save Changes')
 
@@ -21,6 +20,5 @@ class SessionCreateForm(FlaskForm):
     date = DateField('Date', validators=[DataRequired()])
     track_id = SelectField('Track', coerce=int, validators=[DataRequired()])
     session_start = TimeField('Session Start', validators=[Optional()])
-    team_id = SelectField('Team (optional)', coerce=int, validators=[Optional()])
     labels = HiddenField('Labels', default='[]')
     submit = SubmitField('Upload & Process')

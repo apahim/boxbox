@@ -39,9 +39,6 @@ def create_app(config_name=None):
     from app.auth import bp as auth_bp
     app.register_blueprint(auth_bp, url_prefix='/auth')
 
-    from app.teams import bp as teams_bp
-    app.register_blueprint(teams_bp, url_prefix='/teams')
-
     from app.tracks import bp as tracks_bp
     app.register_blueprint(tracks_bp, url_prefix='/tracks')
 

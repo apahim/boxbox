@@ -3,13 +3,9 @@ from functools import wraps
 from flask import jsonify, request
 from flask_login import current_user
 
-from sqlalchemy import or_
-
 from app import db
 from app.api import bp
-from app.models import (
-    Session, ChartData, TeamMember, Track, Lap,
-)
+from app.models import Session, ChartData, Track, Lap
 
 
 def api_login_required(f):
@@ -25,15 +21,8 @@ def api_login_required(f):
             if not session:
                 return jsonify(error='Session not found'), 404
 
-            # Check access: own session or team member
             if session.user_id != current_user.id:
-                if not session.team_id:
-                    return jsonify(error='Access denied'), 403
-                is_member = TeamMember.query.filter_by(
-                    team_id=session.team_id, user_id=current_user.id
-                ).first()
-                if not is_member:
-                    return jsonify(error='Access denied'), 403
+                return jsonify(error='Access denied'), 403
 
             kwargs['session'] = session
 
@@ -176,16 +165,7 @@ def session_raceline(session_id, session):
 
 def _user_sessions_query():
     """Return a query for sessions visible to the current user."""
-    team_ids = [
-        m.team_id for m in
-        TeamMember.query.filter_by(user_id=current_user.id).all()
-    ]
-    return Session.query.filter(
-        or_(
-            Session.user_id == current_user.id,
-            Session.team_id.in_(team_ids) if team_ids else False,
-        )
-    )
+    return Session.query.filter_by(user_id=current_user.id)
 
 
 @bp.route('/tracks/<int:track_id>/gate')

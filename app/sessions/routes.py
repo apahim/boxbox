@@ -4,13 +4,12 @@ import tempfile
 
 from flask import render_template, redirect, url_for, flash, request, jsonify
 from flask_login import login_required, current_user
-from sqlalchemy import or_
 
 from app import db
 from app.sessions import bp
 from app.sessions.forms import SessionCreateForm, SessionEditForm
 from app.models import (
-    Session, Track, TrackCorner, Team, TeamMember,
+    Session, Track, TrackCorner,
     Lap, Telemetry, CornerRecord, CornerSummary,
     SectorTime, ChartData, SessionUpload,
 )
@@ -19,18 +18,7 @@ from app.models import (
 @bp.route('/')
 @login_required
 def list_sessions():
-    # User's own sessions + sessions visible via team membership
-    team_ids = [
-        m.team_id for m in
-        TeamMember.query.filter_by(user_id=current_user.id).all()
-    ]
-
-    query = Session.query.filter(
-        or_(
-            Session.user_id == current_user.id,
-            Session.team_id.in_(team_ids) if team_ids else False,
-        )
-    ).order_by(Session.date.desc())
+    query = Session.query.filter_by(user_id=current_user.id).order_by(Session.date.desc())
 
     sessions = query.all()
 
@@ -53,12 +41,6 @@ def create():
     # Populate track choices
     tracks = Track.query.order_by(Track.name).all()
     form.track_id.choices = [(t.id, t.name) for t in tracks]
-
-    # Populate team choices (user's teams + "None")
-    memberships = TeamMember.query.filter_by(user_id=current_user.id).all()
-    team_ids = [m.team_id for m in memberships]
-    teams = Team.query.filter(Team.id.in_(team_ids)).all() if team_ids else []
-    form.team_id.choices = [(0, '— No team —')] + [(t.id, t.name) for t in teams]
 
     if form.validate_on_submit():
         is_fetch = request.headers.get('X-Requested-With') == 'fetch'
@@ -97,12 +79,10 @@ def create():
 
             # Create session record
             track = Track.query.get(form.track_id.data)
-            team_id = form.team_id.data if form.team_id.data != 0 else None
 
             session = Session(
                 user_id=current_user.id,
                 track_id=track.id,
-                team_id=team_id,
                 date=session_date,
                 session_start=form.session_start.data.strftime('%H:%M') if form.session_start.data else None,
                 data_source=data_source,
@@ -172,14 +152,8 @@ def edit(session_id):
     tracks = Track.query.order_by(Track.name).all()
     form.track_id.choices = [(t.id, t.name) for t in tracks]
 
-    memberships = TeamMember.query.filter_by(user_id=current_user.id).all()
-    team_ids = [m.team_id for m in memberships]
-    teams = Team.query.filter(Team.id.in_(team_ids)).all() if team_ids else []
-    form.team_id.choices = [(0, '— No team —')] + [(t.id, t.name) for t in teams]
-
     if request.method == 'GET':
         form.date.data = session.date
-        form.team_id.data = session.team_id or 0
         form.labels.data = json.dumps(session.labels or [])
         if session.session_start:
             from datetime import time as time_type
@@ -189,7 +163,6 @@ def edit(session_id):
     if form.validate_on_submit():
         session.date = form.date.data
         session.track_id = form.track_id.data
-        session.team_id = form.team_id.data if form.team_id.data != 0 else None
         session.session_start = form.session_start.data.strftime('%H:%M') if form.session_start.data else None
 
         # Parse labels

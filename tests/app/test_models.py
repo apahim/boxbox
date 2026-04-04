@@ -2,7 +2,7 @@ import pytest
 from sqlalchemy.exc import IntegrityError
 
 from app import db
-from app.models import User, Team, TeamMember, Track, TrackCorner
+from app.models import User, Track, TrackCorner
 
 
 class TestUser:
@@ -23,66 +23,6 @@ class TestUser:
         db_session.add(u2)
         with pytest.raises(IntegrityError):
             db_session.commit()
-
-
-class TestTeam:
-    def _make_user(self, session, email='owner@test.com'):
-        user = User(email=email, display_name='Owner')
-        user.set_password('pass')
-        session.add(user)
-        session.commit()
-        return user
-
-    def test_team_creation(self, db_session):
-        user = self._make_user(db_session)
-        team = Team(name='Speed Demons', slug='speed-demons', created_by=user.id)
-        db_session.add(team)
-        db_session.commit()
-
-        assert team.id is not None
-        assert team.slug == 'speed-demons'
-
-    def test_team_member_owner(self, db_session):
-        user = self._make_user(db_session)
-        team = Team(name='Test Team', slug='test-team', created_by=user.id)
-        db_session.add(team)
-        db_session.flush()
-
-        member = TeamMember(team_id=team.id, user_id=user.id, role='owner')
-        db_session.add(member)
-        db_session.commit()
-
-        assert team.members.count() == 1
-        assert team.members.first().role == 'owner'
-
-    def test_team_member_unique_constraint(self, db_session):
-        user = self._make_user(db_session)
-        team = Team(name='Test', slug='test', created_by=user.id)
-        db_session.add(team)
-        db_session.flush()
-
-        m1 = TeamMember(team_id=team.id, user_id=user.id, role='owner')
-        db_session.add(m1)
-        db_session.commit()
-
-        m2 = TeamMember(team_id=team.id, user_id=user.id, role='member')
-        db_session.add(m2)
-        with pytest.raises(IntegrityError):
-            db_session.commit()
-
-    def test_add_member(self, db_session):
-        owner = self._make_user(db_session, 'owner@test.com')
-        member_user = self._make_user(db_session, 'member@test.com')
-
-        team = Team(name='Test', slug='test', created_by=owner.id)
-        db_session.add(team)
-        db_session.flush()
-
-        db_session.add(TeamMember(team_id=team.id, user_id=owner.id, role='owner'))
-        db_session.add(TeamMember(team_id=team.id, user_id=member_user.id, role='member'))
-        db_session.commit()
-
-        assert team.members.count() == 2
 
 
 class TestTrack:

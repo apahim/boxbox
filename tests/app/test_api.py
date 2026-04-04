@@ -5,9 +5,7 @@ import os
 import pytest
 
 from app import db
-from app.models import (
-    User, Track, TrackCorner, Session, Team, TeamMember, ChartData,
-)
+from app.models import User, Track, TrackCorner, Session, ChartData
 from app.sessions.ingest import ingest_session
 from tests.app.conftest import seed_test_track
 
@@ -78,27 +76,6 @@ class TestAPI:
         _login(client, email='other@test.com')
         resp = client.get(f'/api/sessions/{session.id}/summary')
         assert resp.status_code == 403
-
-    def test_summary_team_member_access(self, client, app, setup_session):
-        user, session = setup_session
-        with app.app_context():
-            team = Team(name='Test Team', slug='test-team', created_by=user.id)
-            db.session.add(team)
-            db.session.flush()
-
-            session.team_id = team.id
-            db.session.add(TeamMember(team_id=team.id, user_id=user.id, role='owner'))
-
-            other = User(email='member@test.com', display_name='Member')
-            other.set_password('test123')
-            db.session.add(other)
-            db.session.flush()
-            db.session.add(TeamMember(team_id=team.id, user_id=other.id, role='member'))
-            db.session.commit()
-
-        _login(client, email='member@test.com')
-        resp = client.get(f'/api/sessions/{session.id}/summary')
-        assert resp.status_code == 200
 
     def test_chart_overview(self, client, setup_session):
         _, session = setup_session
