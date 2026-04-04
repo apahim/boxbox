@@ -9,7 +9,11 @@ from sqlalchemy import or_
 from app import db
 from app.sessions import bp
 from app.sessions.forms import SessionCreateForm, SessionEditForm
-from app.models import Session, Track, TrackCorner, Team, TeamMember
+from app.models import (
+    Session, Track, TrackCorner, Team, TeamMember,
+    Lap, Telemetry, CornerRecord, CornerSummary,
+    SectorTime, ChartData, SessionUpload,
+)
 
 
 @bp.route('/')
@@ -29,7 +33,16 @@ def list_sessions():
     ).order_by(Session.date.desc())
 
     sessions = query.all()
-    return render_template('sessions/list.html', sessions=sessions)
+
+    # Compute label frequencies sorted by usage (most used first)
+    label_counts = {}
+    for s in sessions:
+        for l in (s.labels or []):
+            label_counts[l] = label_counts.get(l, 0) + 1
+    sorted_labels = sorted(label_counts, key=lambda l: label_counts[l], reverse=True)
+
+    return render_template('sessions/list.html', sessions=sessions,
+                           sorted_labels=sorted_labels)
 
 
 @bp.route('/create', methods=['GET', 'POST'])
@@ -197,12 +210,44 @@ def edit(session_id):
 @login_required
 def delete(session_id):
     session = Session.query.get_or_404(session_id)
+    is_fetch = request.headers.get('X-Requested-With') == 'fetch'
 
     if session.user_id != current_user.id:
+        if is_fetch:
+            return jsonify(error='You can only delete your own sessions.'), 403
         flash('You can only delete your own sessions.', 'danger')
         return redirect(url_for('sessions.list_sessions'))
 
+    # Bulk SQL deletes — much faster than ORM cascade
+    Telemetry.query.filter_by(session_id=session.id).delete()
+    Lap.query.filter_by(session_id=session.id).delete()
+    CornerRecord.query.filter_by(session_id=session.id).delete()
+    CornerSummary.query.filter_by(session_id=session.id).delete()
+    SectorTime.query.filter_by(session_id=session.id).delete()
+    ChartData.query.filter_by(session_id=session.id).delete()
+    SessionUpload.query.filter_by(session_id=session.id).delete()
     db.session.delete(session)
     db.session.commit()
+
+    if is_fetch:
+        return jsonify(ok=True)
     flash('Session deleted.', 'success')
     return redirect(url_for('sessions.list_sessions'))
+
+
+@bp.route('/<int:session_id>/reingest', methods=['POST'])
+@login_required
+def reingest(session_id):
+    session = Session.query.get_or_404(session_id)
+
+    if session.user_id != current_user.id:
+        return jsonify(error='You can only reingest your own sessions.'), 403
+
+    if not session.needs_reingest:
+        return jsonify(ok=True)
+
+    from app.sessions.reingest import reingest_session
+    success = reingest_session(session)
+    if success:
+        return jsonify(ok=True)
+    return jsonify(error='Could not reingest — original telemetry file not available.'), 422

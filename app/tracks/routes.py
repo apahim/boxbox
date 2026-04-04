@@ -1,7 +1,7 @@
 import json
 import re
 
-from flask import render_template, redirect, url_for, flash, request, current_app
+from flask import render_template, redirect, url_for, flash, request, current_app, jsonify
 from flask_login import login_required, current_user
 
 from app import db
@@ -25,6 +25,7 @@ def list_tracks():
         track_data.append({
             'track': t,
             'corner_count': t.corners.count(),
+            'session_count': t.sessions.count(),
         })
     return render_template('tracks/list.html', tracks=track_data)
 
@@ -73,11 +74,15 @@ def create():
 def edit(slug):
     track = Track.query.filter_by(slug=slug).first_or_404()
 
+    is_fetch = request.headers.get('X-Requested-With') == 'fetch'
+
     if request.method == 'POST':
         corners_json = request.form.get('corners_json', '[]')
         try:
             corners_data = json.loads(corners_json)
         except json.JSONDecodeError:
+            if is_fetch:
+                return jsonify(error='Invalid corner data.'), 400
             flash('Invalid corner data.', 'danger')
             return redirect(url_for('tracks.edit', slug=slug))
 
@@ -119,9 +124,12 @@ def edit(slug):
         )
 
         db.session.commit()
+        if is_fetch:
+            return jsonify(ok=True)
         flash('Corners saved.', 'success')
         return redirect(url_for('tracks.edit', slug=slug))
 
+    session_count = track.sessions.count()
     corners = TrackCorner.query.filter_by(track_id=track.id).order_by(TrackCorner.sort_order).all()
     corners_list = [
         {
@@ -146,4 +154,29 @@ def edit(slug):
                            corners=corners_list,
                            corners_json=json.dumps(corners_list),
                            sf_gate_json=json.dumps(sf_gate),
+                           session_count=session_count,
                            mapkit_token=mapkit_token)
+
+
+@bp.route('/<slug>/delete', methods=['POST'])
+@login_required
+def delete(slug):
+    track = Track.query.filter_by(slug=slug).first_or_404()
+    is_fetch = request.headers.get('X-Requested-With') == 'fetch'
+    session_count = track.sessions.count()
+
+    if session_count > 0:
+        msg = f'Cannot delete — track is used by {session_count} session{"s" if session_count != 1 else ""}.'
+        if is_fetch:
+            return jsonify(error=msg), 409
+        flash(msg, 'danger')
+        return redirect(url_for('tracks.list_tracks'))
+
+    TrackCorner.query.filter_by(track_id=track.id).delete()
+    db.session.delete(track)
+    db.session.commit()
+
+    if is_fetch:
+        return jsonify(ok=True)
+    flash('Track deleted.', 'success')
+    return redirect(url_for('tracks.list_tracks'))

@@ -7,50 +7,107 @@
 <script src="https://cdn.apple-mapkit.com/mk/5.x.x/mapkit.js" crossorigin></script>
 {% endif %}
 <style>
-    #map-container { width: 100%; height: 500px; position: relative; background: var(--bb-surface-alt); border-radius: 8px; overflow: hidden; }
+    .track-editor { position: relative; }
+    #map-container { width: 100%; height: calc(100vh - 180px); min-height: 400px;
+        position: relative; background: var(--bb-surface-alt); border-radius: 8px; overflow: hidden; }
     #map-container .mk-map { width: 100%; height: 100%; }
     #map-fallback { display: flex; align-items: center; justify-content: center; height: 100%; color: var(--bb-text-muted); }
-    .corner-row { display: flex; align-items: center; gap: 6px; margin-bottom: 8px; padding: 8px; background: var(--bb-surface-alt); border-radius: 6px; flex-wrap: wrap; }
-    .corner-row .badge { width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; font-size: 0.75rem; flex-shrink: 0; }
-    .corner-row input { flex: 1; min-width: 80px; }
-    .corner-coords { font-size: 0.75rem; color: var(--bb-text-muted); white-space: nowrap; }
-    .corner-row .btn { flex-shrink: 0; }
+    #map-empty { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+        color: var(--bb-text-muted); font-size: 0.9rem; pointer-events: none; z-index: 10;
+        background: rgba(0,0,0,0.5); padding: 10px 20px; border-radius: 8px;
+        transition: opacity 0.4s; }
+
+    /* Floating sidebar panel */
+    .corner-panel { position: absolute; top: 12px; right: 12px; width: 320px; max-height: calc(100% - 24px);
+        background: rgba(13, 17, 23, 0.92); backdrop-filter: blur(12px);
+        border: 1px solid var(--bb-border); border-radius: 10px;
+        display: flex; flex-direction: column; overflow: hidden; z-index: 20; }
+    .corner-panel-header { padding: 12px 14px 8px; border-bottom: 1px solid var(--bb-border);
+        display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; }
+    .corner-panel-header h6 { margin: 0; font-size: 0.85rem; }
+    .corner-panel-body { overflow-y: auto; padding: 8px; flex: 1; min-height: 0; }
+    .corner-panel-footer { padding: 8px 14px 12px; border-top: 1px solid var(--bb-border); flex-shrink: 0; }
+
+    /* S/F row in corner list */
+    .sf-row { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; padding: 6px 8px;
+        background: rgba(46, 204, 113, 0.08); border: 1px solid rgba(46, 204, 113, 0.2);
+        border-radius: 6px; font-size: 0.8rem; color: #2ecc71; }
+    .sf-row .sf-label { font-weight: 600; flex: 1; }
+    .sf-row .corner-coords { color: rgba(46, 204, 113, 0.6); }
+
+    /* Corner rows */
+    .corner-row { display: flex; align-items: center; gap: 5px; margin-bottom: 4px; padding: 6px 8px;
+        background: var(--bb-surface-alt); border-radius: 6px; cursor: pointer;
+        border: 1px solid transparent; transition: border-color 0.15s, background 0.15s; }
+    .corner-row:hover { background: rgba(59, 130, 246, 0.06); }
+    .corner-row.selected { border-color: rgba(59, 130, 246, 0.4); background: rgba(59, 130, 246, 0.08); }
+    .corner-row.flash { border-color: rgba(46, 204, 113, 0.5); }
+    .corner-row .drag-handle { cursor: grab; color: var(--bb-text-muted); font-size: 0.8rem; flex-shrink: 0; opacity: 0.4; }
+    .corner-row:hover .drag-handle { opacity: 0.8; }
+    .corner-row .badge { width: 22px; height: 22px; display: flex; align-items: center; justify-content: center;
+        font-size: 0.7rem; flex-shrink: 0; }
+    .corner-row input { flex: 1; min-width: 60px; font-size: 0.8rem; padding: 2px 6px; }
+    .corner-coords { font-size: 0.7rem; color: var(--bb-text-muted); white-space: nowrap; }
+    .corner-row .btn { flex-shrink: 0; padding: 0 4px; font-size: 0.75rem; }
+    .corner-row.drag-over { border-top: 2px solid var(--bb-blue); }
+    .corner-row.dragging { opacity: 0.4; }
+
+    /* Save button states */
+    .save-btn.saved { background: #2ecc71; border-color: #2ecc71; }
+    .save-btn.error { background: #e74c3c; border-color: #e74c3c; }
+    .dirty-dot { width: 6px; height: 6px; background: #f59e0b; border-radius: 50%; display: inline-block; margin-left: 6px; }
+    .reingest-warn { font-size: 0.7rem; color: var(--bb-text-muted); margin-top: 6px; }
+
+    /* Panel actions row */
+    .panel-actions { display: flex; gap: 4px; }
+    .panel-actions .btn { font-size: 0.7rem; padding: 2px 8px; }
+
+    @media (max-width: 768px) {
+        .corner-panel { position: relative; top: auto; right: auto; width: 100%; max-height: 300px; margin-top: 8px; }
+    }
 </style>
 {% endblock %}
 
 {% block content %}
-<h2>{{ track.name }} — Corner Editor</h2>
-<p class="text-muted">Click the map to add a corner trap line. Drag the red endpoints to position the line across the track.</p>
+<div class="d-flex justify-content-between align-items-center mb-2">
+    <h2 class="mb-0">{{ track.name }}</h2>
+    <a href="{{ url_for('tracks.list_tracks') }}" class="btn btn-sm btn-outline-secondary"><i class="bi bi-arrow-left"></i> Tracks</a>
+</div>
 
-<div class="row mt-3">
-    <div class="col-lg-8">
-        <div id="map-container">
-            <div id="map-fallback">
-                <p>Map requires a MapKit token. Corners can still be managed via the list below.</p>
-            </div>
+<div class="track-editor">
+    <div id="map-container">
+        <div id="map-fallback">
+            <p>Map requires a MapKit token. Corners can still be managed via the panel.</p>
         </div>
+        <div id="map-empty" style="display:none">Click the map to add your first corner</div>
     </div>
-    <div class="col-lg-4">
-        <div class="card mb-3">
-            <div class="card-body">
-                <h5 class="card-title">Start / Finish Line</h5>
-                <div id="sf-status" class="mb-2"></div>
-                <button type="button" class="btn btn-sm btn-outline-success" id="sf-toggle-btn" onclick="toggleSfGate()">Set Start/Finish Line</button>
+
+    <div class="corner-panel">
+        <div class="corner-panel-header">
+            <h6>Corners</h6>
+            <div class="panel-actions">
+                <button type="button" class="btn btn-outline-success" id="sf-toggle-btn" onclick="toggleSfGate()"
+                        title="Toggle start/finish line">S/F</button>
+                <button type="button" class="btn btn-outline-secondary" onclick="addCornerManual()"
+                        title="Add corner">+ Add</button>
+                <button type="button" class="btn btn-outline-danger" id="clear-all-btn" onclick="clearAllCorners()"
+                        title="Remove all corners" style="display:none">&times; Clear</button>
             </div>
         </div>
-        <div class="card">
-            <div class="card-body">
-                <h5 class="card-title">Corners</h5>
-                <div id="corner-list"></div>
-                <button type="button" class="btn btn-sm btn-outline-secondary mt-2" onclick="addCornerManual()">Add Corner Manually</button>
-                <hr>
-                <form method="POST" id="save-form">
-                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                    <input type="hidden" name="corners_json" id="corners-json" value="">
-                    <input type="hidden" name="sf_gate_json" id="sf-gate-json" value="">
-                    <button type="submit" class="btn btn-primary w-100">Save Corners</button>
-                </form>
+        <div class="corner-panel-body" id="corner-list"></div>
+        <div class="corner-panel-footer">
+            <form method="POST" id="save-form">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="corners_json" id="corners-json" value="">
+                <input type="hidden" name="sf_gate_json" id="sf-gate-json" value="">
+                <button type="submit" class="btn btn-primary w-100 save-btn" id="save-btn" disabled>
+                    <i class="bi bi-check-lg"></i> Saved</button>
+            </form>
+            {% if session_count > 0 %}
+            <div class="reingest-warn" id="reingest-warn" style="display:none">
+                <i class="bi bi-arrow-repeat"></i> Saving will trigger reingestion for {{ session_count }} session{{ 's' if session_count != 1 }}
             </div>
+            {% endif %}
         </div>
     </div>
 </div>
@@ -65,26 +122,90 @@
     var trackLon = {{ track.lon }};
     var mapkitToken = "{{ mapkit_token }}";
     var map = null;
-    var overlays = []; // per corner: {polyline, ann1, ann2, label}
+    var overlays = [];
+    var selectedIdx = -1;
+    var dirty = false;
 
     // Start/finish gate
     var sfGate = {{ sf_gate_json | safe }};
-    var sfOverlays = null; // {polyline, ann1, ann2, label}
+    var sfOverlays = null;
 
-    function renderSfStatus() {
-        var el = document.getElementById('sf-status');
-        var btn = document.getElementById('sf-toggle-btn');
-        if (sfGate) {
-            el.innerHTML = '<span class="text-success">Configured</span> <span class="corner-coords">(' +
-                sfGate.lat1.toFixed(5) + ', ' + sfGate.lon1.toFixed(5) + ')</span>';
-            btn.textContent = 'Remove';
-            btn.className = 'btn btn-sm btn-outline-danger';
-        } else {
-            el.innerHTML = '<span class="text-muted">Not set</span>';
-            btn.textContent = 'Set Start/Finish Line';
-            btn.className = 'btn btn-sm btn-outline-success';
-        }
-        document.getElementById('sf-gate-json').value = sfGate ? JSON.stringify(sfGate) : '';
+    // ── Dirty state ──
+    function markDirty() {
+        if (dirty) return;
+        dirty = true;
+        var btn = document.getElementById('save-btn');
+        btn.disabled = false;
+        btn.innerHTML = 'Save Corners<span class="dirty-dot"></span>';
+        btn.classList.remove('saved', 'error');
+        var warn = document.getElementById('reingest-warn');
+        if (warn) warn.style.display = '';
+        window.onbeforeunload = function() { return 'You have unsaved changes.'; };
+    }
+
+    function markClean() {
+        dirty = false;
+        var btn = document.getElementById('save-btn');
+        btn.disabled = true;
+        btn.innerHTML = '<i class="bi bi-check-lg"></i> Saved';
+        btn.classList.remove('error');
+        btn.classList.add('saved');
+        var warn = document.getElementById('reingest-warn');
+        if (warn) warn.style.display = 'none';
+        window.onbeforeunload = null;
+        setTimeout(function() { btn.classList.remove('saved'); }, 1500);
+    }
+
+    // ── Async save ──
+    document.getElementById('save-form').addEventListener('submit', function(e) {
+        e.preventDefault();
+        if (!dirty) return;
+        var btn = document.getElementById('save-btn');
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Saving…';
+
+        var csrf = this.querySelector('[name=csrf_token]').value;
+        var body = 'csrf_token=' + encodeURIComponent(csrf)
+            + '&corners_json=' + encodeURIComponent(document.getElementById('corners-json').value)
+            + '&sf_gate_json=' + encodeURIComponent(document.getElementById('sf-gate-json').value);
+
+        fetch(window.location.href, {
+            method: 'POST',
+            headers: { 'X-Requested-With': 'fetch', 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: body,
+            credentials: 'same-origin',
+        }).then(function(resp) {
+            if (resp.ok) {
+                markClean();
+            } else {
+                resp.json().then(function(data) {
+                    btn.innerHTML = '<i class="bi bi-x-lg"></i> ' + (data.error || 'Error');
+                    btn.classList.add('error');
+                    btn.disabled = false;
+                }).catch(function() {
+                    btn.innerHTML = '<i class="bi bi-x-lg"></i> Error';
+                    btn.classList.add('error');
+                    btn.disabled = false;
+                });
+            }
+        }).catch(function() {
+            btn.innerHTML = '<i class="bi bi-x-lg"></i> Network error';
+            btn.classList.add('error');
+            btn.disabled = false;
+        });
+    });
+
+    // ── Empty state ──
+    function updateEmptyState() {
+        var el = document.getElementById('map-empty');
+        if (el) el.style.display = corners.length === 0 && !sfGate ? '' : 'none';
+        var clearBtn = document.getElementById('clear-all-btn');
+        if (clearBtn) clearBtn.style.display = corners.length > 1 ? '' : 'none';
+    }
+
+    // ── S/F Gate ──
+    function renderSfInList() {
+        // S/F is rendered as part of the corner list
     }
 
     window.toggleSfGate = function() {
@@ -97,9 +218,26 @@
                 lat2: trackLat - offset, lon2: trackLon + offset,
             };
         }
-        renderSfStatus();
+        updateSfButton();
+        document.getElementById('sf-gate-json').value = sfGate ? JSON.stringify(sfGate) : '';
+        markDirty();
+        renderCornerList();
         if (map) updateSfOverlay();
+        updateEmptyState();
     };
+
+    function updateSfButton() {
+        var btn = document.getElementById('sf-toggle-btn');
+        if (sfGate) {
+            btn.textContent = 'S/F';
+            btn.className = 'btn btn-success';
+            btn.title = 'Remove start/finish line';
+        } else {
+            btn.textContent = 'S/F';
+            btn.className = 'btn btn-outline-success';
+            btn.title = 'Set start/finish line';
+        }
+    }
 
     function clearSfOverlay() {
         if (!sfOverlays || !map) return;
@@ -110,6 +248,17 @@
         sfOverlays = null;
     }
 
+    function makeDot(coord, color, onDragEnd) {
+        var ann = new mapkit.Annotation(coord, function() {
+            var el = document.createElement('div');
+            el.style.cssText = 'width:10px;height:10px;border-radius:50%;background:' + color +
+                ';border:2px solid #fff;box-shadow:0 0 4px rgba(0,0,0,0.5);cursor:grab;';
+            return el;
+        }, { draggable: true, displayPriority: mapkit.Annotation.DisplayPriority.Required });
+        if (onDragEnd) ann.addEventListener('drag-end', onDragEnd);
+        return ann;
+    }
+
     function updateSfOverlay() {
         clearSfOverlay();
         if (!sfGate || !map) return;
@@ -117,41 +266,30 @@
         var coord1 = new mapkit.Coordinate(sfGate.lat1, sfGate.lon1);
         var coord2 = new mapkit.Coordinate(sfGate.lat2, sfGate.lon2);
         var midCoord = new mapkit.Coordinate(
-            (sfGate.lat1 + sfGate.lat2) / 2,
-            (sfGate.lon1 + sfGate.lon2) / 2
-        );
+            (sfGate.lat1 + sfGate.lat2) / 2, (sfGate.lon1 + sfGate.lon2) / 2);
 
         var polyline = new mapkit.PolylineOverlay([coord1, coord2], {
             style: new mapkit.Style({ lineWidth: 4, strokeColor: '#2ecc71', strokeOpacity: 0.9 }),
         });
         map.addOverlay(polyline);
 
-        var ann1 = new mapkit.MarkerAnnotation(coord1, {
-            color: '#2ecc71', glyphText: '\u2022', draggable: true,
-            displayPriority: mapkit.Annotation.DisplayPriority.Required,
-        });
-        ann1.addEventListener('drag-end', function(e) {
+        var ann1 = makeDot(coord1, '#2ecc71', function(e) {
             sfGate.lat1 = e.target.coordinate.latitude;
             sfGate.lon1 = e.target.coordinate.longitude;
-            renderSfStatus();
-            updateSfOverlay();
+            document.getElementById('sf-gate-json').value = JSON.stringify(sfGate);
+            markDirty(); renderCornerList(); updateSfOverlay();
         });
-
-        var ann2 = new mapkit.MarkerAnnotation(coord2, {
-            color: '#2ecc71', glyphText: '\u2022', draggable: true,
-            displayPriority: mapkit.Annotation.DisplayPriority.Required,
-        });
-        ann2.addEventListener('drag-end', function(e) {
+        var ann2 = makeDot(coord2, '#2ecc71', function(e) {
             sfGate.lat2 = e.target.coordinate.latitude;
             sfGate.lon2 = e.target.coordinate.longitude;
-            renderSfStatus();
-            updateSfOverlay();
+            document.getElementById('sf-gate-json').value = JSON.stringify(sfGate);
+            markDirty(); renderCornerList(); updateSfOverlay();
         });
 
         var label = new mapkit.Annotation(midCoord, function() {
             var el = document.createElement('div');
             el.textContent = 'S/F';
-            el.style.cssText = 'font-size:12px;font-weight:bold;color:#fff;background:#2ecc71;padding:1px 5px;border-radius:3px;white-space:nowrap;pointer-events:none;';
+            el.style.cssText = 'font-size:11px;font-weight:bold;color:#fff;background:#2ecc71;padding:1px 5px;border-radius:3px;white-space:nowrap;pointer-events:none;';
             return el;
         }, { draggable: false, enabled: false, displayPriority: mapkit.Annotation.DisplayPriority.Required });
 
@@ -161,41 +299,116 @@
         sfOverlays = { polyline: polyline, ann1: ann1, ann2: ann2, label: label };
     }
 
+    // ── Corner list ──
     function midpoint(c) {
-        return {
-            lat: (c.trap_lat1 + c.trap_lat2) / 2,
-            lon: (c.trap_lon1 + c.trap_lon2) / 2,
-        };
+        return { lat: (c.trap_lat1 + c.trap_lat2) / 2, lon: (c.trap_lon1 + c.trap_lon2) / 2 };
     }
+
+    var dragSrcIdx = null;
 
     function renderCornerList() {
         var list = document.getElementById('corner-list');
         list.innerHTML = '';
+
+        // S/F row
+        if (sfGate) {
+            var sfRow = document.createElement('div');
+            sfRow.className = 'sf-row';
+            sfRow.innerHTML = '<span class="sf-label"><i class="bi bi-flag-fill"></i> Start / Finish</span>' +
+                '<span class="corner-coords">' + sfGate.lat1.toFixed(5) + ', ' + sfGate.lon1.toFixed(5) + '</span>';
+            list.appendChild(sfRow);
+        }
+
         corners.forEach(function(c, i) {
             var mid = midpoint(c);
             var row = document.createElement('div');
-            row.className = 'corner-row';
+            row.className = 'corner-row' + (i === selectedIdx ? ' selected' : '');
+            row.draggable = true;
+            row.dataset.idx = i;
             row.innerHTML =
+                '<i class="bi bi-grip-vertical drag-handle"></i>' +
                 '<span class="badge bg-primary rounded-circle">' + (i + 1) + '</span>' +
-                '<input type="text" class="form-control form-control-sm" value="' + (c.name || 'T' + (i+1)) + '" ' +
-                    'onchange="updateCornerName(' + i + ', this.value)">' +
+                '<input type="text" class="form-control form-control-sm" value="' + (c.name || 'T' + (i+1)).replace(/"/g, '&quot;') + '">' +
                 '<span class="corner-coords">' + mid.lat.toFixed(5) + ', ' + mid.lon.toFixed(5) + '</span>' +
-                '<button type="button" class="btn btn-sm btn-outline-danger" onclick="removeCorner(' + i + ')">&times;</button>';
+                '<button type="button" class="btn btn-sm btn-outline-danger">&times;</button>';
+
+            // Click to select
+            row.addEventListener('click', function(e) {
+                if (e.target.tagName === 'INPUT' || e.target.tagName === 'BUTTON' || e.target.closest('button')) return;
+                selectCorner(i);
+            });
+
+            // Name change
+            row.querySelector('input').addEventListener('change', function() {
+                corners[i].name = this.value;
+                document.getElementById('corners-json').value = JSON.stringify(corners);
+                markDirty();
+                if (map) updateMapOverlays();
+            });
+
+            // Delete
+            row.querySelector('button').addEventListener('click', function() {
+                corners.splice(i, 1);
+                if (selectedIdx === i) selectedIdx = -1;
+                else if (selectedIdx > i) selectedIdx--;
+                markDirty();
+                renderCornerList();
+                if (map) updateMapOverlays();
+                updateEmptyState();
+            });
+
+            // Drag reorder
+            row.addEventListener('dragstart', function(e) {
+                dragSrcIdx = i;
+                row.classList.add('dragging');
+                e.dataTransfer.effectAllowed = 'move';
+            });
+            row.addEventListener('dragend', function() { row.classList.remove('dragging'); });
+            row.addEventListener('dragover', function(e) {
+                e.preventDefault();
+                e.dataTransfer.dropEffect = 'move';
+                row.classList.add('drag-over');
+            });
+            row.addEventListener('dragleave', function() { row.classList.remove('drag-over'); });
+            row.addEventListener('drop', function(e) {
+                e.preventDefault();
+                row.classList.remove('drag-over');
+                if (dragSrcIdx === null || dragSrcIdx === i) return;
+                var moved = corners.splice(dragSrcIdx, 1)[0];
+                corners.splice(i, 0, moved);
+                if (selectedIdx === dragSrcIdx) selectedIdx = i;
+                dragSrcIdx = null;
+                markDirty();
+                renderCornerList();
+                if (map) updateMapOverlays();
+            });
+
             list.appendChild(row);
         });
+
         document.getElementById('corners-json').value = JSON.stringify(corners);
+        updateEmptyState();
     }
 
-    window.updateCornerName = function(i, name) {
-        corners[i].name = name;
-        document.getElementById('corners-json').value = JSON.stringify(corners);
-    };
-
-    window.removeCorner = function(i) {
-        corners.splice(i, 1);
+    function selectCorner(i) {
+        selectedIdx = (selectedIdx === i) ? -1 : i;
         renderCornerList();
         if (map) updateMapOverlays();
-    };
+        // Scroll to selected row
+        if (selectedIdx >= 0) {
+            var rows = document.querySelectorAll('.corner-row');
+            if (rows[selectedIdx]) rows[selectedIdx].scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+        }
+    }
+
+    function flashCornerRow(idx) {
+        var rows = document.querySelectorAll('.corner-row');
+        if (rows[idx]) {
+            rows[idx].classList.add('flash');
+            rows[idx].scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+            setTimeout(function() { rows[idx].classList.remove('flash'); }, 600);
+        }
+    }
 
     window.addCornerManual = function() {
         var offset = 0.00005;
@@ -204,11 +417,24 @@
             trap_lat1: trackLat + offset, trap_lon1: trackLon - offset,
             trap_lat2: trackLat - offset, trap_lon2: trackLon + offset,
         });
+        markDirty();
+        renderCornerList();
+        if (map) updateMapOverlays();
+        setTimeout(function() { flashCornerRow(corners.length - 1); }, 50);
+    };
+
+    window.clearAllCorners = function() {
+        if (!confirm('Remove all ' + corners.length + ' corners?')) return;
+        corners = [];
+        selectedIdx = -1;
+        markDirty();
         renderCornerList();
         if (map) updateMapOverlays();
     };
 
+    // ── Map overlays ──
     function clearOverlays() {
+        if (!map) return;
         overlays.forEach(function(o) {
             if (o.polyline) map.removeOverlay(o.polyline);
             if (o.ann1) map.removeAnnotation(o.ann1);
@@ -223,70 +449,54 @@
         clearOverlays();
 
         corners.forEach(function(c, i) {
+            var isSelected = (i === selectedIdx);
             var coord1 = new mapkit.Coordinate(c.trap_lat1, c.trap_lon1);
             var coord2 = new mapkit.Coordinate(c.trap_lat2, c.trap_lon2);
             var mid = midpoint(c);
             var midCoord = new mapkit.Coordinate(mid.lat, mid.lon);
 
-            // Trap line
+            var lineColor = isSelected ? '#ffffff' : '#e74c3c';
+            var lineWidth = isSelected ? 4 : 3;
+
             var polyline = new mapkit.PolylineOverlay([coord1, coord2], {
-                style: new mapkit.Style({
-                    lineWidth: 3,
-                    strokeColor: '#e74c3c',
-                    strokeOpacity: 0.9,
-                }),
+                style: new mapkit.Style({ lineWidth: lineWidth, strokeColor: lineColor, strokeOpacity: 0.9 }),
             });
             map.addOverlay(polyline);
 
-            // Endpoint 1 (draggable)
-            var ann1 = new mapkit.MarkerAnnotation(coord1, {
-                color: '#e74c3c',
-                glyphText: '\u2022',
-                draggable: true,
-                displayPriority: mapkit.Annotation.DisplayPriority.Required,
-            });
-            ann1.addEventListener('drag-end', function(e) {
+            var dotColor = isSelected ? '#3b82f6' : '#e74c3c';
+            var ann1 = makeDot(coord1, dotColor, function(e) {
                 corners[i].trap_lat1 = e.target.coordinate.latitude;
                 corners[i].trap_lon1 = e.target.coordinate.longitude;
-                renderCornerList();
-                updateMapOverlays();
+                markDirty(); renderCornerList(); updateMapOverlays();
             });
-
-            // Endpoint 2 (draggable)
-            var ann2 = new mapkit.MarkerAnnotation(coord2, {
-                color: '#e74c3c',
-                glyphText: '\u2022',
-                draggable: true,
-                displayPriority: mapkit.Annotation.DisplayPriority.Required,
-            });
-            ann2.addEventListener('drag-end', function(e) {
+            var ann2 = makeDot(coord2, dotColor, function(e) {
                 corners[i].trap_lat2 = e.target.coordinate.latitude;
                 corners[i].trap_lon2 = e.target.coordinate.longitude;
-                renderCornerList();
-                updateMapOverlays();
+                markDirty(); renderCornerList(); updateMapOverlays();
             });
 
-            // Corner name label at midpoint (non-interactive text)
             var labelText = c.name || 'T' + (i + 1);
-            var label = new mapkit.Annotation(midCoord, function(coordinate, options) {
+            var labelBg = isSelected ? '#3b82f6' : '#3498db';
+            var label = new mapkit.Annotation(midCoord, function() {
                 var el = document.createElement('div');
                 el.textContent = labelText;
-                el.style.cssText = 'font-size:12px;font-weight:bold;color:#fff;background:#3498db;padding:1px 5px;border-radius:3px;white-space:nowrap;pointer-events:none;';
+                el.style.cssText = 'font-size:11px;font-weight:bold;color:#fff;background:' + labelBg +
+                    ';padding:1px 5px;border-radius:3px;white-space:nowrap;cursor:pointer;';
                 return el;
             }, {
                 draggable: false,
-                enabled: false,
                 displayPriority: mapkit.Annotation.DisplayPriority.Required,
             });
+            label.addEventListener('select', function() { selectCorner(i); });
 
             map.addAnnotation(ann1);
             map.addAnnotation(ann2);
             map.addAnnotation(label);
-
-            overlays.push({polyline: polyline, ann1: ann1, ann2: ann2, label: label});
+            overlays.push({ polyline: polyline, ann1: ann1, ann2: ann2, label: label });
         });
     }
 
+    // ── Map init ──
     function initMap() {
         if (!mapkitToken) return;
 
@@ -308,12 +518,10 @@
             isRotationEnabled: false,
         });
 
-        // Zoom to fit corners or default span
         if (corners.length > 0) {
-            var lats = [];
-            corners.forEach(function(c) { lats.push(c.trap_lat1, c.trap_lat2); });
-            var lons = [];
-            corners.forEach(function(c) { lons.push(c.trap_lon1, c.trap_lon2); });
+            var lats = [], lons = [];
+            corners.forEach(function(c) { lats.push(c.trap_lat1, c.trap_lat2); lons.push(c.trap_lon1, c.trap_lon2); });
+            if (sfGate) { lats.push(sfGate.lat1, sfGate.lat2); lons.push(sfGate.lon1, sfGate.lon2); }
             var pad = 0.001;
             var region = new mapkit.BoundingRegion(
                 Math.max.apply(null, lats) + pad, Math.max.apply(null, lons) + pad,
@@ -324,28 +532,29 @@
             map.region = new mapkit.CoordinateRegion(center, new mapkit.CoordinateSpan(0.005, 0.005));
         }
 
-        // Click to add corner trap line
         map.addEventListener('single-tap', function(e) {
             var point = new DOMPoint(e.pointOnPage.x, e.pointOnPage.y);
             var coord = map.convertPointOnPageToCoordinate(point);
-            var offset = 0.00005; // ~5m
+            var offset = 0.00005;
             corners.push({
                 name: 'T' + (corners.length + 1),
-                trap_lat1: coord.latitude + offset,
-                trap_lon1: coord.longitude - offset,
-                trap_lat2: coord.latitude - offset,
-                trap_lon2: coord.longitude + offset,
+                trap_lat1: coord.latitude + offset, trap_lon1: coord.longitude - offset,
+                trap_lat2: coord.latitude - offset, trap_lon2: coord.longitude + offset,
             });
+            markDirty();
             renderCornerList();
             updateMapOverlays();
+            setTimeout(function() { flashCornerRow(corners.length - 1); }, 50);
         });
 
         updateMapOverlays();
         updateSfOverlay();
     }
 
+    // ── Init ──
+    updateSfButton();
     renderCornerList();
-    renderSfStatus();
+    updateEmptyState();
 
     if (mapkitToken) {
         MapHelpers.initMapKit(mapkitToken);

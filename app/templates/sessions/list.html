@@ -8,14 +8,34 @@
         from { opacity: 1; transform: translateX(0); }
         to   { opacity: 0; transform: translateX(40px); }
     }
-    tr.deleting { animation: rowFadeOut 0.4s ease forwards; pointer-events: none; }
+    tr.row-busy { pointer-events: none; }
+    tr.row-removing { animation: rowFadeOut 0.4s ease forwards; pointer-events: none; }
+    .row-progress { display: flex; align-items: center; gap: 10px; padding: 8px 0; }
+    .row-progress-bar { flex: 1; height: 4px; background: var(--bb-surface-alt); border-radius: 2px; overflow: hidden; }
+    .row-progress-fill { height: 100%; border-radius: 2px; transition: width 0.4s ease; width: 0%; }
+    .row-progress-text { font-size: 0.75rem; color: var(--bb-text-muted); white-space: nowrap; }
+    .reingest-icon { color: var(--bb-amber, #f59e0b); font-size: 0.85rem; margin-left: 4px;
+        vertical-align: middle; }
     .spinner-border-sm { width: 1rem; height: 1rem; border-width: 0.15em; }
     .label-filter { display: inline-flex; align-items: center; gap: 4px; cursor: pointer;
-        background: var(--bb-surface-alt); color: var(--bb-text-muted); border: 1px solid var(--bb-border);
-        border-radius: 999px; padding: 3px 10px; font-size: 0.75rem; transition: all 0.15s; }
-    .label-filter:hover, .label-filter.active {
+        border-radius: 999px; padding: 3px 10px; font-size: 0.75rem; transition: all 0.15s;
+        border: 1px solid var(--bb-border); background: var(--bb-surface-alt); color: var(--bb-text-muted); }
+    .label-filter[data-label=""]:hover, .label-filter[data-label=""].active {
         background: rgba(59, 130, 246, 0.15); color: var(--bb-blue); border-color: rgba(59, 130, 246, 0.3); }
-    .session-label { font-size: 0.7rem; padding: 1px 6px; }
+    .label-filter.active .label-dismiss { margin-left: 2px; font-size: 0.65rem; opacity: 0.7; }
+    .label-filter:not(.active) .label-dismiss { display: none; }
+    .label-overflow { font-style: italic; opacity: 0.8; }
+    .session-label { font-size: 0.7rem; padding: 1px 6px; border: none; }
+    .track-filter { background: var(--bb-surface-alt); color: var(--bb-text); border: 1px solid var(--bb-border);
+        border-radius: 6px; padding: 3px 8px; font-size: 0.75rem; cursor: pointer; }
+    .track-filter:focus { outline: none; border-color: var(--bb-blue); }
+    .filter-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-bottom: 12px; }
+    .filter-group { display: flex; align-items: center; gap: 6px; }
+    .filter-group-label { font-size: 0.7rem; color: var(--bb-text-muted); text-transform: uppercase; letter-spacing: 0.5px; }
+    th.sortable { cursor: pointer; user-select: none; white-space: nowrap; }
+    th.sortable:hover { color: var(--bb-blue); }
+    th.sortable .sort-icon { font-size: 0.65rem; margin-left: 3px; opacity: 0.4; }
+    th.sortable.sort-asc .sort-icon, th.sortable.sort-desc .sort-icon { opacity: 1; color: var(--bb-blue); }
 </style>
 {% endblock %}
 
@@ -26,45 +46,65 @@
 </div>
 
 {% if sessions %}
-<!-- Label filters -->
-{% set all_labels = [] %}
-{% for s in sessions %}
-{% if s.labels %}{% for l in s.labels %}{% if l not in all_labels %}{% if all_labels.append(l) %}{% endif %}{% endif %}{% endfor %}{% endif %}
-{% endfor %}
-{% if all_labels %}
-<div class="d-flex flex-wrap gap-2 mb-3" id="labelFilters">
-    <span class="label-filter active" data-label="">All</span>
-    {% for label in all_labels|sort %}
-    <span class="label-filter" data-label="{{ label }}">{{ label }}</span>
-    {% endfor %}
+<!-- Filters -->
+{% set all_tracks = sessions|map(attribute='track')|select|map(attribute='name')|unique|sort|list %}
+<div class="filter-bar">
+    {% if all_tracks %}
+    <div class="filter-group">
+        <span class="filter-group-label">Track</span>
+        <select class="track-filter" id="trackFilter">
+            <option value="">All tracks</option>
+            {% for t in all_tracks %}
+            <option value="{{ t }}">{{ t }}</option>
+            {% endfor %}
+        </select>
+    </div>
+    {% endif %}
+    {% if sorted_labels %}
+    <div class="filter-group">
+        <span class="filter-group-label">Labels</span>
+        {% set visible_count = 5 %}
+        <div class="d-flex flex-wrap gap-2" id="labelFilters">
+            <span class="label-filter active" data-label="">All</span>
+            {% for label in sorted_labels[:visible_count] %}
+            <span class="label-filter" data-label="{{ label }}">{{ label }}<i class="bi bi-x label-dismiss"></i></span>
+            {% endfor %}
+            {% if sorted_labels|length > visible_count %}
+            <span class="label-filter label-overflow" id="labelOverflow">+{{ sorted_labels|length - visible_count }} more</span>
+            {% for label in sorted_labels[visible_count:] %}
+            <span class="label-filter label-extra" data-label="{{ label }}" style="display:none">{{ label }}<i class="bi bi-x label-dismiss"></i></span>
+            {% endfor %}
+            {% endif %}
+        </div>
+    </div>
+    {% endif %}
 </div>
-{% endif %}
 
 <div class="table-responsive">
     <table class="table table-hover" id="sessionsTable">
         <thead>
             <tr>
-                <th>Date</th>
-                <th>Track</th>
-                <th>Best Lap</th>
-                <th>Clean Laps</th>
-                <th>Consistency</th>
+                <th class="sortable sort-desc" data-col="0" data-type="string">Date <i class="bi bi-arrow-down sort-icon"></i></th>
+                <th class="sortable" data-col="1" data-type="string">Track <i class="bi bi-arrow-down-up sort-icon"></i></th>
+                <th class="sortable" data-col="2" data-type="number">Best Lap <i class="bi bi-arrow-down-up sort-icon"></i></th>
+                <th class="sortable" data-col="3" data-type="number">Clean Laps <i class="bi bi-arrow-down-up sort-icon"></i></th>
+                <th class="sortable" data-col="4" data-type="number">Consistency <i class="bi bi-arrow-down-up sort-icon"></i></th>
                 <th>Labels</th>
                 <th></th>
             </tr>
         </thead>
         <tbody>
             {% for s in sessions %}
-            <tr data-labels="{{ (s.labels or [])|join(',') }}">
-                <td>{{ s.date }}</td>
+            <tr data-labels="{{ (s.labels or [])|join(',') }}" data-track="{{ s.track.name if s.track else '' }}">
+                <td data-sort="{{ s.date }}">{{ s.date }}{% if s.needs_reingest %}<i class="bi bi-arrow-repeat reingest-icon" title="Needs reingestion — track corners were updated"></i>{% endif %}</td>
                 <td>{{ s.track.name if s.track else '—' }}</td>
-                <td>{{ "%.3f"|format(s.best_lap_time) if s.best_lap_time else '—' }}s</td>
-                <td>{{ s.clean_laps or '—' }} / {{ s.total_laps or '—' }}</td>
-                <td>{{ "%.1f"|format(s.consistency_pct) if s.consistency_pct else '—' }}%</td>
+                <td data-sort="{{ s.best_lap_time or 999999 }}">{{ "%.3f"|format(s.best_lap_time) if s.best_lap_time else '—' }}s</td>
+                <td data-sort="{{ s.clean_laps or 0 }}">{{ s.clean_laps or '—' }} / {{ s.total_laps or '—' }}</td>
+                <td data-sort="{{ s.consistency_pct or 0 }}">{{ "%.1f"|format(s.consistency_pct) if s.consistency_pct else '—' }}%</td>
                 <td>
                     {% if s.labels %}
                     {% for label in s.labels %}
-                    <span class="badge bg-info session-label">{{ label }}</span>
+                    <span class="badge session-label" data-label="{{ label }}">{{ label }}</span>
                     {% endfor %}
                     {% else %}
                     —
@@ -73,6 +113,12 @@
                 <td class="text-nowrap">
                     <a href="{{ url_for('dashboard.view', session_id=s.id) }}" class="btn btn-sm btn-outline-primary" title="Dashboard"><i class="bi bi-speedometer2"></i>Dashboard</a>
                     {% if s.user_id == current_user.id %}
+                    {% if s.needs_reingest %}
+                    <button class="btn btn-sm btn-outline-warning reingest-btn" title="Reingest session"
+                            data-url="{{ url_for('sessions.reingest', session_id=s.id) }}"
+                            data-csrf="{{ csrf_token() }}"
+                            onclick="handleReingest(this)"><i class="bi bi-arrow-repeat"></i></button>
+                    {% endif %}
                     <a href="{{ url_for('sessions.edit', session_id=s.id) }}" class="btn btn-sm btn-outline-secondary" title="Edit"><i class="bi bi-pencil"></i></a>
                     <form method="POST" action="{{ url_for('sessions.delete', session_id=s.id) }}" class="d-inline"
                           onsubmit="return handleDelete(this)">
@@ -96,34 +142,286 @@
 
 {% block extra_scripts %}
 <script>
+// Label color palette — deterministic hash maps label name to a color
+var LABEL_COLORS = [
+    {h:210, s:70, l:55},  // blue
+    {h:160, s:55, l:45},  // teal
+    {h:35,  s:75, l:50},  // amber
+    {h:280, s:50, l:55},  // purple
+    {h:350, s:60, l:55},  // rose
+    {h:120, s:45, l:45},  // green
+    {h:195, s:65, l:50},  // cyan
+    {h:25,  s:70, l:50},  // orange
+    {h:245, s:55, l:60},  // indigo
+    {h:330, s:50, l:50},  // pink
+    {h:55,  s:60, l:45},  // olive
+    {h:180, s:45, l:45},  // dark cyan
+];
+
+function labelHash(name) {
+    var hash = 0;
+    for (var i = 0; i < name.length; i++) {
+        hash = ((hash << 5) - hash) + name.charCodeAt(i);
+        hash |= 0;
+    }
+    return Math.abs(hash) % LABEL_COLORS.length;
+}
+
+function labelColor(name) { return LABEL_COLORS[labelHash(name)]; }
+
+function applyLabelColors() {
+    // Table badges
+    document.querySelectorAll('.session-label[data-label]').forEach(function(el) {
+        var c = labelColor(el.dataset.label);
+        el.style.background = 'hsla(' + c.h + ',' + c.s + '%,' + c.l + '%,0.2)';
+        el.style.color = 'hsl(' + c.h + ',' + c.s + '%,' + (c.l + 15) + '%)';
+    });
+    // Filter pills (not "All" or overflow)
+    document.querySelectorAll('.label-filter[data-label]:not([data-label=""])').forEach(function(el) {
+        var c = labelColor(el.dataset.label);
+        el.style.setProperty('--lc-h', c.h);
+        el.style.setProperty('--lc-s', c.s + '%');
+        el.style.setProperty('--lc-l', c.l + '%');
+        el.style.borderColor = 'hsla(' + c.h + ',' + c.s + '%,' + c.l + '%,0.3)';
+        el.style.color = 'hsl(' + c.h + ',' + c.s + '%,' + (c.l + 15) + '%)';
+        el.style.background = 'hsla(' + c.h + ',' + c.s + '%,' + c.l + '%,0.1)';
+    });
+}
+
+function updateFilterColors() {
+    document.querySelectorAll('.label-filter[data-label]:not([data-label=""])').forEach(function(el) {
+        var c = labelColor(el.dataset.label);
+        if (el.classList.contains('active')) {
+            el.style.background = 'hsla(' + c.h + ',' + c.s + '%,' + c.l + '%,0.25)';
+            el.style.borderColor = 'hsla(' + c.h + ',' + c.s + '%,' + c.l + '%,0.5)';
+        } else {
+            el.style.background = 'hsla(' + c.h + ',' + c.s + '%,' + c.l + '%,0.1)';
+            el.style.borderColor = 'hsla(' + c.h + ',' + c.s + '%,' + c.l + '%,0.3)';
+        }
+    });
+}
+
+applyLabelColors();
+
+// ── Shared row progress helper ──
+function rowProgress(row, color) {
+    var colCount = row.cells.length;
+    var id = 'rp' + Math.random().toString(36).slice(2, 8);
+    row.classList.add('row-busy');
+    row.innerHTML = '<td colspan="' + colCount + '">'
+        + '<div class="row-progress">'
+        + '<div class="row-progress-bar"><div class="row-progress-fill" id="' + id + 'Fill" style="background:' + color + '"></div></div>'
+        + '<span class="row-progress-text" id="' + id + 'Text">Preparing…</span>'
+        + '</div></td>';
+    return {
+        fill: document.getElementById(id + 'Fill'),
+        text: document.getElementById(id + 'Text'),
+    };
+}
+
+function animateStages(els, stages, interval) {
+    var stage = 0;
+    return setInterval(function() {
+        if (stage < stages.length) {
+            els.fill.style.width = stages[stage].pct + '%';
+            els.text.textContent = stages[stage].text;
+            stage++;
+        }
+    }, interval || 600);
+}
+
+// ── Delete ──
+var deleteStages = [
+    { pct: 15, text: 'Removing telemetry…' },
+    { pct: 40, text: 'Cleaning up laps…' },
+    { pct: 60, text: 'Removing charts…' },
+    { pct: 80, text: 'Almost done…' },
+];
+
 function handleDelete(form) {
     if (!confirm('Delete this session? This cannot be undone.')) return false;
-    var btn = form.querySelector('button');
-    btn.disabled = true;
-    btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
     var row = form.closest('tr');
-    row.classList.add('deleting');
-    setTimeout(function() { form.submit(); }, 400);
+    var csrf = form.querySelector('[name=csrf_token]').value;
+    var els = rowProgress(row, 'var(--bb-blue)');
+    var timer = animateStages(els, deleteStages);
+
+    fetch(form.action, {
+        method: 'POST',
+        headers: { 'X-Requested-With': 'fetch', 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: 'csrf_token=' + encodeURIComponent(csrf),
+        credentials: 'same-origin',
+    }).then(function(resp) {
+        clearInterval(timer);
+        if (resp.ok) {
+            els.fill.style.width = '100%';
+            els.text.textContent = 'Deleted';
+            setTimeout(function() {
+                row.classList.add('row-removing');
+                setTimeout(function() { row.remove(); }, 400);
+            }, 300);
+        } else {
+            resp.json().then(function(data) { alert(data.error || 'Delete failed'); })
+                .catch(function() { alert('Delete failed'); });
+            location.reload();
+        }
+    }).catch(function() {
+        clearInterval(timer);
+        alert('Network error — could not delete session.');
+        location.reload();
+    });
+
     return false;
 }
 
-// Label filtering
+// ── Reingest ──
+var reingestStages = [
+    { pct: 10, text: 'Decompressing data…' },
+    { pct: 25, text: 'Parsing telemetry…' },
+    { pct: 45, text: 'Analyzing corners…' },
+    { pct: 65, text: 'Computing sectors…' },
+    { pct: 80, text: 'Generating charts…' },
+    { pct: 92, text: 'Almost done…' },
+];
+
+function handleReingest(btn) {
+    var row = btn.closest('tr');
+    var url = btn.dataset.url;
+    var csrf = btn.dataset.csrf;
+    var els = rowProgress(row, 'var(--bb-amber, #f59e0b)');
+    var timer = animateStages(els, reingestStages, 2000);
+
+    fetch(url, {
+        method: 'POST',
+        headers: { 'X-Requested-With': 'fetch', 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: 'csrf_token=' + encodeURIComponent(csrf),
+        credentials: 'same-origin',
+    }).then(function(resp) {
+        clearInterval(timer);
+        if (resp.ok) {
+            els.fill.style.width = '100%';
+            els.text.textContent = 'Reingestion complete';
+            setTimeout(function() { location.reload(); }, 800);
+        } else {
+            resp.json().then(function(data) { alert(data.error || 'Reingest failed'); })
+                .catch(function() { alert('Reingest failed'); });
+            location.reload();
+        }
+    }).catch(function() {
+        clearInterval(timer);
+        alert('Network error — could not reingest session.');
+        location.reload();
+    });
+}
+
+// Overflow toggle
+var overflowBtn = document.getElementById('labelOverflow');
+if (overflowBtn) {
+    overflowBtn.addEventListener('click', function() {
+        var extras = document.querySelectorAll('.label-extra');
+        var expanded = overflowBtn.dataset.expanded === '1';
+        extras.forEach(function(el) { el.style.display = expanded ? 'none' : ''; });
+        overflowBtn.style.display = expanded ? '' : 'none';
+        overflowBtn.dataset.expanded = expanded ? '0' : '1';
+    });
+}
+
+// ── Combined filtering (track + labels) ──
 var filters = document.querySelectorAll('.label-filter');
+var allBtn = document.querySelector('.label-filter[data-label=""]');
+var trackFilter = document.getElementById('trackFilter');
+
+function applyFilters() {
+    var active = document.querySelectorAll('.label-filter.active[data-label]:not([data-label=""])');
+    var selectedLabels = Array.prototype.map.call(active, function(f) { return f.dataset.label; });
+    var selectedTrack = trackFilter ? trackFilter.value : '';
+
+    if (selectedLabels.length === 0) {
+        allBtn.classList.add('active');
+    } else {
+        allBtn.classList.remove('active');
+    }
+
+    var rows = document.querySelectorAll('#sessionsTable tbody tr');
+    rows.forEach(function(row) {
+        var show = true;
+        // Track filter
+        if (selectedTrack && row.dataset.track !== selectedTrack) show = false;
+        // Label filter (AND)
+        if (show && selectedLabels.length > 0) {
+            var rowLabels = (row.dataset.labels || '').split(',');
+            show = selectedLabels.every(function(s) { return rowLabels.indexOf(s) !== -1; });
+        }
+        row.style.display = show ? '' : 'none';
+    });
+}
+
 filters.forEach(function(f) {
     f.addEventListener('click', function() {
-        filters.forEach(function(ff) { ff.classList.remove('active'); });
-        f.classList.add('active');
-        var label = f.dataset.label;
-        var rows = document.querySelectorAll('#sessionsTable tbody tr');
-        rows.forEach(function(row) {
-            if (!label) {
-                row.style.display = '';
-            } else {
-                var labels = (row.dataset.labels || '').split(',');
-                row.style.display = labels.indexOf(label) !== -1 ? '' : 'none';
-            }
-        });
+        if (!f.dataset.label) {
+            filters.forEach(function(ff) { ff.classList.remove('active'); });
+            allBtn.classList.add('active');
+        } else {
+            f.classList.toggle('active');
+        }
+        applyFilters();
+        updateFilterColors();
     });
 });
+
+if (trackFilter) {
+    trackFilter.addEventListener('change', function() { applyFilters(); });
+}
+
+// ── Column sorting ──
+var thead = document.querySelector('#sessionsTable thead');
+var tbody = document.querySelector('#sessionsTable tbody');
+
+if (thead && tbody) {
+    thead.querySelectorAll('th.sortable').forEach(function(th) {
+        th.addEventListener('click', function() {
+            var col = parseInt(th.dataset.col);
+            var type = th.dataset.type;
+            var asc;
+
+            if (th.classList.contains('sort-asc')) {
+                th.classList.remove('sort-asc');
+                th.classList.add('sort-desc');
+                asc = false;
+            } else if (th.classList.contains('sort-desc')) {
+                th.classList.remove('sort-desc');
+                th.classList.add('sort-asc');
+                asc = true;
+            } else {
+                asc = true;
+                th.classList.add('sort-asc');
+            }
+
+            // Clear other headers
+            thead.querySelectorAll('th.sortable').forEach(function(other) {
+                if (other !== th) {
+                    other.classList.remove('sort-asc', 'sort-desc');
+                    other.querySelector('.sort-icon').className = 'bi bi-arrow-down-up sort-icon';
+                }
+            });
+            th.querySelector('.sort-icon').className = 'bi ' + (asc ? 'bi-arrow-up' : 'bi-arrow-down') + ' sort-icon';
+
+            var rows = Array.prototype.slice.call(tbody.querySelectorAll('tr'));
+            rows.sort(function(a, b) {
+                var aCell = a.cells[col];
+                var bCell = b.cells[col];
+                var aVal = aCell.dataset.sort !== undefined ? aCell.dataset.sort : aCell.textContent.trim();
+                var bVal = bCell.dataset.sort !== undefined ? bCell.dataset.sort : bCell.textContent.trim();
+
+                if (type === 'number') {
+                    aVal = parseFloat(aVal) || 0;
+                    bVal = parseFloat(bVal) || 0;
+                    return asc ? aVal - bVal : bVal - aVal;
+                }
+                return asc ? aVal.localeCompare(bVal) : bVal.localeCompare(aVal);
+            });
+            rows.forEach(function(row) { tbody.appendChild(row); });
+        });
+    });
+}
 </script>
 {% endblock %}

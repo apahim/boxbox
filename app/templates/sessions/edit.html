@@ -9,7 +9,7 @@
             <div class="card-body p-4">
                 <h3 class="card-title mb-4">Edit Session</h3>
                 <form method="POST">
-                    {{ form.hidden_tag() }}
+                    {{ form.csrf_token() }}
 
                     <div class="row">
                         <div class="col-md-6 mb-3">
