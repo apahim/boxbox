@@ -6,7 +6,7 @@ class Config:
     SQLALCHEMY_DATABASE_URI = os.environ.get('DATABASE_URL', 'sqlite:///kart.db')
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     MAPKIT_TOKEN = os.environ.get('MAPKIT_TOKEN', '')
-    MAX_CONTENT_LENGTH = 50 * 1024 * 1024  # 50MB upload limit
+    MAX_CONTENT_LENGTH = 150 * 1024 * 1024  # 150MB upload limit
 
 
 class TestingConfig(Config):

@@ -196,7 +196,8 @@ window.Raceline = (function() {
 
     function init(data) {
         rlData = data;
-        if (!rlData || !rlData.laps || rlData.laps.length === 0) return;
+        if (!rlData) return;
+        if (!rlData.sessions && (!rlData.laps || rlData.laps.length === 0)) return;
 
         // Wrap single-session raceline into sessions format
         if (!rlData.sessions) {

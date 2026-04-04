@@ -334,6 +334,25 @@ def evolution_raceline():
     return jsonify({'sessions': sessions})
 
 
+@bp.route('/tracks/<int:track_id>/gate')
+def track_gate(track_id):
+    """Return start/finish gate coordinates for a track."""
+    if not current_user.is_authenticated:
+        return jsonify(error='Authentication required'), 401
+
+    track = db.session.get(Track, track_id)
+    if not track:
+        return jsonify(error='Track not found'), 404
+
+    if track.sf_lat1 is None:
+        return jsonify(error='No start/finish gate configured'), 404
+
+    return jsonify(
+        sf_lat1=track.sf_lat1, sf_lon1=track.sf_lon1,
+        sf_lat2=track.sf_lat2, sf_lon2=track.sf_lon2,
+    )
+
+
 @bp.route('/tracks')
 def api_tracks():
     """Return list of tracks the user has sessions at."""

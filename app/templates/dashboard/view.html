@@ -14,7 +14,9 @@
 <meta id="session-meta"
       data-session-id="{{ session.id }}"
       data-mapkit-token="{{ mapkit_token }}"
-      data-api-base="{{ url_for('api.session_summary', session_id=session.id) | replace('/summary', '') }}">
+      data-api-base="{{ url_for('api.session_summary', session_id=session.id) | replace('/summary', '') }}"
+      data-track-id="{{ session.track_id }}"
+      data-session-id-val="{{ session.id }}">
 
 <div class="row mb-4">
     <div class="col">

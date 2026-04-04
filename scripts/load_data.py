@@ -102,6 +102,15 @@ def load_racechrono_session(csv_path):
     )
     df.columns = new_columns
 
+    # Normalize acceleration column names for consistency
+    rename = {}
+    if "lateral_acceleration" in df.columns and "lateral_acc" not in df.columns:
+        rename["lateral_acceleration"] = "lateral_acc"
+    if "longitudinal_acceleration" in df.columns and "longitudinal_acc" not in df.columns:
+        rename["longitudinal_acceleration"] = "longitudinal_acc"
+    if rename:
+        df = df.rename(columns=rename)
+
     return df
 
 

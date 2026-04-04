@@ -81,6 +81,23 @@ def edit(slug):
             flash('Invalid corner data.', 'danger')
             return redirect(url_for('tracks.edit', slug=slug))
 
+        # Save start/finish gate if provided
+        sf_json = request.form.get('sf_gate_json', '')
+        if sf_json:
+            try:
+                sf = json.loads(sf_json)
+                track.sf_lat1 = float(sf['lat1'])
+                track.sf_lon1 = float(sf['lon1'])
+                track.sf_lat2 = float(sf['lat2'])
+                track.sf_lon2 = float(sf['lon2'])
+            except (json.JSONDecodeError, KeyError, TypeError, ValueError):
+                pass  # ignore malformed SF gate data
+        else:
+            track.sf_lat1 = None
+            track.sf_lon1 = None
+            track.sf_lat2 = None
+            track.sf_lon2 = None
+
         # Delete existing corners and replace
         TrackCorner.query.filter_by(track_id=track.id).delete()
 
@@ -117,8 +134,16 @@ def edit(slug):
 
     mapkit_token = current_app.config.get('MAPKIT_TOKEN', '')
 
+    sf_gate = None
+    if track.sf_lat1 is not None:
+        sf_gate = {
+            'lat1': track.sf_lat1, 'lon1': track.sf_lon1,
+            'lat2': track.sf_lat2, 'lon2': track.sf_lon2,
+        }
+
     return render_template('tracks/edit.html',
                            track=track,
                            corners=corners_list,
                            corners_json=json.dumps(corners_list),
+                           sf_gate_json=json.dumps(sf_gate),
                            mapkit_token=mapkit_token)

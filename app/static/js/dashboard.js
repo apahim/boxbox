@@ -213,11 +213,64 @@
     function loadRaceline() {
         tabsLoaded.raceline = true;
         if (!mapkitToken) return;
-        api("/raceline").then(function(data) {
-            if (!data) return;
-            MapHelpers.waitForMapKit(function() {
-                Raceline.init(data);
-            });
+        var trackId = meta.dataset.trackId;
+        var currentSessionId = parseInt(meta.dataset.sessionIdVal);
+
+        // Fetch current session raceline + sibling sessions at the same track
+        Promise.all([
+            api("/raceline"),
+            trackId ? fetch("/api/evolution?track_id=" + trackId, { credentials: "same-origin" })
+                .then(function(r) { return r.ok ? r.json() : []; }).catch(function() { return []; }) : Promise.resolve([])
+        ]).then(function(results) {
+            var currentData = results[0];
+            var allSessions = results[1];
+            if (!currentData) return;
+
+            // Filter to sessions that aren't the current one
+            var otherIds = [];
+            var currentMeta = null;
+            for (var i = 0; i < allSessions.length; i++) {
+                if (allSessions[i].id !== currentSessionId) {
+                    otherIds.push(allSessions[i].id);
+                } else {
+                    currentMeta = allSessions[i];
+                }
+            }
+
+            if (otherIds.length === 0) {
+                // No other sessions, just init with current data
+                MapHelpers.waitForMapKit(function() { Raceline.init(currentData); });
+                return;
+            }
+
+            // Fetch raceline data for sibling sessions
+            fetch("/api/evolution/raceline?session_ids=" + otherIds.join(","), { credentials: "same-origin" })
+                .then(function(r) { return r.ok ? r.json() : null; })
+                .then(function(evoData) {
+                    // Build combined sessions array: current first, then others
+                    var sessions = [{
+                        laps: currentData.laps,
+                        is_current: true,
+                        session_id: currentSessionId,
+                        date: currentMeta ? currentMeta.date : "",
+                        session_type: currentMeta ? currentMeta.session_type : ""
+                    }];
+
+                    if (evoData && evoData.sessions) {
+                        for (var j = 0; j < evoData.sessions.length; j++) {
+                            var s = evoData.sessions[j];
+                            s.is_current = false;
+                            sessions.push(s);
+                        }
+                    }
+
+                    MapHelpers.waitForMapKit(function() {
+                        Raceline.init({ sessions: sessions });
+                    });
+                })
+                .catch(function() {
+                    MapHelpers.waitForMapKit(function() { Raceline.init(currentData); });
+                });
         });
     }
 

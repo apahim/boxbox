@@ -1,6 +1,6 @@
 from flask_wtf import FlaskForm
-from flask_wtf.file import FileField, FileRequired, FileAllowed
-from wtforms import StringField, FloatField, IntegerField, SelectField, SubmitField, DateField, TimeField
+from flask_wtf.file import FileField, FileAllowed
+from wtforms import StringField, FloatField, IntegerField, SelectField, SubmitField, DateField, TimeField, HiddenField
 from wtforms.validators import DataRequired, Optional
 
 
@@ -17,9 +17,9 @@ class SessionEditForm(FlaskForm):
 
 class SessionCreateForm(FlaskForm):
     csv_file = FileField('Telemetry CSV', validators=[
-        FileRequired(),
         FileAllowed(['csv'], 'CSV files only'),
     ])
+    data_source = HiddenField('Data Source', default='racechrono')
     date = DateField('Date', validators=[DataRequired()])
     track_id = SelectField('Track', coerce=int, validators=[DataRequired()])
     kart_number = IntegerField('Kart Number', validators=[Optional()])

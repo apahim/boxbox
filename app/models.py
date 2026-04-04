@@ -67,6 +67,11 @@ class Track(db.Model):
     timezone = db.Column(db.String(50), default='UTC')
     created_by = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
 
+    sf_lat1 = db.Column(db.Float, nullable=True)
+    sf_lon1 = db.Column(db.Float, nullable=True)
+    sf_lat2 = db.Column(db.Float, nullable=True)
+    sf_lon2 = db.Column(db.Float, nullable=True)
+
     corners = db.relationship('TrackCorner', backref='track', lazy='dynamic',
                               cascade='all, delete-orphan',
                               order_by='TrackCorner.sort_order')
@@ -122,6 +127,7 @@ class Session(db.Model):
 
     weather = db.Column(db.JSON)
     coaching = db.Column(db.JSON)
+    data_source = db.Column(db.String(20), default='racechrono')
     needs_reingest = db.Column(db.Boolean, default=False, nullable=False)
 
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))

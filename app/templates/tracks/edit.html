@@ -31,6 +31,13 @@
         </div>
     </div>
     <div class="col-lg-4">
+        <div class="card mb-3">
+            <div class="card-body">
+                <h5 class="card-title">Start / Finish Line</h5>
+                <div id="sf-status" class="mb-2"></div>
+                <button type="button" class="btn btn-sm btn-outline-success" id="sf-toggle-btn" onclick="toggleSfGate()">Set Start/Finish Line</button>
+            </div>
+        </div>
         <div class="card">
             <div class="card-body">
                 <h5 class="card-title">Corners</h5>
@@ -40,6 +47,7 @@
                 <form method="POST" id="save-form">
                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <input type="hidden" name="corners_json" id="corners-json" value="">
+                    <input type="hidden" name="sf_gate_json" id="sf-gate-json" value="">
                     <button type="submit" class="btn btn-primary w-100">Save Corners</button>
                 </form>
             </div>
@@ -58,6 +66,100 @@
     var mapkitToken = "{{ mapkit_token }}";
     var map = null;
     var overlays = []; // per corner: {polyline, ann1, ann2, label}
+
+    // Start/finish gate
+    var sfGate = {{ sf_gate_json | safe }};
+    var sfOverlays = null; // {polyline, ann1, ann2, label}
+
+    function renderSfStatus() {
+        var el = document.getElementById('sf-status');
+        var btn = document.getElementById('sf-toggle-btn');
+        if (sfGate) {
+            el.innerHTML = '<span class="text-success">Configured</span> <span class="corner-coords">(' +
+                sfGate.lat1.toFixed(5) + ', ' + sfGate.lon1.toFixed(5) + ')</span>';
+            btn.textContent = 'Remove';
+            btn.className = 'btn btn-sm btn-outline-danger';
+        } else {
+            el.innerHTML = '<span class="text-muted">Not set</span>';
+            btn.textContent = 'Set Start/Finish Line';
+            btn.className = 'btn btn-sm btn-outline-success';
+        }
+        document.getElementById('sf-gate-json').value = sfGate ? JSON.stringify(sfGate) : '';
+    }
+
+    window.toggleSfGate = function() {
+        if (sfGate) {
+            sfGate = null;
+        } else {
+            var offset = 0.00008;
+            sfGate = {
+                lat1: trackLat + offset, lon1: trackLon - offset,
+                lat2: trackLat - offset, lon2: trackLon + offset,
+            };
+        }
+        renderSfStatus();
+        if (map) updateSfOverlay();
+    };
+
+    function clearSfOverlay() {
+        if (!sfOverlays || !map) return;
+        if (sfOverlays.polyline) map.removeOverlay(sfOverlays.polyline);
+        if (sfOverlays.ann1) map.removeAnnotation(sfOverlays.ann1);
+        if (sfOverlays.ann2) map.removeAnnotation(sfOverlays.ann2);
+        if (sfOverlays.label) map.removeAnnotation(sfOverlays.label);
+        sfOverlays = null;
+    }
+
+    function updateSfOverlay() {
+        clearSfOverlay();
+        if (!sfGate || !map) return;
+
+        var coord1 = new mapkit.Coordinate(sfGate.lat1, sfGate.lon1);
+        var coord2 = new mapkit.Coordinate(sfGate.lat2, sfGate.lon2);
+        var midCoord = new mapkit.Coordinate(
+            (sfGate.lat1 + sfGate.lat2) / 2,
+            (sfGate.lon1 + sfGate.lon2) / 2
+        );
+
+        var polyline = new mapkit.PolylineOverlay([coord1, coord2], {
+            style: new mapkit.Style({ lineWidth: 4, strokeColor: '#2ecc71', strokeOpacity: 0.9 }),
+        });
+        map.addOverlay(polyline);
+
+        var ann1 = new mapkit.MarkerAnnotation(coord1, {
+            color: '#2ecc71', glyphText: '\u2022', draggable: true,
+            displayPriority: mapkit.Annotation.DisplayPriority.Required,
+        });
+        ann1.addEventListener('drag-end', function(e) {
+            sfGate.lat1 = e.target.coordinate.latitude;
+            sfGate.lon1 = e.target.coordinate.longitude;
+            renderSfStatus();
+            updateSfOverlay();
+        });
+
+        var ann2 = new mapkit.MarkerAnnotation(coord2, {
+            color: '#2ecc71', glyphText: '\u2022', draggable: true,
+            displayPriority: mapkit.Annotation.DisplayPriority.Required,
+        });
+        ann2.addEventListener('drag-end', function(e) {
+            sfGate.lat2 = e.target.coordinate.latitude;
+            sfGate.lon2 = e.target.coordinate.longitude;
+            renderSfStatus();
+            updateSfOverlay();
+        });
+
+        var label = new mapkit.Annotation(midCoord, function() {
+            var el = document.createElement('div');
+            el.textContent = 'S/F';
+            el.style.cssText = 'font-size:12px;font-weight:bold;color:#fff;background:#2ecc71;padding:1px 5px;border-radius:3px;white-space:nowrap;pointer-events:none;';
+            return el;
+        }, { draggable: false, enabled: false, displayPriority: mapkit.Annotation.DisplayPriority.Required });
+
+        map.addAnnotation(ann1);
+        map.addAnnotation(ann2);
+        map.addAnnotation(label);
+        sfOverlays = { polyline: polyline, ann1: ann1, ann2: ann2, label: label };
+    }
 
     function midpoint(c) {
         return {
@@ -239,9 +341,11 @@
         });
 
         updateMapOverlays();
+        updateSfOverlay();
     }
 
     renderCornerList();
+    renderSfStatus();
 
     if (mapkitToken) {
         MapHelpers.initMapKit(mapkitToken);

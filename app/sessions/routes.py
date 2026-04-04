@@ -49,8 +49,18 @@ def create():
     if form.validate_on_submit():
         session_date = form.date.data
 
+        # Determine CSV source: standard file input or GoPro-generated CSV
+        data_source = form.data_source.data or 'racechrono'
+        if data_source == 'gopro':
+            csv_file = request.files.get('gopro_csv')
+        else:
+            csv_file = form.csv_file.data
+
+        if not csv_file:
+            flash('No telemetry file provided.', 'danger')
+            return render_template('sessions/create.html', form=form)
+
         # Save CSV to temp file
-        csv_file = form.csv_file.data
         temp_fd, temp_path = tempfile.mkstemp(suffix='.csv')
         try:
             csv_file.save(temp_path)
@@ -68,6 +78,7 @@ def create():
                 session_start=form.session_start.data.strftime('%H:%M') if form.session_start.data else None,
                 kart_number=form.kart_number.data,
                 driver_weight_kg=form.driver_weight_kg.data,
+                data_source=data_source,
             )
             db.session.add(session)
             db.session.flush()  # Get session.id
