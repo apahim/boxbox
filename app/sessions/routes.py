@@ -1,7 +1,8 @@
+import json
 import os
 import tempfile
 
-from flask import render_template, redirect, url_for, flash, request
+from flask import render_template, redirect, url_for, flash, request, jsonify
 from flask_login import login_required, current_user
 from sqlalchemy import or_
 
@@ -47,6 +48,8 @@ def create():
     form.team_id.choices = [(0, '— No team —')] + [(t.id, t.name) for t in teams]
 
     if form.validate_on_submit():
+        is_fetch = request.headers.get('X-Requested-With') == 'fetch'
+
         session_date = form.date.data
 
         # Determine CSV source: standard file input or GoPro-generated CSV
@@ -57,8 +60,22 @@ def create():
             csv_file = form.csv_file.data
 
         if not csv_file:
-            flash('No telemetry file provided.', 'danger')
+            msg = 'No telemetry file provided.'
+            if is_fetch:
+                return jsonify(error=msg), 400
+            flash(msg, 'danger')
             return render_template('sessions/create.html', form=form)
+
+        # Parse labels
+        labels = []
+        try:
+            raw = form.labels.data
+            if raw:
+                labels = json.loads(raw)
+                if not isinstance(labels, list):
+                    labels = []
+        except (json.JSONDecodeError, TypeError):
+            labels = []
 
         # Save CSV to temp file
         temp_fd, temp_path = tempfile.mkstemp(suffix='.csv')
@@ -79,6 +96,7 @@ def create():
                 kart_number=form.kart_number.data,
                 driver_weight_kg=form.driver_weight_kg.data,
                 data_source=data_source,
+                labels=labels,
             )
             db.session.add(session)
             db.session.flush()  # Get session.id
@@ -99,16 +117,32 @@ def create():
             from app.sessions.ingest import ingest_session
             ingest_session(temp_path, session, track_coords, track_corners)
 
+            if is_fetch:
+                return jsonify(
+                    success=True,
+                    total_laps=session.total_laps,
+                    redirect_url=url_for('sessions.list_sessions'),
+                )
+
             flash(f'Session uploaded successfully. {session.total_laps} laps processed.', 'success')
             return redirect(url_for('sessions.list_sessions'))
 
         except Exception as e:
             db.session.rollback()
+            if is_fetch:
+                return jsonify(error=str(e)), 500
             flash(f'Error processing CSV: {e}', 'danger')
             return render_template('sessions/create.html', form=form)
         finally:
             os.close(temp_fd)
             os.unlink(temp_path)
+
+    # If form validation failed on a fetch request, return errors as JSON
+    if request.method == 'POST' and request.headers.get('X-Requested-With') == 'fetch':
+        errors = {}
+        for field, errs in form.errors.items():
+            errors[field] = errs
+        return jsonify(error='Validation failed', fields=errors), 400
 
     return render_template('sessions/create.html', form=form)
 
@@ -136,6 +170,7 @@ def edit(session_id):
     if request.method == 'GET':
         form.date.data = session.date
         form.team_id.data = session.team_id or 0
+        form.labels.data = json.dumps(session.labels or [])
         if session.session_start:
             from datetime import time as time_type
             parts = session.session_start.split(':')
@@ -149,6 +184,13 @@ def edit(session_id):
         session.driver_weight_kg = form.driver_weight_kg.data
         session.session_type = form.session_type.data or None
         session.session_start = form.session_start.data.strftime('%H:%M') if form.session_start.data else None
+
+        # Parse labels
+        try:
+            raw = form.labels.data
+            session.labels = json.loads(raw) if raw else []
+        except (json.JSONDecodeError, TypeError):
+            session.labels = []
 
         db.session.commit()
         flash('Session updated.', 'success')

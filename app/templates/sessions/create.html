@@ -6,305 +6,659 @@
 
 {% block content %}
 <div class="row justify-content-center">
-    <div class="col-md-8">
-        <div class="card">
-            <div class="card-body">
-                <h3 class="card-title mb-4">Upload Session</h3>
+    <div class="col-md-8 col-lg-6">
 
-                <!-- Data source toggle -->
-                <div class="btn-group mb-3 w-100" role="group">
-                    <input type="radio" class="btn-check" name="source-toggle" id="src-racechrono" value="racechrono" checked>
-                    <label class="btn btn-outline-primary" for="src-racechrono">RaceChrono CSV</label>
-                    <input type="radio" class="btn-check" name="source-toggle" id="src-gopro" value="gopro">
-                    <label class="btn btn-outline-primary" for="src-gopro">GoPro MP4</label>
-                </div>
+        <!-- Wizard Step Indicator -->
+        <ul class="wizard-steps" id="wizardSteps">
+            <li class="active" data-step="1">
+                <span class="step-circle">1</span>
+                <span class="step-label">Source</span>
+                <span class="step-line"></span>
+            </li>
+            <li data-step="2">
+                <span class="step-circle">2</span>
+                <span class="step-label">Details</span>
+                <span class="step-line"></span>
+            </li>
+            <li data-step="3">
+                <span class="step-circle">3</span>
+                <span class="step-label">Upload</span>
+            </li>
+        </ul>
 
-                <form method="POST" enctype="multipart/form-data" id="upload-form">
-                    {{ form.csrf_token }}
-                    {{ form.data_source(id="data-source-field") }}
+        <form method="POST" enctype="multipart/form-data" id="upload-form">
+            {{ form.csrf_token }}
+            {{ form.data_source(id="data-source-field") }}
+            {{ form.labels(id="labels-field") }}
 
-                    <!-- RaceChrono CSV input -->
-                    <div id="racechrono-input" class="mb-3">
-                        {{ form.csv_file.label(class="form-label") }}
-                        {{ form.csv_file(class="form-control") }}
-                        <div class="form-text">RaceChrono v3 CSV export</div>
-                        {% for error in form.csv_file.errors %}
-                        <div class="text-danger small">{{ error }}</div>
-                        {% endfor %}
-                    </div>
+            <!-- ==================== STEP 1: Source ==================== -->
+            <div class="wizard-pane" id="step-1">
+                <div class="card">
+                    <div class="card-body p-4">
+                        <h4 class="mb-1">Choose telemetry source</h4>
+                        <p class="text-muted mb-3" style="font-size: 0.85rem;">Select how you captured your session data.</p>
 
-                    <!-- GoPro MP4 input -->
-                    <div id="gopro-input" class="mb-3" style="display:none;">
-                        <label class="form-label">GoPro Video</label>
-                        <input type="file" class="form-control" id="gopro-file" accept=".mp4,.MP4">
-                        <div class="form-text">GoPro Hero 13 MP4 with GPS enabled. The video stays on your computer — only telemetry data is uploaded.</div>
-
-                        <!-- Progress -->
-                        <div id="gopro-progress" class="mt-3" style="display:none;">
-                            <div class="progress mb-2">
-                                <div id="gopro-progress-bar" class="progress-bar progress-bar-striped progress-bar-animated" style="width:0%"></div>
+                        <div class="row g-3 mb-3">
+                            <div class="col-6">
+                                <div class="source-card" id="src-racechrono" data-source="racechrono">
+                                    <i class="bi bi-phone"></i>
+                                    <h6>RaceChrono</h6>
+                                    <small>CSV Export</small>
+                                </div>
                             </div>
-                            <small id="gopro-progress-text" class="text-muted"></small>
-                        </div>
-
-                        <!-- Preview -->
-                        <div id="gopro-preview" class="mt-3" style="display:none;">
-                            <div class="card bg-light">
-                                <div class="card-body py-2">
-                                    <h6 class="card-title mb-1">Extracted Telemetry</h6>
-                                    <div id="gopro-summary" class="small"></div>
+                            <div class="col-6">
+                                <div class="source-card" id="src-gopro" data-source="gopro">
+                                    <i class="bi bi-camera-video"></i>
+                                    <h6>GoPro</h6>
+                                    <small>MP4 Video</small>
                                 </div>
                             </div>
                         </div>
 
-                        <!-- Download extracted CSV for debugging -->
-                        <button type="button" id="gopro-download" class="btn btn-sm btn-outline-secondary mt-2" style="display:none;">Download extracted CSV</button>
+                        <!-- RaceChrono file input -->
+                        <div id="racechrono-input" style="display:none;">
+                            <label class="form-label">Telemetry CSV</label>
+                            {{ form.csv_file(class="form-control", id="csv-file") }}
+                            <div class="form-text">RaceChrono v3 CSV export</div>
+                            <div id="rc-file-info" class="mt-2" style="display:none;">
+                                <span class="badge bg-info"><i class="bi bi-file-earmark-text"></i> <span id="rc-filename"></span></span>
+                            </div>
+                        </div>
 
-                        <!-- Error -->
-                        <div id="gopro-error" class="alert alert-danger mt-3" style="display:none;"></div>
+                        <!-- GoPro file input + extraction -->
+                        <div id="gopro-input" style="display:none;">
+                            <label class="form-label">GoPro Video</label>
+                            <input type="file" class="form-control" id="gopro-file" accept=".mp4,.MP4">
+                            <div class="form-text">GoPro Hero with GPS enabled. Only telemetry is extracted — the video stays on your device.</div>
+
+                            <div id="gopro-progress" class="mt-3" style="display:none;">
+                                <div class="progress mb-2" style="height: 6px;">
+                                    <div id="gopro-progress-bar" class="progress-bar progress-bar-striped progress-bar-animated" style="width:0%"></div>
+                                </div>
+                                <small id="gopro-progress-text" class="text-muted"></small>
+                            </div>
+
+                            <div id="gopro-preview" class="mt-3" style="display:none;">
+                                <div class="card" style="background: var(--bb-surface-alt);">
+                                    <div class="card-body py-2">
+                                        <h6 class="card-title mb-1" style="font-size: 0.85rem;"><i class="bi bi-check-circle text-success"></i> Telemetry Extracted</h6>
+                                        <div id="gopro-summary" class="small"></div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div id="gopro-error" class="alert alert-danger mt-3" style="display:none;"></div>
+                        </div>
+
+                        <div class="d-flex justify-content-end mt-4">
+                            <button type="button" class="btn btn-primary" id="btn-next-1" disabled>Next <i class="bi bi-arrow-right"></i></button>
+                        </div>
                     </div>
+                </div>
+            </div>
 
-                    <div class="row">
-                        <div class="col-md-6 mb-3">
-                            {{ form.date.label(class="form-label") }}
-                            {{ form.date(class="form-control") }}
-                            {% for error in form.date.errors %}
-                            <div class="text-danger small">{{ error }}</div>
-                            {% endfor %}
-                        </div>
-                        <div class="col-md-6 mb-3">
-                            {{ form.track_id.label(class="form-label") }}
-                            {{ form.track_id(class="form-select") }}
-                        </div>
-                    </div>
+            <!-- ==================== STEP 2: Details ==================== -->
+            <div class="wizard-pane" id="step-2" style="display:none;">
+                <div class="card">
+                    <div class="card-body p-4">
+                        <h4 class="mb-1">Session details</h4>
+                        <p class="text-muted mb-3" style="font-size: 0.85rem;">Tell us about this session.</p>
 
-                    <div class="row">
-                        <div class="col-md-4 mb-3">
-                            {{ form.kart_number.label(class="form-label") }}
-                            {{ form.kart_number(class="form-control", placeholder="11") }}
+                        <div class="row">
+                            <div class="col-6 mb-3">
+                                {{ form.date.label(class="form-label") }}
+                                {{ form.date(class="form-control") }}
+                                {% for error in form.date.errors %}
+                                <div class="text-danger small">{{ error }}</div>
+                                {% endfor %}
+                            </div>
+                            <div class="col-6 mb-3">
+                                {{ form.track_id.label(class="form-label") }}
+                                {{ form.track_id(class="form-select") }}
+                            </div>
                         </div>
-                        <div class="col-md-4 mb-3">
-                            {{ form.driver_weight_kg.label(class="form-label") }}
-                            {{ form.driver_weight_kg(class="form-control", placeholder="93.9", step="0.1") }}
-                        </div>
-                        <div class="col-md-4 mb-3">
-                            {{ form.session_start.label(class="form-label") }}
-                            {{ form.session_start(class="form-control") }}
-                        </div>
-                    </div>
 
-                    <div class="row">
-                        <div class="col-md-6 mb-3">
-                            {{ form.session_type.label(class="form-label") }}
-                            {{ form.session_type(class="form-control", placeholder="Open Sprint - Adult Only") }}
+                        <div class="row">
+                            <div class="col-6 mb-3">
+                                {{ form.session_start.label(class="form-label") }}
+                                {{ form.session_start(class="form-control") }}
+                            </div>
+                            <div class="col-6 mb-3">
+                                {{ form.session_type.label(class="form-label") }}
+                                {{ form.session_type(class="form-control", placeholder="e.g. Open Sprint") }}
+                            </div>
                         </div>
-                        <div class="col-md-6 mb-3">
+
+                        <div class="row">
+                            <div class="col-6 mb-3">
+                                {{ form.kart_number.label(class="form-label") }}
+                                {{ form.kart_number(class="form-control", placeholder="11") }}
+                            </div>
+                            <div class="col-6 mb-3">
+                                {{ form.driver_weight_kg.label(class="form-label") }}
+                                {{ form.driver_weight_kg(class="form-control", placeholder="93.9", step="0.1") }}
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
                             {{ form.team_id.label(class="form-label") }}
                             {{ form.team_id(class="form-select") }}
                         </div>
+
+                        <div class="mb-3">
+                            <label class="form-label">Labels</label>
+                            <div class="tag-input-wrap" id="tag-input-wrap">
+                                <input type="text" id="tag-text-input" placeholder="Type a label and press Enter" autocomplete="off">
+                                <div class="tag-autocomplete" id="tag-autocomplete"></div>
+                            </div>
+                            <div class="tag-suggestions" id="tag-suggestions"></div>
+                        </div>
+
+                        <div class="d-flex justify-content-between mt-4">
+                            <button type="button" class="btn btn-outline-secondary" id="btn-back-2"><i class="bi bi-arrow-left"></i> Back</button>
+                            <button type="button" class="btn btn-primary" id="btn-next-2">Next <i class="bi bi-arrow-right"></i></button>
+                        </div>
                     </div>
-
-                    {{ form.submit(class="btn btn-primary", id="upload-btn") }}
-                    <div class="form-text mt-2">Processing may take a moment for large files.</div>
-                </form>
-
-                <script>
-                // Source toggle
-                document.querySelectorAll('input[name="source-toggle"]').forEach(function(radio) {
-                    radio.addEventListener('change', function() {
-                        var isGoPro = this.value === 'gopro';
-                        document.getElementById('racechrono-input').style.display = isGoPro ? 'none' : '';
-                        document.getElementById('gopro-input').style.display = isGoPro ? '' : 'none';
-                        document.getElementById('data-source-field').value = this.value;
-                    });
-                });
-
-                // Form submit handler
-                document.getElementById('upload-form').addEventListener('submit', function(e) {
-                    var isGoPro = document.getElementById('data-source-field').value === 'gopro';
-                    if (isGoPro) {
-                        // Always prevent default for GoPro — the module script handles submission via fetch.
-                        // If the module hasn't loaded yet, this stops a broken POST from reaching the server.
-                        e.preventDefault();
-                        if (window._goProSubmitReady && window._goProSubmit) {
-                            window._goProSubmit();
-                        } else {
-                            var errorDiv = document.getElementById('gopro-error');
-                            errorDiv.textContent = 'GoPro extraction module is still loading. Please wait and try again.';
-                            errorDiv.style.display = '';
-                        }
-                        return;
-                    }
-                    // RaceChrono path
-                    var btn = document.getElementById('upload-btn');
-                    btn.disabled = true;
-                    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Processing\u2026';
-                });
-                </script>
-
-                <script type="module">
-                import { extractGoPro, detectLaps, telemetrySummary, telemetryToCSV } from "{{ url_for('static', filename='js/gopro-extract.js') }}";
-
-                // Signal to the regular script that the module loaded successfully
-                window._goProSubmitReady = true;
-
-                var goProData = null;
-                var sfGate = null;
-
-                var fileInput = document.getElementById('gopro-file');
-                var progressDiv = document.getElementById('gopro-progress');
-                var progressBar = document.getElementById('gopro-progress-bar');
-                var progressText = document.getElementById('gopro-progress-text');
-                var previewDiv = document.getElementById('gopro-preview');
-                var summaryDiv = document.getElementById('gopro-summary');
-                var errorDiv = document.getElementById('gopro-error');
-                var trackSelect = document.getElementById('track_id');
-                var downloadBtn = document.getElementById('gopro-download');
-
-                fileInput.addEventListener('change', async function() {
-                    var file = this.files[0];
-                    if (!file) return;
-
-                    goProData = null;
-                    errorDiv.style.display = 'none';
-                    previewDiv.style.display = 'none';
-                    progressDiv.style.display = '';
-                    progressBar.style.width = '0%';
-                    progressBar.classList.add('progress-bar-animated');
-                    progressText.textContent = 'Reading video metadata\u2026';
-
-                    try {
-                        goProData = await extractGoPro(file, function(pct) {
-                            progressBar.style.width = pct + '%';
-                            if (pct < 50) progressText.textContent = 'Reading video metadata\u2026';
-                            else if (pct < 90) progressText.textContent = 'Extracting telemetry\u2026';
-                            else progressText.textContent = 'Finalizing\u2026';
-                        });
-
-                        // Try lap detection with current track
-                        await tryLapDetection();
-
-                        progressBar.style.width = '100%';
-                        progressBar.classList.remove('progress-bar-animated');
-                        progressText.textContent = 'Extraction complete.';
-
-                        showSummary();
-                        downloadBtn.style.display = '';
-                    } catch (err) {
-                        progressDiv.style.display = 'none';
-                        errorDiv.textContent = 'Error: ' + err.message;
-                        errorDiv.style.display = '';
-                    }
-                });
-
-                // Re-run lap detection when track changes
-                trackSelect.addEventListener('change', async function() {
-                    if (!goProData) return;
-                    await tryLapDetection();
-                    showSummary();
-                });
-
-                async function tryLapDetection() {
-                    if (!goProData) return;
-                    var trackId = trackSelect.value;
-                    if (!trackId) return;
-
-                    try {
-                        var resp = await fetch('/api/tracks/' + trackId + '/gate', { credentials: 'same-origin' });
-                        if (resp.ok) {
-                            sfGate = await resp.json();
-                            detectLaps(goProData, sfGate);
-                        } else {
-                            sfGate = null;
-                            // Reset lap numbers to 1
-                            for (var i = 0; i < goProData.rows.length; i++) {
-                                goProData.rows[i].lap_number = 1;
-                            }
-                            goProData.lapCount = 0;
-                        }
-                    } catch (e) {
-                        sfGate = null;
-                    }
-                }
-
-                function showSummary() {
-                    if (!goProData) return;
-                    var s = telemetrySummary(goProData);
-                    if (!s) return;
-
-                    var html = '<strong>' + s.sampleCount.toLocaleString() + '</strong> GPS samples, ' +
-                        '<strong>' + s.durationFormatted + '</strong> duration, ' +
-                        'max speed <strong>' + s.maxSpeedKmh + ' km/h</strong>';
-
-                    if (s.lapCount > 0) {
-                        html += '<br>Detected <strong>' + s.lapCount + ' laps</strong>';
-                        if (s.bestLapFormatted) html += ', est. best: <strong>' + s.bestLapFormatted + '</strong>';
-                    } else if (sfGate === null) {
-                        html += '<br><span class="text-warning">No start/finish line configured for this track. Laps cannot be detected.</span>';
-                    } else {
-                        html += '<br><span class="text-warning">No lap crossings detected. Check the start/finish line position.</span>';
-                    }
-
-                    summaryDiv.innerHTML = html;
-                    previewDiv.style.display = '';
-                }
-
-                // Download extracted CSV for debugging
-                downloadBtn.addEventListener('click', function() {
-                    if (!goProData) return;
-                    var csvBlob = telemetryToCSV(goProData);
-                    var url = URL.createObjectURL(csvBlob);
-                    var a = document.createElement('a');
-                    a.href = url;
-                    a.download = (goProData.fileName || 'gopro').replace(/\.[^.]+$/, '') + '_extracted.csv';
-                    a.click();
-                    URL.revokeObjectURL(url);
-                });
-
-                // GoPro submit handler — called by the regular script's submit handler via window function
-                window._goProSubmit = function() {
-                    if (!goProData || !goProData.rows || goProData.rows.length === 0) {
-                        errorDiv.textContent = 'Please select and extract a GoPro MP4 file first.';
-                        errorDiv.style.display = '';
-                        return;
-                    }
-
-                    var btn = document.getElementById('upload-btn');
-                    btn.disabled = true;
-                    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Uploading\u2026';
-                    errorDiv.style.display = 'none';
-
-                    // Generate CSV and submit via fetch
-                    var csvBlob = telemetryToCSV(goProData);
-                    var form = document.getElementById('upload-form');
-                    var formData = new FormData(form);
-                    formData.delete('gopro_csv');
-                    formData.append('gopro_csv', new File([csvBlob], 'gopro_telemetry.csv', { type: 'text/csv' }));
-
-                    fetch(form.action || window.location.href, {
-                        method: 'POST',
-                        body: formData,
-                        credentials: 'same-origin',
-                    }).then(function(resp) {
-                        if (resp.redirected) {
-                            window.location.href = resp.url;
-                        } else {
-                            return resp.text().then(function(html) {
-                                document.open();
-                                document.write(html);
-                                document.close();
-                            });
-                        }
-                    }).catch(function(err) {
-                        btn.disabled = false;
-                        btn.textContent = 'Upload & Process';
-                        errorDiv.textContent = 'Upload failed: ' + err.message;
-                        errorDiv.style.display = '';
-                    });
-                };
-                </script>
+                </div>
             </div>
-        </div>
+
+            <!-- ==================== STEP 3: Review & Upload ==================== -->
+            <div class="wizard-pane" id="step-3" style="display:none;">
+                <div class="card">
+                    <div class="card-body p-4">
+
+                        <!-- Review view (shown before upload) -->
+                        <div id="review-view">
+                            <h4 class="mb-1">Review & Upload</h4>
+                            <p class="text-muted mb-3" style="font-size: 0.85rem;">Confirm your session details before processing.</p>
+
+                            <dl class="review-grid" id="review-summary"></dl>
+
+                            <div class="d-flex justify-content-between mt-4">
+                                <button type="button" class="btn btn-outline-secondary" id="btn-back-3"><i class="bi bi-arrow-left"></i> Back</button>
+                                <button type="button" class="btn btn-primary" id="btn-upload"><i class="bi bi-upload"></i> Upload & Process</button>
+                            </div>
+                        </div>
+
+                        <!-- Upload progress (shown during upload) -->
+                        <div id="upload-progress-view" class="upload-overlay" style="display:none;">
+                            <i class="bi bi-gear" style="font-size: 2rem; color: var(--bb-text-muted);"></i>
+                            <h5 class="mt-2">Processing your session</h5>
+                            <div class="progress" style="height: 8px;">
+                                <div id="upload-progress-bar" class="progress-bar" style="width: 0%; transition: width 0.5s ease;"></div>
+                            </div>
+                            <div id="upload-stage-text" class="stage-text mt-2">Uploading file...</div>
+                            <div id="upload-error" class="error-text" style="display:none;"></div>
+                            <button type="button" class="btn btn-outline-secondary btn-sm mt-3" id="btn-retry" style="display:none;"><i class="bi bi-arrow-repeat"></i> Try Again</button>
+                        </div>
+
+                    </div>
+                </div>
+            </div>
+
+        </form>
     </div>
 </div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script type="module">
+import { extractGoPro, detectLaps, telemetrySummary, telemetryToCSV } from "{{ url_for('static', filename='js/gopro-extract.js') }}";
+
+// ---- State ----
+var currentStep = 1;
+var selectedSource = null;
+var goProData = null;
+var sfGate = null;
+var tags = [];
+var knownLabels = []; // from API + defaults
+
+var DEFAULTS = ['Wet', 'Dry', 'Race', 'Practice', 'Qualifying', 'New tyres'];
+
+// ---- DOM refs ----
+var steps = document.querySelectorAll('.wizard-steps li');
+var panes = document.querySelectorAll('.wizard-pane');
+var srcCards = document.querySelectorAll('.source-card');
+var rcInput = document.getElementById('racechrono-input');
+var gpInput = document.getElementById('gopro-input');
+var csvFile = document.getElementById('csv-file');
+var goProFile = document.getElementById('gopro-file');
+var dataSourceField = document.getElementById('data-source-field');
+var labelsField = document.getElementById('labels-field');
+var trackSelect = document.getElementById('track_id');
+var tagWrap = document.getElementById('tag-input-wrap');
+var tagTextInput = document.getElementById('tag-text-input');
+var tagAutocomplete = document.getElementById('tag-autocomplete');
+var tagSuggestions = document.getElementById('tag-suggestions');
+
+// ---- Wizard navigation ----
+function goToStep(step) {
+    if (step < 1 || step > 3) return;
+    currentStep = step;
+    panes.forEach(function(p, i) { p.style.display = (i + 1 === step) ? '' : 'none'; });
+    steps.forEach(function(s, i) {
+        var n = i + 1;
+        s.classList.remove('active', 'completed');
+        if (n < step) s.classList.add('completed');
+        else if (n === step) s.classList.add('active');
+        // Update circle content
+        var circle = s.querySelector('.step-circle');
+        circle.innerHTML = n < step ? '<i class="bi bi-check-lg"></i>' : n;
+    });
+    if (step === 3) buildReview();
+}
+
+// Click completed steps to go back
+steps.forEach(function(s) {
+    s.addEventListener('click', function() {
+        if (s.classList.contains('completed')) {
+            goToStep(parseInt(s.dataset.step));
+        }
+    });
+});
+
+// ---- Step 1: Source selection ----
+srcCards.forEach(function(card) {
+    card.addEventListener('click', function() {
+        srcCards.forEach(function(c) { c.classList.remove('selected'); });
+        card.classList.add('selected');
+        selectedSource = card.dataset.source;
+        dataSourceField.value = selectedSource;
+
+        rcInput.style.display = selectedSource === 'racechrono' ? '' : 'none';
+        gpInput.style.display = selectedSource === 'gopro' ? '' : 'none';
+
+        // Reset file state
+        goProData = null;
+        document.getElementById('gopro-preview').style.display = 'none';
+        document.getElementById('gopro-error').style.display = 'none';
+        document.getElementById('gopro-progress').style.display = 'none';
+        document.getElementById('rc-file-info').style.display = 'none';
+
+        checkStep1Ready();
+    });
+});
+
+function checkStep1Ready() {
+    var ready = false;
+    if (selectedSource === 'racechrono') {
+        ready = csvFile.files.length > 0;
+    } else if (selectedSource === 'gopro') {
+        ready = goProData !== null && goProData.rows && goProData.rows.length > 0;
+    }
+    document.getElementById('btn-next-1').disabled = !ready;
+}
+
+csvFile.addEventListener('change', function() {
+    var info = document.getElementById('rc-file-info');
+    var nameEl = document.getElementById('rc-filename');
+    if (csvFile.files.length > 0) {
+        nameEl.textContent = csvFile.files[0].name;
+        info.style.display = '';
+    } else {
+        info.style.display = 'none';
+    }
+    checkStep1Ready();
+});
+
+// GoPro extraction
+goProFile.addEventListener('change', async function() {
+    var file = this.files[0];
+    if (!file) return;
+
+    goProData = null;
+    var errDiv = document.getElementById('gopro-error');
+    var prevDiv = document.getElementById('gopro-preview');
+    var progDiv = document.getElementById('gopro-progress');
+    var progBar = document.getElementById('gopro-progress-bar');
+    var progText = document.getElementById('gopro-progress-text');
+
+    errDiv.style.display = 'none';
+    prevDiv.style.display = 'none';
+    progDiv.style.display = '';
+    progBar.style.width = '0%';
+    progBar.classList.add('progress-bar-animated');
+    progText.textContent = 'Reading video metadata\u2026';
+    checkStep1Ready();
+
+    try {
+        goProData = await extractGoPro(file, function(pct) {
+            progBar.style.width = pct + '%';
+            if (pct < 50) progText.textContent = 'Reading video metadata\u2026';
+            else if (pct < 90) progText.textContent = 'Extracting telemetry\u2026';
+            else progText.textContent = 'Finalizing\u2026';
+        });
+
+        await tryLapDetection();
+
+        progBar.style.width = '100%';
+        progBar.classList.remove('progress-bar-animated');
+        progText.textContent = 'Extraction complete.';
+
+        showGoProSummary();
+        checkStep1Ready();
+    } catch (err) {
+        progDiv.style.display = 'none';
+        errDiv.textContent = 'Error: ' + err.message;
+        errDiv.style.display = '';
+        checkStep1Ready();
+    }
+});
+
+async function tryLapDetection() {
+    if (!goProData) return;
+    var trackId = trackSelect.value;
+    if (!trackId) return;
+    try {
+        var resp = await fetch('/api/tracks/' + trackId + '/gate', { credentials: 'same-origin' });
+        if (resp.ok) {
+            sfGate = await resp.json();
+            detectLaps(goProData, sfGate);
+        } else {
+            sfGate = null;
+            for (var i = 0; i < goProData.rows.length; i++) goProData.rows[i].lap_number = 1;
+            goProData.lapCount = 0;
+        }
+    } catch (e) { sfGate = null; }
+}
+
+trackSelect.addEventListener('change', async function() {
+    if (!goProData) return;
+    await tryLapDetection();
+    showGoProSummary();
+});
+
+function showGoProSummary() {
+    if (!goProData) return;
+    var s = telemetrySummary(goProData);
+    if (!s) return;
+    var html = '<strong>' + s.sampleCount.toLocaleString() + '</strong> GPS samples, ' +
+        '<strong>' + s.durationFormatted + '</strong>, max <strong>' + s.maxSpeedKmh + ' km/h</strong>';
+    if (s.lapCount > 0) {
+        html += '<br>Detected <strong>' + s.lapCount + ' laps</strong>';
+        if (s.bestLapFormatted) html += ', best: <strong>' + s.bestLapFormatted + '</strong>';
+    } else if (sfGate === null) {
+        html += '<br><span style="color: var(--bb-amber);">No start/finish line for this track.</span>';
+    }
+    document.getElementById('gopro-summary').innerHTML = html;
+    document.getElementById('gopro-preview').style.display = '';
+}
+
+document.getElementById('btn-next-1').addEventListener('click', function() { goToStep(2); });
+
+// ---- Step 2: Details ----
+document.getElementById('btn-back-2').addEventListener('click', function() { goToStep(1); });
+document.getElementById('btn-next-2').addEventListener('click', function() {
+    // Validate required fields
+    var dateVal = document.getElementById('date').value;
+    var trackVal = trackSelect.value;
+    if (!dateVal) { alert('Date is required.'); return; }
+    if (!trackVal) { alert('Track is required.'); return; }
+    goToStep(3);
+});
+
+// ---- Tag input ----
+(async function initTags() {
+    // Fetch existing labels from API
+    try {
+        var resp = await fetch('/api/labels', { credentials: 'same-origin' });
+        if (resp.ok) {
+            var existing = await resp.json();
+            knownLabels = Array.from(new Set(DEFAULTS.concat(existing))).sort();
+        } else {
+            knownLabels = DEFAULTS.slice();
+        }
+    } catch (e) {
+        knownLabels = DEFAULTS.slice();
+    }
+    renderSuggestions();
+})();
+
+function renderTags() {
+    // Remove existing pills
+    tagWrap.querySelectorAll('.tag-pill').forEach(function(p) { p.remove(); });
+    tags.forEach(function(tag, i) {
+        var pill = document.createElement('span');
+        pill.className = 'tag-pill';
+        pill.innerHTML = tag + ' <span class="tag-remove" data-idx="' + i + '">&times;</span>';
+        tagWrap.insertBefore(pill, tagTextInput);
+    });
+    labelsField.value = JSON.stringify(tags);
+    renderSuggestions();
+}
+
+function addTag(tag) {
+    tag = tag.trim();
+    if (!tag || tags.indexOf(tag) !== -1) return;
+    tags.push(tag);
+    renderTags();
+    tagTextInput.value = '';
+    hideAutocomplete();
+}
+
+function removeTag(idx) {
+    tags.splice(idx, 1);
+    renderTags();
+}
+
+tagWrap.addEventListener('click', function(e) {
+    if (e.target.classList.contains('tag-remove')) {
+        removeTag(parseInt(e.target.dataset.idx));
+        return;
+    }
+    tagTextInput.focus();
+});
+
+tagTextInput.addEventListener('keydown', function(e) {
+    if ((e.key === 'Enter' || e.key === ',') && tagTextInput.value.trim()) {
+        e.preventDefault();
+        // If autocomplete has a highlighted option, use that
+        var hl = tagAutocomplete.querySelector('.highlight');
+        if (hl) {
+            addTag(hl.textContent);
+        } else {
+            addTag(tagTextInput.value.replace(',', ''));
+        }
+    } else if (e.key === 'Backspace' && !tagTextInput.value && tags.length > 0) {
+        removeTag(tags.length - 1);
+    } else if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        moveAutocomplete(1);
+    } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        moveAutocomplete(-1);
+    } else if (e.key === 'Escape') {
+        hideAutocomplete();
+    }
+});
+
+tagTextInput.addEventListener('input', function() {
+    showAutocomplete(tagTextInput.value);
+});
+
+tagTextInput.addEventListener('focus', function() {
+    if (tagTextInput.value) showAutocomplete(tagTextInput.value);
+});
+
+document.addEventListener('click', function(e) {
+    if (!tagWrap.contains(e.target)) hideAutocomplete();
+});
+
+var acHighlight = -1;
+
+function showAutocomplete(query) {
+    query = (query || '').toLowerCase().trim();
+    if (!query) { hideAutocomplete(); return; }
+
+    var matches = knownLabels.filter(function(l) {
+        return l.toLowerCase().indexOf(query) !== -1 && tags.indexOf(l) === -1;
+    });
+    if (matches.length === 0) { hideAutocomplete(); return; }
+
+    acHighlight = -1;
+    tagAutocomplete.innerHTML = '';
+    matches.forEach(function(m) {
+        var opt = document.createElement('div');
+        opt.className = 'tag-option';
+        opt.textContent = m;
+        opt.addEventListener('mousedown', function(e) {
+            e.preventDefault();
+            addTag(m);
+        });
+        tagAutocomplete.appendChild(opt);
+    });
+    tagAutocomplete.style.display = 'block';
+}
+
+function hideAutocomplete() {
+    tagAutocomplete.style.display = 'none';
+    acHighlight = -1;
+}
+
+function moveAutocomplete(dir) {
+    var items = tagAutocomplete.querySelectorAll('.tag-option');
+    if (items.length === 0) return;
+    items.forEach(function(it) { it.classList.remove('highlight'); });
+    acHighlight += dir;
+    if (acHighlight < 0) acHighlight = items.length - 1;
+    if (acHighlight >= items.length) acHighlight = 0;
+    items[acHighlight].classList.add('highlight');
+    items[acHighlight].scrollIntoView({ block: 'nearest' });
+}
+
+function renderSuggestions() {
+    tagSuggestions.innerHTML = '';
+    var available = knownLabels.filter(function(l) { return tags.indexOf(l) === -1; });
+    available.slice(0, 10).forEach(function(label) {
+        var chip = document.createElement('span');
+        chip.className = 'tag-chip';
+        chip.textContent = label;
+        chip.addEventListener('click', function() { addTag(label); });
+        tagSuggestions.appendChild(chip);
+    });
+}
+
+// ---- Step 3: Review ----
+document.getElementById('btn-back-3').addEventListener('click', function() { goToStep(2); });
+
+function buildReview() {
+    var dl = document.getElementById('review-summary');
+    dl.innerHTML = '';
+
+    function addRow(label, value) {
+        if (!value) return;
+        dl.innerHTML += '<dt>' + label + '</dt><dd>' + value + '</dd>';
+    }
+
+    addRow('Source', selectedSource === 'gopro' ? 'GoPro MP4' : 'RaceChrono CSV');
+    if (selectedSource === 'racechrono' && csvFile.files.length > 0) {
+        addRow('File', csvFile.files[0].name);
+    } else if (selectedSource === 'gopro' && goProFile.files.length > 0) {
+        addRow('File', goProFile.files[0].name);
+    }
+    addRow('Date', document.getElementById('date').value);
+    var trackOpt = trackSelect.options[trackSelect.selectedIndex];
+    addRow('Track', trackOpt ? trackOpt.text : '');
+    addRow('Session Type', document.getElementById('session_type').value);
+    addRow('Session Start', document.getElementById('session_start').value);
+    addRow('Kart', document.getElementById('kart_number').value);
+    addRow('Driver Weight', document.getElementById('driver_weight_kg').value ? document.getElementById('driver_weight_kg').value + ' kg' : '');
+    var teamOpt = document.getElementById('team_id').options[document.getElementById('team_id').selectedIndex];
+    if (teamOpt && parseInt(teamOpt.value) !== 0) addRow('Team', teamOpt.text);
+    if (tags.length > 0) {
+        addRow('Labels', tags.map(function(t) { return '<span class="badge bg-info">' + t + '</span>'; }).join(' '));
+    }
+}
+
+// ---- Upload ----
+var uploadStages = [
+    { pct: 10, text: 'Uploading file\u2026' },
+    { pct: 25, text: 'Parsing telemetry\u2026' },
+    { pct: 45, text: 'Analyzing lap times\u2026' },
+    { pct: 60, text: 'Computing corner analysis\u2026' },
+    { pct: 75, text: 'Generating charts\u2026' },
+    { pct: 88, text: 'Almost done\u2026' },
+];
+
+document.getElementById('btn-upload').addEventListener('click', async function() {
+    var reviewView = document.getElementById('review-view');
+    var progressView = document.getElementById('upload-progress-view');
+    var progressBar = document.getElementById('upload-progress-bar');
+    var stageText = document.getElementById('upload-stage-text');
+    var errorDiv = document.getElementById('upload-error');
+    var retryBtn = document.getElementById('btn-retry');
+
+    reviewView.style.display = 'none';
+    progressView.style.display = '';
+    errorDiv.style.display = 'none';
+    retryBtn.style.display = 'none';
+    progressBar.style.width = '0%';
+
+    // Start stage animation
+    var stageIdx = 0;
+    var stageTimer = setInterval(function() {
+        if (stageIdx < uploadStages.length) {
+            progressBar.style.width = uploadStages[stageIdx].pct + '%';
+            stageText.textContent = uploadStages[stageIdx].text;
+            stageIdx++;
+        }
+    }, 3000);
+
+    // Build FormData
+    var form = document.getElementById('upload-form');
+    var formData = new FormData(form);
+
+    // For GoPro, replace csv_file with the extracted CSV
+    if (selectedSource === 'gopro' && goProData) {
+        var csvBlob = telemetryToCSV(goProData);
+        formData.delete('gopro_csv');
+        formData.append('gopro_csv', new File([csvBlob], 'gopro_telemetry.csv', { type: 'text/csv' }));
+    }
+
+    try {
+        var resp = await fetch(form.action || window.location.href, {
+            method: 'POST',
+            body: formData,
+            credentials: 'same-origin',
+            headers: { 'X-Requested-With': 'fetch' },
+        });
+
+        clearInterval(stageTimer);
+
+        if (resp.ok) {
+            var result = await resp.json();
+            progressBar.style.width = '100%';
+            stageText.textContent = 'Done! ' + (result.total_laps || '') + ' laps processed.';
+            progressBar.classList.add('bg-success');
+            // Redirect after brief pause
+            setTimeout(function() {
+                window.location.href = result.redirect_url || '/sessions/';
+            }, 1000);
+        } else {
+            var err = await resp.json().catch(function() { return { error: 'Upload failed' }; });
+            progressBar.style.width = '100%';
+            progressBar.classList.add('bg-danger');
+            stageText.textContent = '';
+            errorDiv.textContent = err.error || 'Upload failed. Please try again.';
+            errorDiv.style.display = '';
+            retryBtn.style.display = '';
+        }
+    } catch (e) {
+        clearInterval(stageTimer);
+        progressBar.style.width = '100%';
+        progressBar.classList.add('bg-danger');
+        stageText.textContent = '';
+        errorDiv.textContent = 'Network error: ' + e.message;
+        errorDiv.style.display = '';
+        retryBtn.style.display = '';
+    }
+});
+
+document.getElementById('btn-retry').addEventListener('click', function() {
+    var progressBar = document.getElementById('upload-progress-bar');
+    progressBar.classList.remove('bg-danger', 'bg-success');
+    document.getElementById('review-view').style.display = '';
+    document.getElementById('upload-progress-view').style.display = 'none';
+});
+</script>
 {% endblock %}

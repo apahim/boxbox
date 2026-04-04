@@ -127,6 +127,7 @@ class Session(db.Model):
 
     weather = db.Column(db.JSON)
     coaching = db.Column(db.JSON)
+    labels = db.Column(db.JSON, default=list)
     data_source = db.Column(db.String(20), default='racechrono')
     needs_reingest = db.Column(db.Boolean, default=False, nullable=False)
 

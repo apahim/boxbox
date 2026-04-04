@@ -12,6 +12,7 @@ class SessionEditForm(FlaskForm):
     session_type = StringField('Session Type', validators=[Optional()])
     session_start = TimeField('Session Start', validators=[Optional()])
     team_id = SelectField('Team (optional)', coerce=int, validators=[Optional()])
+    labels = HiddenField('Labels', default='[]')
     submit = SubmitField('Save Changes')
 
 
@@ -27,4 +28,5 @@ class SessionCreateForm(FlaskForm):
     session_type = StringField('Session Type', validators=[Optional()])
     session_start = TimeField('Session Start', validators=[Optional()])
     team_id = SelectField('Team (optional)', coerce=int, validators=[Optional()])
+    labels = HiddenField('Labels', default='[]')
     submit = SubmitField('Upload & Process')

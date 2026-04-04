@@ -10,18 +10,38 @@
     }
     tr.deleting { animation: rowFadeOut 0.4s ease forwards; pointer-events: none; }
     .spinner-border-sm { width: 1rem; height: 1rem; border-width: 0.15em; }
+    .label-filter { display: inline-flex; align-items: center; gap: 4px; cursor: pointer;
+        background: var(--bb-surface-alt); color: var(--bb-text-muted); border: 1px solid var(--bb-border);
+        border-radius: 999px; padding: 3px 10px; font-size: 0.75rem; transition: all 0.15s; }
+    .label-filter:hover, .label-filter.active {
+        background: rgba(59, 130, 246, 0.15); color: var(--bb-blue); border-color: rgba(59, 130, 246, 0.3); }
+    .session-label { font-size: 0.7rem; padding: 1px 6px; }
 </style>
 {% endblock %}
 
 {% block content %}
-<div class="d-flex justify-content-between align-items-center mb-4">
+<div class="d-flex justify-content-between align-items-center mb-3">
     <h2>Sessions</h2>
     <a href="{{ url_for('sessions.create') }}" class="btn btn-primary"><i class="bi bi-upload"></i>Upload Session</a>
 </div>
 
 {% if sessions %}
+<!-- Label filters -->
+{% set all_labels = [] %}
+{% for s in sessions %}
+{% if s.labels %}{% for l in s.labels %}{% if l not in all_labels %}{% if all_labels.append(l) %}{% endif %}{% endif %}{% endfor %}{% endif %}
+{% endfor %}
+{% if all_labels %}
+<div class="d-flex flex-wrap gap-2 mb-3" id="labelFilters">
+    <span class="label-filter active" data-label="">All</span>
+    {% for label in all_labels|sort %}
+    <span class="label-filter" data-label="{{ label }}">{{ label }}</span>
+    {% endfor %}
+</div>
+{% endif %}
+
 <div class="table-responsive">
-    <table class="table table-hover">
+    <table class="table table-hover" id="sessionsTable">
         <thead>
             <tr>
                 <th>Date</th>
@@ -35,13 +55,20 @@
         </thead>
         <tbody>
             {% for s in sessions %}
-            <tr>
+            <tr data-labels="{{ (s.labels or [])|join(',') }}">
                 <td>{{ s.date }}</td>
                 <td>{{ s.track.name if s.track else '—' }}</td>
                 <td>{{ "%.3f"|format(s.best_lap_time) if s.best_lap_time else '—' }}s</td>
                 <td>{{ s.clean_laps or '—' }} / {{ s.total_laps or '—' }}</td>
                 <td>{{ "%.1f"|format(s.consistency_pct) if s.consistency_pct else '—' }}%</td>
-                <td><span class="badge bg-warning">{{ s.session_type or '—' }}</span></td>
+                <td>
+                    <span class="badge bg-warning">{{ s.session_type or '—' }}</span>
+                    {% if s.labels %}
+                    {% for label in s.labels %}
+                    <span class="badge bg-info session-label">{{ label }}</span>
+                    {% endfor %}
+                    {% endif %}
+                </td>
                 <td class="text-nowrap">
                     <a href="{{ url_for('dashboard.view', session_id=s.id) }}" class="btn btn-sm btn-outline-primary" title="Dashboard"><i class="bi bi-speedometer2"></i>Dashboard</a>
                     {% if s.user_id == current_user.id %}
@@ -78,5 +105,24 @@ function handleDelete(form) {
     setTimeout(function() { form.submit(); }, 400);
     return false;
 }
+
+// Label filtering
+var filters = document.querySelectorAll('.label-filter');
+filters.forEach(function(f) {
+    f.addEventListener('click', function() {
+        filters.forEach(function(ff) { ff.classList.remove('active'); });
+        f.classList.add('active');
+        var label = f.dataset.label;
+        var rows = document.querySelectorAll('#sessionsTable tbody tr');
+        rows.forEach(function(row) {
+            if (!label) {
+                row.style.display = '';
+            } else {
+                var labels = (row.dataset.labels || '').split(',');
+                row.style.display = labels.indexOf(label) !== -1 ? '' : 'none';
+            }
+        });
+    });
+});
 </script>
 {% endblock %}

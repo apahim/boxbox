@@ -6,7 +6,7 @@
 <div class="row justify-content-center">
     <div class="col-md-8">
         <div class="card">
-            <div class="card-body">
+            <div class="card-body p-4">
                 <h3 class="card-title mb-4">Edit Session</h3>
                 <form method="POST">
                     {{ form.hidden_tag() }}
@@ -51,6 +51,16 @@
                         </div>
                     </div>
 
+                    <div class="mb-3">
+                        <label class="form-label">Labels</label>
+                        {{ form.labels(id="labels-field") }}
+                        <div class="tag-input-wrap" id="tag-input-wrap">
+                            <input type="text" id="tag-text-input" placeholder="Type a label and press Enter" autocomplete="off">
+                            <div class="tag-autocomplete" id="tag-autocomplete"></div>
+                        </div>
+                        <div class="tag-suggestions" id="tag-suggestions"></div>
+                    </div>
+
                     {{ form.submit(class="btn btn-primary") }}
                     <a href="{{ url_for('sessions.list_sessions') }}" class="btn btn-outline-secondary ms-2">Cancel</a>
                 </form>
@@ -58,4 +68,133 @@
         </div>
     </div>
 </div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+(function() {
+    var DEFAULTS = ['Wet', 'Dry', 'Race', 'Practice', 'Qualifying', 'New tyres'];
+    var labelsField = document.getElementById('labels-field');
+    var tagWrap = document.getElementById('tag-input-wrap');
+    var tagTextInput = document.getElementById('tag-text-input');
+    var tagAutocomplete = document.getElementById('tag-autocomplete');
+    var tagSuggestions = document.getElementById('tag-suggestions');
+    var tags = [];
+    var knownLabels = DEFAULTS.slice();
+    var acHighlight = -1;
+
+    // Load initial tags from hidden field
+    try {
+        var initial = JSON.parse(labelsField.value);
+        if (Array.isArray(initial)) tags = initial;
+    } catch (e) {}
+
+    // Fetch known labels
+    fetch('/api/labels', { credentials: 'same-origin' })
+        .then(function(r) { return r.ok ? r.json() : []; })
+        .then(function(existing) {
+            knownLabels = Array.from(new Set(DEFAULTS.concat(existing))).sort();
+            renderSuggestions();
+        })
+        .catch(function() {});
+
+    renderTags();
+
+    function renderTags() {
+        tagWrap.querySelectorAll('.tag-pill').forEach(function(p) { p.remove(); });
+        tags.forEach(function(tag, i) {
+            var pill = document.createElement('span');
+            pill.className = 'tag-pill';
+            pill.innerHTML = tag + ' <span class="tag-remove" data-idx="' + i + '">&times;</span>';
+            tagWrap.insertBefore(pill, tagTextInput);
+        });
+        labelsField.value = JSON.stringify(tags);
+        renderSuggestions();
+    }
+
+    function addTag(tag) {
+        tag = tag.trim();
+        if (!tag || tags.indexOf(tag) !== -1) return;
+        tags.push(tag);
+        renderTags();
+        tagTextInput.value = '';
+        hideAutocomplete();
+    }
+
+    function removeTag(idx) {
+        tags.splice(idx, 1);
+        renderTags();
+    }
+
+    tagWrap.addEventListener('click', function(e) {
+        if (e.target.classList.contains('tag-remove')) {
+            removeTag(parseInt(e.target.dataset.idx));
+            return;
+        }
+        tagTextInput.focus();
+    });
+
+    tagTextInput.addEventListener('keydown', function(e) {
+        if ((e.key === 'Enter' || e.key === ',') && tagTextInput.value.trim()) {
+            e.preventDefault();
+            var hl = tagAutocomplete.querySelector('.highlight');
+            addTag(hl ? hl.textContent : tagTextInput.value.replace(',', ''));
+        } else if (e.key === 'Backspace' && !tagTextInput.value && tags.length > 0) {
+            removeTag(tags.length - 1);
+        } else if (e.key === 'ArrowDown') {
+            e.preventDefault(); moveAutocomplete(1);
+        } else if (e.key === 'ArrowUp') {
+            e.preventDefault(); moveAutocomplete(-1);
+        } else if (e.key === 'Escape') {
+            hideAutocomplete();
+        }
+    });
+
+    tagTextInput.addEventListener('input', function() { showAutocomplete(tagTextInput.value); });
+    tagTextInput.addEventListener('focus', function() { if (tagTextInput.value) showAutocomplete(tagTextInput.value); });
+    document.addEventListener('click', function(e) { if (!tagWrap.contains(e.target)) hideAutocomplete(); });
+
+    function showAutocomplete(query) {
+        query = (query || '').toLowerCase().trim();
+        if (!query) { hideAutocomplete(); return; }
+        var matches = knownLabels.filter(function(l) {
+            return l.toLowerCase().indexOf(query) !== -1 && tags.indexOf(l) === -1;
+        });
+        if (!matches.length) { hideAutocomplete(); return; }
+        acHighlight = -1;
+        tagAutocomplete.innerHTML = '';
+        matches.forEach(function(m) {
+            var opt = document.createElement('div');
+            opt.className = 'tag-option';
+            opt.textContent = m;
+            opt.addEventListener('mousedown', function(e) { e.preventDefault(); addTag(m); });
+            tagAutocomplete.appendChild(opt);
+        });
+        tagAutocomplete.style.display = 'block';
+    }
+
+    function hideAutocomplete() { tagAutocomplete.style.display = 'none'; acHighlight = -1; }
+
+    function moveAutocomplete(dir) {
+        var items = tagAutocomplete.querySelectorAll('.tag-option');
+        if (!items.length) return;
+        items.forEach(function(it) { it.classList.remove('highlight'); });
+        acHighlight += dir;
+        if (acHighlight < 0) acHighlight = items.length - 1;
+        if (acHighlight >= items.length) acHighlight = 0;
+        items[acHighlight].classList.add('highlight');
+    }
+
+    function renderSuggestions() {
+        tagSuggestions.innerHTML = '';
+        knownLabels.filter(function(l) { return tags.indexOf(l) === -1; }).slice(0, 10).forEach(function(label) {
+            var chip = document.createElement('span');
+            chip.className = 'tag-chip';
+            chip.textContent = label;
+            chip.addEventListener('click', function() { addTag(label); });
+            tagSuggestions.appendChild(chip);
+        });
+    }
+})();
+</script>
 {% endblock %}

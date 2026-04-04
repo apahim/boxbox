@@ -353,6 +353,21 @@ def track_gate(track_id):
     )
 
 
+@bp.route('/labels')
+def api_labels():
+    """Return distinct labels used across the current user's sessions."""
+    if not current_user.is_authenticated:
+        return jsonify(error='Authentication required'), 401
+
+    sessions = _user_sessions_query().all()
+    all_labels = set()
+    for s in sessions:
+        if s.labels:
+            for label in s.labels:
+                all_labels.add(label)
+    return jsonify(sorted(all_labels))
+
+
 @bp.route('/tracks')
 def api_tracks():
     """Return list of tracks the user has sessions at."""
