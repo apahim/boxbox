@@ -253,7 +253,7 @@
                         is_current: true,
                         session_id: currentSessionId,
                         date: currentMeta ? currentMeta.date : "",
-                        session_type: currentMeta ? currentMeta.session_type : ""
+                        labels: currentMeta ? (currentMeta.labels || []) : []
                     }];
 
                     if (evoData && evoData.sessions) {

@@ -42,10 +42,7 @@ def ingested_session(app):
             user_id=user.id,
             track_id=track.id,
             date=date(2026, 3, 8),
-            session_type='Open Sprint - Adult Only',
             session_start='14:00',
-            kart_number=11,
-            driver_weight_kg=93.9,
         )
         db.session.add(session)
         db.session.flush()

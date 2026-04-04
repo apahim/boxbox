@@ -201,7 +201,7 @@ window.Raceline = (function() {
 
         // Wrap single-session raceline into sessions format
         if (!rlData.sessions) {
-            rlData = { sessions: [{ laps: rlData.laps, is_current: true, date: "", session_type: "" }] };
+            rlData = { sessions: [{ laps: rlData.laps, is_current: true, date: "" }] };
         }
 
         // Populate Lap A selector
@@ -225,7 +225,7 @@ window.Raceline = (function() {
         rlData.sessions.forEach(function(session, si) {
             var opt = document.createElement("option");
             opt.value = si;
-            opt.textContent = (session.date || "Current") + (session.session_type ? " \u2014 " + session.session_type : "") + (session.is_current ? " (current)" : "");
+            opt.textContent = (session.date || "Current") + (session.is_current ? " (current)" : "");
             selBS.appendChild(opt);
         });
 

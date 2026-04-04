@@ -133,10 +133,7 @@ def import_session(race_dir, user_email):
         user_id=user.id,
         track_id=track.id,
         date=session_date,
-        session_type=meta.get('session_type'),
         session_start=meta.get('session_start'),
-        kart_number=meta.get('kart_number'),
-        driver_weight_kg=meta.get('driver_weight_kg'),
     )
     db.session.add(session)
     db.session.flush()

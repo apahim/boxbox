@@ -23,14 +23,10 @@
         <h1 id="dashTitle">{{ session.track.name if session.track else 'Session' }} &mdash; {{ session.date }}</h1>
         <p class="text-muted" id="dashSubtitle"></p>
         <div class="d-flex gap-2 flex-wrap" id="dashBadges">
-            {% if session.kart_number %}
-            <span class="badge bg-primary metadata-badge">Kart #{{ session.kart_number }}</span>
-            {% endif %}
-            {% if session.driver_weight_kg %}
-            <span class="badge bg-secondary metadata-badge">{{ session.driver_weight_kg }} kg</span>
-            {% endif %}
-            {% if session.session_type %}
-            <span class="badge bg-warning metadata-badge">{{ session.session_type }}</span>
+            {% if session.labels %}
+            {% for label in session.labels %}
+            <span class="badge bg-info metadata-badge">{{ label }}</span>
+            {% endfor %}
             {% endif %}
         </div>
     </div>

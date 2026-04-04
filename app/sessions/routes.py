@@ -91,10 +91,7 @@ def create():
                 track_id=track.id,
                 team_id=team_id,
                 date=session_date,
-                session_type=form.session_type.data or None,
                 session_start=form.session_start.data.strftime('%H:%M') if form.session_start.data else None,
-                kart_number=form.kart_number.data,
-                driver_weight_kg=form.driver_weight_kg.data,
                 data_source=data_source,
                 labels=labels,
             )
@@ -180,9 +177,6 @@ def edit(session_id):
         session.date = form.date.data
         session.track_id = form.track_id.data
         session.team_id = form.team_id.data if form.team_id.data != 0 else None
-        session.kart_number = form.kart_number.data
-        session.driver_weight_kg = form.driver_weight_kg.data
-        session.session_type = form.session_type.data or None
         session.session_start = form.session_start.data.strftime('%H:%M') if form.session_start.data else None
 
         # Parse labels

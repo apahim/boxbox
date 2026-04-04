@@ -107,10 +107,7 @@ class Session(db.Model):
     track_id = db.Column(db.Integer, db.ForeignKey('tracks.id'), nullable=False)
     team_id = db.Column(db.Integer, db.ForeignKey('teams.id'), nullable=True)
     date = db.Column(db.Date, nullable=False)
-    session_type = db.Column(db.String(100))
     session_start = db.Column(db.String(10))
-    kart_number = db.Column(db.Integer)
-    driver_weight_kg = db.Column(db.Float)
 
     # Precomputed summary stats
     total_laps = db.Column(db.Integer)

@@ -34,10 +34,3 @@ def view(session_id):
 
     mapkit_token = current_app.config.get('MAPKIT_TOKEN', '')
     return render_template('dashboard/view.html', session=session, mapkit_token=mapkit_token)
-
-
-@bp.route('/evolution')
-@login_required
-def evolution():
-    mapkit_token = current_app.config.get('MAPKIT_TOKEN', '')
-    return render_template('dashboard/evolution.html', mapkit_token=mapkit_token)

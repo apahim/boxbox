@@ -124,25 +124,9 @@
                                 {{ form.session_start(class="form-control") }}
                             </div>
                             <div class="col-6 mb-3">
-                                {{ form.session_type.label(class="form-label") }}
-                                {{ form.session_type(class="form-control", placeholder="e.g. Open Sprint") }}
+                                {{ form.team_id.label(class="form-label") }}
+                                {{ form.team_id(class="form-select") }}
                             </div>
-                        </div>
-
-                        <div class="row">
-                            <div class="col-6 mb-3">
-                                {{ form.kart_number.label(class="form-label") }}
-                                {{ form.kart_number(class="form-control", placeholder="11") }}
-                            </div>
-                            <div class="col-6 mb-3">
-                                {{ form.driver_weight_kg.label(class="form-label") }}
-                                {{ form.driver_weight_kg(class="form-control", placeholder="93.9", step="0.1") }}
-                            </div>
-                        </div>
-
-                        <div class="mb-3">
-                            {{ form.team_id.label(class="form-label") }}
-                            {{ form.team_id(class="form-select") }}
                         </div>
 
                         <div class="mb-3">
@@ -559,10 +543,7 @@ function buildReview() {
     addRow('Date', document.getElementById('date').value);
     var trackOpt = trackSelect.options[trackSelect.selectedIndex];
     addRow('Track', trackOpt ? trackOpt.text : '');
-    addRow('Session Type', document.getElementById('session_type').value);
     addRow('Session Start', document.getElementById('session_start').value);
-    addRow('Kart', document.getElementById('kart_number').value);
-    addRow('Driver Weight', document.getElementById('driver_weight_kg').value ? document.getElementById('driver_weight_kg').value + ' kg' : '');
     var teamOpt = document.getElementById('team_id').options[document.getElementById('team_id').selectedIndex];
     if (teamOpt && parseInt(teamOpt.value) !== 0) addRow('Team', teamOpt.text);
     if (tags.length > 0) {
