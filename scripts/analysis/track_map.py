@@ -117,7 +117,6 @@ def create_sector_delta_map(df, best_lap, sector_data, weather=None, track_corne
             "min": 0.0,
             "max": round(delta_max, 3),
         },
-        "show_colorbar": False,
         "cmid": None,
         "corners": _corners_list(df, best_lap=best_lap, track_corners=track_corners),
         "wind": wind_data(weather),
