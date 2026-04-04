@@ -1,19 +1,19 @@
 {% extends "base.html" %}
 
-{% block title %}Edit {{ track.name }} - Kart Telemetry{% endblock %}
+{% block title %}Edit {{ track.name }} - BoxBox{% endblock %}
 
 {% block extra_head %}
 {% if mapkit_token %}
 <script src="https://cdn.apple-mapkit.com/mk/5.x.x/mapkit.js" crossorigin></script>
 {% endif %}
 <style>
-    #map-container { width: 100%; height: 500px; position: relative; background: #e0e0e0; border-radius: 8px; overflow: hidden; }
+    #map-container { width: 100%; height: 500px; position: relative; background: var(--bb-surface-alt); border-radius: 8px; overflow: hidden; }
     #map-container .mk-map { width: 100%; height: 100%; }
-    #map-fallback { display: flex; align-items: center; justify-content: center; height: 100%; color: #666; }
-    .corner-row { display: flex; align-items: center; gap: 6px; margin-bottom: 8px; padding: 8px; background: #f8f9fa; border-radius: 4px; flex-wrap: wrap; }
+    #map-fallback { display: flex; align-items: center; justify-content: center; height: 100%; color: var(--bb-text-muted); }
+    .corner-row { display: flex; align-items: center; gap: 6px; margin-bottom: 8px; padding: 8px; background: var(--bb-surface-alt); border-radius: 6px; flex-wrap: wrap; }
     .corner-row .badge { width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; font-size: 0.75rem; flex-shrink: 0; }
     .corner-row input { flex: 1; min-width: 80px; }
-    .corner-coords { font-size: 0.75rem; color: #666; white-space: nowrap; }
+    .corner-coords { font-size: 0.75rem; color: var(--bb-text-muted); white-space: nowrap; }
     .corner-row .btn { flex-shrink: 0; }
 </style>
 {% endblock %}

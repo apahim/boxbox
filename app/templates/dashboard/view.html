@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}Dashboard - {{ session.track.name if session.track else 'Session' }} {{ session.date }}{% endblock %}
+{% block title %}{{ session.track.name if session.track else 'Session' }} {{ session.date }} - BoxBox{% endblock %}
 
 {% block extra_head %}
 <script src="https://cdn.plot.ly/plotly-3.4.0.min.js"></script>
@@ -30,7 +30,7 @@
             <span class="badge bg-secondary metadata-badge">{{ session.driver_weight_kg }} kg</span>
             {% endif %}
             {% if session.session_type %}
-            <span class="badge bg-warning text-dark metadata-badge">{{ session.session_type }}</span>
+            <span class="badge bg-warning metadata-badge">{{ session.session_type }}</span>
             {% endif %}
         </div>
     </div>

@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}Manage {{ team.name }} - Kart Telemetry{% endblock %}
+{% block title %}Manage {{ team.name }} - BoxBox{% endblock %}
 
 {% block content %}
 <h2>{{ team.name }}</h2>
@@ -29,7 +29,7 @@
                                 {% if member.role != 'owner' %}
                                 <form method="POST" action="{{ url_for('teams.remove_member', slug=team.slug, user_id=member.user_id) }}" style="display:inline">
                                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                                    <button type="submit" class="btn btn-sm btn-outline-danger" onclick="return confirm('Remove this member?')">Remove</button>
+                                    <button type="submit" class="btn btn-sm btn-outline-danger" onclick="return confirm('Remove this member?')"><i class="bi bi-x-lg"></i></button>
                                 </form>
                                 {% endif %}
                             </td>
