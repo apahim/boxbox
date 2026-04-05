@@ -93,19 +93,18 @@
     </div>
     <div class="mt-2">
     {% for s in matching_sessions %}
-        <div class="form-check">
-            <input class="form-check-input match-session-cb" type="checkbox" value="{{ s.id }}" id="ms{{ s.id }}" checked>
-            <label class="form-check-label" for="ms{{ s.id }}">
+        <div class="d-flex align-items-center justify-content-between py-1" id="match-{{ s.id }}">
+            <span style="font-size:0.85rem;">
                 {{ s.date.strftime('%-d %b %Y') }}{% if s.session_start %} &middot; {{ s.session_start }}{% endif %}
                 {% if s.data_source %}<span class="text-muted">&middot; {{ s.data_source }}</span>{% endif %}
-            </label>
+            </span>
+            <div class="d-flex gap-1">
+                <button class="btn btn-sm btn-outline-primary" onclick="assignSession({{ s.id }}, this)">Assign</button>
+            </div>
         </div>
     {% endfor %}
     </div>
-    <button class="btn btn-sm btn-primary mt-2" id="assignBtn" onclick="assignSessions()">
-        Assign Selected
-    </button>
-    <div class="mt-1" style="font-size:0.75rem; color:var(--bb-text-muted);">Sessions will be reingested with this track's gate and corners.</div>
+    <div class="mt-1" style="font-size:0.75rem; color:var(--bb-text-muted);">Assigned sessions can be reingested to apply this track's gate and corners.</div>
 </div>
 {% endif %}
 
@@ -166,35 +165,51 @@
 <script src="{{ url_for('static', filename='js/mapkit-helpers.js') }}"></script>
 {% if matching_sessions %}
 <script>
-window.assignSessions = function() {
-    var ids = [];
-    document.querySelectorAll('.match-session-cb:checked').forEach(function(cb) {
-        ids.push(parseInt(cb.value));
-    });
-    if (!ids.length) return;
-
-    var btn = document.getElementById('assignBtn');
+window.assignSession = function(sessionId, btn) {
     btn.disabled = true;
-    btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Assigning\u2026';
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
 
     fetch('{{ url_for("tracks.assign_sessions", slug=track.slug) }}', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'fetch' },
-        body: JSON.stringify({ session_ids: ids }),
+        body: JSON.stringify({ session_ids: [sessionId] }),
         credentials: 'same-origin',
     }).then(function(r) { return r.json(); })
     .then(function(data) {
         if (data.ok) {
-            var el = document.getElementById('matchAlert');
-            el.innerHTML = '<i class="bi bi-check-circle"></i> ' + data.count + ' session' +
-                (data.count !== 1 ? 's' : '') + ' assigned to this track. They will update on next reingest.';
-            el.style.background = 'rgba(46,204,113,0.08)';
-            el.style.borderColor = 'rgba(46,204,113,0.25)';
-            setTimeout(function() { el.remove(); }, 5000);
+            var actions = btn.parentElement;
+            actions.innerHTML =
+                '<span class="text-success" style="font-size:0.8rem;"><i class="bi bi-check-lg"></i> Assigned</span> ' +
+                '<button class="btn btn-sm btn-outline-warning" onclick="reingestSession(' + sessionId + ', this)">' +
+                    '<i class="bi bi-arrow-repeat"></i> Reingest</button>';
         }
     }).catch(function() {
         btn.disabled = false;
-        btn.innerHTML = 'Assign Selected';
+        btn.innerHTML = 'Assign';
+    });
+};
+
+window.reingestSession = function(sessionId, btn) {
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Reingesting\u2026';
+
+    fetch('/sessions/' + sessionId + '/reingest', {
+        method: 'POST',
+        headers: { 'X-Requested-With': 'fetch', 'Content-Type': 'application/x-www-form-urlencoded' },
+        credentials: 'same-origin',
+    }).then(function(r) { return r.json(); })
+    .then(function(data) {
+        if (data.ok) {
+            btn.parentElement.innerHTML =
+                '<span class="text-success" style="font-size:0.8rem;"><i class="bi bi-check-lg"></i> Done</span>';
+        } else {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="bi bi-arrow-repeat"></i> Retry';
+            btn.classList.replace('btn-outline-warning', 'btn-outline-danger');
+        }
+    }).catch(function() {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="bi bi-arrow-repeat"></i> Retry';
     });
 };
 </script>

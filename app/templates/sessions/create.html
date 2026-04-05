@@ -123,13 +123,18 @@
                             </div>
                             <div class="col-12 col-sm-6 mb-3">
                                 <label class="form-label">Track</label>
-                                <div id="track-display" class="form-control" style="background: var(--bb-surface-alt); cursor: default;">
-                                    <span id="track-name" class="text-muted">Detected from telemetry after upload</span>
-                                </div>
+                                <select name="track_id" id="track_id" class="form-select">
+                                    <option value="">— No track —</option>
+                                    {% for t in tracks %}
+                                    <option value="{{ t.id }}">{{ t.name }}</option>
+                                    {% endfor %}
+                                </select>
                                 <div id="track-warning" class="small mt-1" style="display:none; color: var(--bb-amber);">
                                     No close match. <a href="{{ url_for('tracks.create') }}">Add a new track?</a>
                                 </div>
-                                <input type="hidden" name="track_id" id="track_id" value="">
+                                <div id="track-detected" class="small mt-1" style="display:none; color: var(--bb-text-muted);">
+                                    <i class="bi bi-geo-alt"></i> Auto-detected from GPS
+                                </div>
                             </div>
                         </div>
 
@@ -246,15 +251,15 @@ function autoSelectTrack(lat, lon) {
         if (d < bestDist) { bestDist = d; bestId = id; }
     }
     if (bestId === null) return;
-    trackSelect.value = bestId;
-    document.getElementById('track-name').textContent = trackCoords[bestId].name;
-    document.getElementById('track-name').classList.remove('text-muted');
-    // Warn if no close match (~5km threshold)
     var warning = document.getElementById('track-warning');
+    var detected = document.getElementById('track-detected');
     if (bestDist > 0.002) {
         warning.style.display = '';
+        detected.style.display = 'none';
     } else {
+        trackSelect.value = bestId;
         warning.style.display = 'none';
+        detected.style.display = '';
     }
 }
 
@@ -639,8 +644,8 @@ function buildReview() {
         addRow('File', goProFile.files[0].name);
     }
     addRow('Date', document.getElementById('date').value);
-    var trackId = trackSelect.value;
-    addRow('Track', trackCoords[trackId] ? trackCoords[trackId].name : '<span class="text-muted">No track</span>');
+    var trackOpt = trackSelect.options[trackSelect.selectedIndex];
+    addRow('Track', trackSelect.value ? trackOpt.textContent : '<span class="text-muted">No track</span>');
     addRow('Session Start', document.getElementById('session_start').value);
     if (tags.length > 0) {
         addRow('Labels', tags.map(function(t) { return '<span class="badge bg-info">' + t + '</span>'; }).join(' '));

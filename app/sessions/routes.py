@@ -68,7 +68,7 @@ def create():
             if is_fetch:
                 return jsonify(error=msg), 400
             flash(msg, 'danger')
-            return render_template('sessions/create.html', form=form, track_coords_js=track_coords_js)
+            return render_template('sessions/create.html', form=form, track_coords_js=track_coords_js, tracks=tracks)
 
         # Parse labels
         labels = []
@@ -142,7 +142,7 @@ def create():
             if is_fetch:
                 return jsonify(error='Error processing telemetry file. Please check the format and try again.'), 500
             flash('Error processing telemetry file. Please check the format and try again.', 'danger')
-            return render_template('sessions/create.html', form=form, track_coords_js=track_coords_js)
+            return render_template('sessions/create.html', form=form, track_coords_js=track_coords_js, tracks=tracks)
         finally:
             os.close(temp_fd)
             os.unlink(temp_path)
@@ -154,7 +154,7 @@ def create():
             errors[field] = errs
         return jsonify(error='Validation failed', fields=errors), 400
 
-    return render_template('sessions/create.html', form=form, track_coords_js=track_coords_js)
+    return render_template('sessions/create.html', form=form, track_coords_js=track_coords_js, tracks=tracks)
 
 
 @bp.route('/<int:session_id>/edit', methods=['GET', 'POST'])

@@ -8,7 +8,7 @@ SHARE_TOKEN_MAX_AGE = timedelta(days=30)
 
 from app import db
 from app.api import bp
-from app.models import Session, ChartData, Track, Lap
+from app.models import Session, ChartData, Track, Telemetry, Lap
 
 
 def api_login_required(f):
@@ -190,6 +190,34 @@ def session_raceline(session_id, session):
 def _user_sessions_query():
     """Return a query for sessions visible to the current user."""
     return Session.query.filter_by(user_id=current_user.id)
+
+
+@bp.route('/sessions/<int:session_id>/detect-track')
+def detect_track(session_id):
+    """Detect the best matching track from a session's first GPS coordinate."""
+    if not current_user.is_authenticated:
+        return jsonify(error='Authentication required'), 401
+
+    session = db.session.get(Session, session_id)
+    if not session or session.user_id != current_user.id:
+        return jsonify(error='Not found'), 404
+
+    first = Telemetry.query.filter_by(session_id=session_id).order_by(Telemetry.id).first()
+    if not first or not first.latitude or not first.longitude:
+        return jsonify(track_id=None)
+
+    tracks = Track.query.all()
+    best = None
+    best_dist = float('inf')
+    for t in tracks:
+        d = (t.lat - first.latitude) ** 2 + (t.lon - first.longitude) ** 2
+        if d < best_dist:
+            best_dist = d
+            best = t
+
+    if best and best_dist <= 0.002:
+        return jsonify(track_id=best.id, track_name=best.name)
+    return jsonify(track_id=None)
 
 
 @bp.route('/tracks/<int:track_id>/gate')

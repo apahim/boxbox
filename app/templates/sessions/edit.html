@@ -21,7 +21,14 @@
                         </div>
                         <div class="col-md-6 mb-3">
                             {{ form.track_id.label(class="form-label") }}
-                            {{ form.track_id(class="form-select") }}
+                            <div class="d-flex gap-2">
+                                {{ form.track_id(class="form-select") }}
+                                <button type="button" class="btn btn-sm btn-outline-secondary" id="detectTrackBtn"
+                                        onclick="detectTrack()" title="Auto-detect from GPS data" style="white-space:nowrap;">
+                                    <i class="bi bi-geo-alt"></i> Detect
+                                </button>
+                            </div>
+                            <div id="detect-result" class="small mt-1" style="display:none;"></div>
                         </div>
                     </div>
 
@@ -52,6 +59,33 @@
 {% endblock %}
 
 {% block extra_scripts %}
+<script>
+window.detectTrack = function() {
+    var btn = document.getElementById('detectTrackBtn');
+    var result = document.getElementById('detect-result');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
+    result.style.display = 'none';
+    fetch('/api/sessions/{{ session.id }}/detect-track', { credentials: 'same-origin' })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="bi bi-geo-alt"></i> Detect';
+            if (data.track_id) {
+                document.getElementById('track_id').value = data.track_id;
+                result.innerHTML = '<i class="bi bi-geo-alt"></i> Detected: ' + data.track_name;
+                result.style.color = 'var(--bb-text-muted)';
+            } else {
+                result.innerHTML = 'No matching track found';
+                result.style.color = 'var(--bb-amber, #f59e0b)';
+            }
+            result.style.display = '';
+        }).catch(function() {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="bi bi-geo-alt"></i> Detect';
+        });
+};
+</script>
 <script>
 (function() {
     var DEFAULTS = ['Wet', 'Dry', 'Race', 'Practice', 'Qualifying', 'New tyres'];

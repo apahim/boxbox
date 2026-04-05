@@ -1,4 +1,3 @@
-import csv
 import gzip
 import os
 import tempfile
@@ -11,58 +10,6 @@ from app.models import (
     SectorTime, ChartData, SessionUpload, Track, TrackCorner,
 )
 from app.sessions.ingest import ingest_session
-
-
-def _auto_detect_track(csv_path):
-    """Try to match a track from the first GPS coordinate in the CSV.
-
-    Returns a Track or None.
-    """
-    try:
-        with open(csv_path, 'r') as f:
-            reader = csv.reader(f)
-            # Find header row
-            header = None
-            for row in reader:
-                if row and row[0].strip().lower() == 'timestamp':
-                    header = [c.strip().lower() for c in row]
-                    break
-            if not header:
-                return None
-            # Skip units and source rows
-            next(reader, None)
-            next(reader, None)
-            # Read first data row
-            first_row = next(reader, None)
-            if not first_row:
-                return None
-
-            lat_idx = lon_idx = -1
-            for i, col in enumerate(header):
-                if 'latitude' in col and lat_idx < 0:
-                    lat_idx = i
-                if 'longitude' in col and lon_idx < 0:
-                    lon_idx = i
-            if lat_idx < 0 or lon_idx < 0:
-                return None
-
-            lat = float(first_row[lat_idx])
-            lon = float(first_row[lon_idx])
-    except Exception:
-        return None
-
-    # Find nearest track (same threshold as create form: ~5km ≈ 0.002 deg²)
-    tracks = Track.query.all()
-    best_track = None
-    best_dist = float('inf')
-    for t in tracks:
-        d = (t.lat - lat) ** 2 + (t.lon - lon) ** 2
-        if d < best_dist:
-            best_dist = d
-            best_track = t
-    if best_track and best_dist <= 0.002:
-        return best_track
-    return None
 
 
 def reingest_session(session):
@@ -92,15 +39,6 @@ def reingest_session(session):
             f.write(csv_data)
 
         track = db.session.get(Track, session.track_id) if session.track_id else None
-
-        # Auto-detect track from GPS if none assigned
-        if not track:
-            track = _auto_detect_track(temp_path)
-            if track:
-                session.track_id = track.id
-                current_app.logger.info(
-                    'Auto-detected track "%s" for session %d', track.name, session.id
-                )
 
         sf_gate = None
         if track:
