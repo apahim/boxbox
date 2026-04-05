@@ -28,12 +28,23 @@
     .corner-panel-body { overflow-y: auto; padding: 8px; flex: 1; min-height: 0; }
     .corner-panel-footer { padding: 8px 14px 12px; border-top: 1px solid var(--bb-border); flex-shrink: 0; }
 
-    /* S/F row in corner list */
-    .sf-row { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; padding: 6px 8px;
+    /* Panel sections */
+    .panel-section { margin-bottom: 10px; }
+    .panel-section-header { display: flex; align-items: center; justify-content: space-between;
+        padding: 4px 4px 6px; font-size: 0.8rem; font-weight: 600; color: var(--bb-text-muted); }
+    .panel-section-header .section-title { display: flex; align-items: center; gap: 5px; }
+    .panel-section-divider { border-top: 1px solid var(--bb-border); margin: 6px 0 10px; }
+
+    /* S/F section */
+    .sf-active { display: flex; align-items: center; gap: 6px; padding: 8px;
         background: rgba(46, 204, 113, 0.08); border: 1px solid rgba(46, 204, 113, 0.2);
         border-radius: 6px; font-size: 0.8rem; color: #2ecc71; }
-    .sf-row .sf-label { font-weight: 600; flex: 1; }
-    .sf-row .corner-coords { color: rgba(46, 204, 113, 0.6); }
+    .sf-active .sf-info { flex: 1; }
+    .sf-active .sf-coords { font-size: 0.7rem; color: rgba(46, 204, 113, 0.6); margin-top: 2px; }
+    .sf-placeholder { padding: 10px; text-align: center; font-size: 0.8rem;
+        color: var(--bb-text-muted); border: 1px dashed var(--bb-border); border-radius: 6px; }
+    .sf-placeholder .btn { margin-top: 6px; }
+    .sf-placeholder .sf-hint { font-size: 0.7rem; margin-top: 4px; color: var(--bb-text-dim); }
 
     /* Corner rows */
     .corner-row { display: flex; align-items: center; gap: 5px; margin-bottom: 4px; padding: 6px 8px;
@@ -79,33 +90,47 @@
         <div id="map-fallback">
             <p>Map requires a MapKit token. Corners can still be managed via the panel.</p>
         </div>
-        <div id="map-empty" style="display:none">Click the map to add your first corner</div>
+        <div id="map-empty" style="display:none">Start by drawing a start/finish line, then add corner trap lines</div>
     </div>
 
     <div class="corner-panel">
         <div class="corner-panel-header">
-            <h6>Corners</h6>
-            <div class="panel-actions">
-                <button type="button" class="btn btn-outline-success" id="sf-toggle-btn" onclick="toggleSfGate()"
-                        title="Toggle start/finish line">S/F</button>
-                <button type="button" class="btn btn-outline-secondary" onclick="addCornerManual()"
-                        title="Add corner">+ Add</button>
-                <button type="button" class="btn btn-outline-danger" id="clear-all-btn" onclick="clearAllCorners()"
-                        title="Remove all corners" style="display:none">&times; Clear</button>
+            <h6>Track Setup</h6>
+        </div>
+        <div class="corner-panel-body">
+            <!-- S/F Section -->
+            <div class="panel-section">
+                <div class="panel-section-header">
+                    <span class="section-title"><i class="bi bi-flag-fill" style="color:#2ecc71"></i> Start / Finish Line</span>
+                </div>
+                <div id="sf-content"></div>
+            </div>
+            <div class="panel-section-divider"></div>
+            <!-- Corners Section -->
+            <div class="panel-section">
+                <div class="panel-section-header">
+                    <span class="section-title"><i class="bi bi-signpost-split" style="color:var(--bb-blue)"></i> Corners</span>
+                    <div class="panel-actions">
+                        <button type="button" class="btn btn-outline-secondary" onclick="addCornerManual()"
+                                title="Add corner">+ Add</button>
+                        <button type="button" class="btn btn-outline-danger" id="clear-all-btn" onclick="clearAllCorners()"
+                                title="Remove all corners" style="display:none">&times; Clear</button>
+                    </div>
+                </div>
+                <div id="corners-list-content"></div>
             </div>
         </div>
-        <div class="corner-panel-body" id="corner-list"></div>
         <div class="corner-panel-footer">
             <form method="POST" id="save-form">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <input type="hidden" name="corners_json" id="corners-json" value="">
-                <input type="hidden" name="sf_gate_json" id="sf-gate-json" value="">
+                <input type="hidden" name="sf_gate_json" id="sf-gate-json" value="{{ sf_gate_json }}">
                 <button type="submit" class="btn btn-primary w-100 save-btn" id="save-btn" disabled>
                     <i class="bi bi-check-lg"></i> Saved</button>
             </form>
             {% if session_count > 0 %}
             <div class="reingest-warn" id="reingest-warn" style="display:none">
-                <i class="bi bi-arrow-repeat"></i> Saving will trigger reingestion for {{ session_count }} session{{ 's' if session_count != 1 }}
+                <i class="bi bi-arrow-repeat"></i> Saving will require reingest on sessions to have effect
             </div>
             {% endif %}
         </div>
@@ -136,7 +161,7 @@
         dirty = true;
         var btn = document.getElementById('save-btn');
         btn.disabled = false;
-        btn.innerHTML = 'Save Corners<span class="dirty-dot"></span>';
+        btn.innerHTML = 'Save<span class="dirty-dot"></span>';
         btn.classList.remove('saved', 'error');
         var warn = document.getElementById('reingest-warn');
         if (warn) warn.style.display = '';
@@ -204,40 +229,52 @@
     }
 
     // ── S/F Gate ──
-    function renderSfInList() {
-        // S/F is rendered as part of the corner list
-    }
-
-    window.toggleSfGate = function() {
-        if (sfGate) {
-            sfGate = null;
-        } else {
-            var offset = 0.00008;
-            sfGate = {
-                lat1: trackLat + offset, lon1: trackLon - offset,
-                lat2: trackLat - offset, lon2: trackLon + offset,
-            };
-        }
-        updateSfButton();
-        document.getElementById('sf-gate-json').value = sfGate ? JSON.stringify(sfGate) : '';
+    function addSfGate() {
+        var offset = 0.00008;
+        sfGate = {
+            lat1: trackLat + offset, lon1: trackLon - offset,
+            lat2: trackLat - offset, lon2: trackLon + offset,
+        };
+        document.getElementById('sf-gate-json').value = JSON.stringify(sfGate);
         markDirty();
-        renderCornerList();
+        renderAll();
         if (map) updateSfOverlay();
-        updateEmptyState();
-    };
+    }
 
-    function updateSfButton() {
-        var btn = document.getElementById('sf-toggle-btn');
+    function removeSfGate() {
+        sfGate = null;
+        document.getElementById('sf-gate-json').value = '';
+        markDirty();
+        renderAll();
+        if (map) updateSfOverlay();
+    }
+
+    function renderSfSection() {
+        var container = document.getElementById('sf-content');
         if (sfGate) {
-            btn.textContent = 'S/F';
-            btn.className = 'btn btn-success';
-            btn.title = 'Remove start/finish line';
+            container.innerHTML =
+                '<div class="sf-active">' +
+                    '<i class="bi bi-flag-fill"></i>' +
+                    '<div class="sf-info">' +
+                        '<div>Gate configured</div>' +
+                        '<div class="sf-coords">' + sfGate.lat1.toFixed(5) + ', ' + sfGate.lon1.toFixed(5) +
+                            ' &rarr; ' + sfGate.lat2.toFixed(5) + ', ' + sfGate.lon2.toFixed(5) + '</div>' +
+                    '</div>' +
+                    '<button type="button" class="btn btn-sm btn-outline-danger" onclick="removeSfGate()" title="Remove">&times;</button>' +
+                '</div>';
         } else {
-            btn.textContent = 'S/F';
-            btn.className = 'btn btn-outline-success';
-            btn.title = 'Set start/finish line';
+            container.innerHTML =
+                '<div class="sf-placeholder">' +
+                    '<div>No start/finish line</div>' +
+                    '<button type="button" class="btn btn-sm btn-outline-success" onclick="addSfGate()">' +
+                        '<i class="bi bi-plus-lg"></i> Draw Start/Finish Line</button>' +
+                    '<div class="sf-hint">Required for accurate lap detection</div>' +
+                '</div>';
         }
     }
+
+    window.addSfGate = addSfGate;
+    window.removeSfGate = removeSfGate;
 
     function clearSfOverlay() {
         if (!sfOverlays || !map) return;
@@ -277,13 +314,13 @@
             sfGate.lat1 = e.target.coordinate.latitude;
             sfGate.lon1 = e.target.coordinate.longitude;
             document.getElementById('sf-gate-json').value = JSON.stringify(sfGate);
-            markDirty(); renderCornerList(); updateSfOverlay();
+            markDirty(); renderAll(); updateSfOverlay();
         });
         var ann2 = makeDot(coord2, '#2ecc71', function(e) {
             sfGate.lat2 = e.target.coordinate.latitude;
             sfGate.lon2 = e.target.coordinate.longitude;
             document.getElementById('sf-gate-json').value = JSON.stringify(sfGate);
-            markDirty(); renderCornerList(); updateSfOverlay();
+            markDirty(); renderAll(); updateSfOverlay();
         });
 
         var label = new mapkit.Annotation(midCoord, function() {
@@ -306,18 +343,9 @@
 
     var dragSrcIdx = null;
 
-    function renderCornerList() {
-        var list = document.getElementById('corner-list');
+    function renderCornersContent() {
+        var list = document.getElementById('corners-list-content');
         list.innerHTML = '';
-
-        // S/F row
-        if (sfGate) {
-            var sfRow = document.createElement('div');
-            sfRow.className = 'sf-row';
-            sfRow.innerHTML = '<span class="sf-label"><i class="bi bi-flag-fill"></i> Start / Finish</span>' +
-                '<span class="corner-coords">' + sfGate.lat1.toFixed(5) + ', ' + sfGate.lon1.toFixed(5) + '</span>';
-            list.appendChild(sfRow);
-        }
 
         corners.forEach(function(c, i) {
             var mid = midpoint(c);
@@ -352,9 +380,8 @@
                 if (selectedIdx === i) selectedIdx = -1;
                 else if (selectedIdx > i) selectedIdx--;
                 markDirty();
-                renderCornerList();
+                renderAll();
                 if (map) updateMapOverlays();
-                updateEmptyState();
             });
 
             // Drag reorder
@@ -379,20 +406,28 @@
                 if (selectedIdx === dragSrcIdx) selectedIdx = i;
                 dragSrcIdx = null;
                 markDirty();
-                renderCornerList();
+                renderAll();
                 if (map) updateMapOverlays();
             });
 
             list.appendChild(row);
         });
 
+        if (corners.length === 0) {
+            list.innerHTML = '<div style="padding:8px;text-align:center;font-size:0.8rem;color:var(--bb-text-muted);">Click the map or use + Add to create corners</div>';
+        }
+    }
+
+    function renderAll() {
+        renderSfSection();
+        renderCornersContent();
         document.getElementById('corners-json').value = JSON.stringify(corners);
         updateEmptyState();
     }
 
     function selectCorner(i) {
         selectedIdx = (selectedIdx === i) ? -1 : i;
-        renderCornerList();
+        renderAll();
         if (map) updateMapOverlays();
         // Scroll to selected row
         if (selectedIdx >= 0) {
@@ -418,7 +453,7 @@
             trap_lat2: trackLat - offset, trap_lon2: trackLon + offset,
         });
         markDirty();
-        renderCornerList();
+        renderAll();
         if (map) updateMapOverlays();
         setTimeout(function() { flashCornerRow(corners.length - 1); }, 50);
     };
@@ -428,7 +463,7 @@
         corners = [];
         selectedIdx = -1;
         markDirty();
-        renderCornerList();
+        renderAll();
         if (map) updateMapOverlays();
     };
 
@@ -467,12 +502,12 @@
             var ann1 = makeDot(coord1, dotColor, function(e) {
                 corners[i].trap_lat1 = e.target.coordinate.latitude;
                 corners[i].trap_lon1 = e.target.coordinate.longitude;
-                markDirty(); renderCornerList(); updateMapOverlays();
+                markDirty(); renderAll(); updateMapOverlays();
             });
             var ann2 = makeDot(coord2, dotColor, function(e) {
                 corners[i].trap_lat2 = e.target.coordinate.latitude;
                 corners[i].trap_lon2 = e.target.coordinate.longitude;
-                markDirty(); renderCornerList(); updateMapOverlays();
+                markDirty(); renderAll(); updateMapOverlays();
             });
 
             var labelText = c.name || 'T' + (i + 1);
@@ -542,7 +577,7 @@
                 trap_lat2: coord.latitude - offset, trap_lon2: coord.longitude + offset,
             });
             markDirty();
-            renderCornerList();
+            renderAll();
             updateMapOverlays();
             setTimeout(function() { flashCornerRow(corners.length - 1); }, 50);
         });
@@ -552,9 +587,7 @@
     }
 
     // ── Init ──
-    updateSfButton();
-    renderCornerList();
-    updateEmptyState();
+    renderAll();
 
     if (mapkitToken) {
         MapHelpers.initMapKit(mapkitToken);

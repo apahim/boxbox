@@ -91,12 +91,18 @@ def edit(slug):
         if sf_json:
             try:
                 sf = json.loads(sf_json)
-                track.sf_lat1 = float(sf['lat1'])
-                track.sf_lon1 = float(sf['lon1'])
-                track.sf_lat2 = float(sf['lat2'])
-                track.sf_lon2 = float(sf['lon2'])
+                if sf:
+                    track.sf_lat1 = float(sf['lat1'])
+                    track.sf_lon1 = float(sf['lon1'])
+                    track.sf_lat2 = float(sf['lat2'])
+                    track.sf_lon2 = float(sf['lon2'])
+                else:
+                    track.sf_lat1 = None
+                    track.sf_lon1 = None
+                    track.sf_lat2 = None
+                    track.sf_lon2 = None
             except (json.JSONDecodeError, KeyError, TypeError, ValueError):
-                pass  # ignore malformed SF gate data
+                pass  # keep existing gate data on malformed input
         else:
             track.sf_lat1 = None
             track.sf_lon1 = None
