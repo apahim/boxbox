@@ -165,13 +165,15 @@
 <script src="{{ url_for('static', filename='js/mapkit-helpers.js') }}"></script>
 {% if matching_sessions %}
 <script>
+var _csrf = document.querySelector('[name=csrf_token]').value;
+
 window.assignSession = function(sessionId, btn) {
     btn.disabled = true;
     btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
 
     fetch('{{ url_for("tracks.assign_sessions", slug=track.slug) }}', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'fetch' },
+        headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'fetch', 'X-CSRFToken': _csrf },
         body: JSON.stringify({ session_ids: [sessionId] }),
         credentials: 'same-origin',
     }).then(function(r) { return r.json(); })
@@ -195,7 +197,7 @@ window.reingestSession = function(sessionId, btn) {
 
     fetch('/sessions/' + sessionId + '/reingest', {
         method: 'POST',
-        headers: { 'X-Requested-With': 'fetch', 'Content-Type': 'application/x-www-form-urlencoded' },
+        headers: { 'X-Requested-With': 'fetch', 'Content-Type': 'application/x-www-form-urlencoded', 'X-CSRFToken': _csrf },
         credentials: 'same-origin',
     }).then(function(r) { return r.json(); })
     .then(function(data) {
