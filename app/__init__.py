@@ -4,6 +4,7 @@ import time
 
 from flask import Flask, jsonify, redirect, render_template, request, url_for
 from flask_sqlalchemy import SQLAlchemy
+from werkzeug.middleware.proxy_fix import ProxyFix
 from flask_migrate import Migrate
 from flask_login import LoginManager, current_user
 from flask_wtf.csrf import CSRFProtect
@@ -110,6 +111,8 @@ def create_app(config_name=None):
     else:
         from app.config import Config
         app.config.from_object(Config)
+        # Trust X-Forwarded-* headers from Caddy reverse proxy
+        app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
 
     _configure_logging(app)
     _validate_env(app)
