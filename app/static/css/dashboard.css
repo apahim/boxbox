@@ -24,7 +24,7 @@
 }
 .weather-wind i { font-size: 0.9rem; }
 
-.share-popover { position: fixed; z-index: 1000; width: 320px; background: var(--bb-surface); border: 1px solid var(--bb-border); border-radius: 8px; padding: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.3); }
+.share-popover { position: fixed; z-index: 1000; width: min(320px, calc(100vw - 32px)); background: var(--bb-surface); border: 1px solid var(--bb-border); border-radius: 8px; padding: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.3); }
 .share-active { color: var(--bb-blue) !important; border-color: rgba(59,130,246,0.4) !important; }
 
 .dash-share-btn {
@@ -74,6 +74,11 @@
 .map-wind { position: absolute; bottom: 8px; left: 8px; background: rgba(255,255,255,0.85); border: 1px solid #999; border-radius: 4px; padding: 4px 6px; font-size: 0.7rem; z-index: 10; text-align: center; line-height: 1.2; }
 .map-wind .arrow { font-size: 1.1rem; display: block; }
 
+/* Chart containers */
+.chart-container { width: 100%; height: 350px; }
+.chart-container-tall { width: 100%; height: 400px; }
+#racelineWrap { height: 600px; }
+
 @media (max-width: 576px) {
     h1 { font-size: 1.4rem; }
     .stat-value { font-size: 1.3rem; }
@@ -86,12 +91,14 @@
     .metadata-badge { font-size: 0.75rem; }
     .action-plan .action-item { padding: 0.5rem 0.75rem; font-size: 0.85rem; }
     .action-icon { width: 24px; height: 24px; font-size: 0.75rem; margin-right: 0.5rem; }
-    .mapkit-wrap { height: 400px; }
+    .mapkit-wrap { height: 280px; }
     #racelineWrap { height: 400px; }
+    .chart-container, .chart-container-tall { height: 250px; }
     .rl-selector { max-height: none !important; overflow-y: visible !important; }
     .accordion-button { font-size: 0.8rem !important; padding: 0.4rem 0.5rem !important; }
     .form-check { margin-bottom: 0.1rem; }
     .js-plotly-plot { min-height: 0 !important; }
     #dashboardTabs { flex-wrap: nowrap; overflow-x: auto; -webkit-overflow-scrolling: touch; }
     #dashboardTabs .nav-link { white-space: nowrap; font-size: 0.85rem; padding: 0.4rem 0.75rem; }
+    .weather-strip { gap: 8px; padding: 4px 10px; font-size: 0.8rem; }
 }

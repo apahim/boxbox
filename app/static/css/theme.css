@@ -376,6 +376,7 @@ a:hover { color: #60a5fa; }
 @media (max-width: 576px) {
     .wizard-steps li .step-label { display: none; }
     .wizard-steps li .step-line { width: 32px; margin: 0 0.4rem; }
+    .nav-tabs .nav-link { padding: 0.5rem 0.75rem; font-size: 0.85rem; }
 }
 
 /* ---- Source cards ---- */

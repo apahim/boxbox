@@ -120,8 +120,8 @@
     </div>
     <div id="excludedLapsAlert"></div>
     <div id="coachingPlan"></div>
-    <div class="row mb-3"><div class="col-12"><div class="card p-2"><div id="laptimeBarDiv" style="width:100%;height:350px;"></div></div></div></div>
-    <div class="row mb-3"><div class="col-12"><div class="card p-2"><div id="deltaTobestDiv" style="width:100%;height:350px;"></div></div></div></div>
+    <div class="row mb-3"><div class="col-12"><div class="card p-2"><div id="laptimeBarDiv" class="chart-container"></div></div></div></div>
+    <div class="row mb-3"><div class="col-12"><div class="card p-2"><div id="deltaTobestDiv" class="chart-container"></div></div></div></div>
     <div id="sectorTableContainer"></div>
 </div>
 
@@ -138,8 +138,8 @@
         <div class="col-md-4"><div class="card p-2"><div class="mapkit-wrap" id="brakingMapWrap"><div class="mk-map" id="brakingMap"></div><canvas id="brakingCanvas"></canvas></div></div></div>
         <div class="col-md-4"><div class="card p-2"><div class="mapkit-wrap" id="sectorMapWrap"><div class="mk-map" id="sectorMap"></div><canvas id="sectorCanvas"></canvas></div></div></div>
     </div>
-    <div class="row mb-3"><div class="col-12"><div class="card p-2"><div id="cumulativeDeltaDiv" style="width:100%;height:350px;"></div></div></div></div>
-    <div class="row mb-3"><div class="col-12"><div class="card p-2"><div id="throttleBrakeDiv" style="width:100%;height:400px;"></div></div></div></div>
+    <div class="row mb-3"><div class="col-12"><div class="card p-2"><div id="cumulativeDeltaDiv" class="chart-container"></div></div></div></div>
+    <div class="row mb-3"><div class="col-12"><div class="card p-2"><div id="throttleBrakeDiv" class="chart-container-tall"></div></div></div></div>
 </div>
 
 <!-- Racing Line Tab -->
@@ -167,7 +167,7 @@
         </div>
     </div>
     <div class="row"><div class="col-12"><div class="card p-2">
-        <div class="mapkit-wrap" id="racelineWrap" style="height: 600px;"><div class="mk-map" id="racelineMap"></div><canvas id="racelineCanvas"></canvas></div>
+        <div class="mapkit-wrap" id="racelineWrap"><div class="mk-map" id="racelineMap"></div><canvas id="racelineCanvas"></canvas></div>
         <div id="racelinePlayback" class="d-flex align-items-center gap-2 mt-2 px-2" style="font-size: 0.85rem;">
             <button id="rlPlayBtn" class="btn btn-sm btn-outline-primary" title="Play/Pause" style="min-width: 36px;">&#9654;</button>
             <input id="rlTimeline" type="range" class="form-range flex-grow-1" min="0" max="100" step="0.1" value="0" style="height: 20px;">
@@ -186,7 +186,7 @@
     <p class="section-desc">Each corner as a performance unit — ranked by time loss with root cause classification and corner archetypes.</p>
     <div id="cornerMapContainer"></div>
     <div id="cornerTableContainer"></div>
-    <div class="row mt-3"><div class="col-12"><div class="card p-2"><div id="brakingConsistencyDiv" style="width:100%;height:400px;"></div></div></div></div>
+    <div class="row mt-3"><div class="col-12"><div class="card p-2"><div id="brakingConsistencyDiv" class="chart-container-tall"></div></div></div></div>
 
 </div>
 

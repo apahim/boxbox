@@ -46,6 +46,11 @@
     .session-label-source { background: rgba(255,255,255,0.08) !important; color: var(--bb-text-muted) !important;
         border: 1px solid var(--bb-border) !important; font-weight: normal; }
     .session-label-source i { font-size: 0.6rem; }
+    @media (max-width: 576px) {
+        #sessionsTable td, #sessionsTable th { padding: 0.4rem 0.3rem; font-size: 0.8rem; }
+        #sessionsTable .btn-sm { padding: 0.2rem 0.4rem; font-size: 0.75rem; }
+        .filter-bar { gap: 8px; }
+    }
 </style>
 {% endblock %}
 
@@ -108,10 +113,10 @@
             <tr>
                 <th class="sortable sort-asc" data-col="0" data-type="string">Date <i class="bi bi-arrow-down sort-icon"></i></th>
                 <th class="sortable" data-col="1" data-type="string">Track <i class="bi bi-arrow-down-up sort-icon"></i></th>
-                <th class="sortable" data-col="2" data-type="string">Source <i class="bi bi-arrow-down-up sort-icon"></i></th>
+                <th class="sortable d-none d-md-table-cell" data-col="2" data-type="string">Source <i class="bi bi-arrow-down-up sort-icon"></i></th>
                 <th class="sortable" data-col="3" data-type="number">Best Lap <i class="bi bi-arrow-down-up sort-icon"></i></th>
-                <th class="sortable" data-col="4" data-type="number">Clean Laps <i class="bi bi-arrow-down-up sort-icon"></i></th>
-                <th class="sortable" data-col="5" data-type="number">Consistency <i class="bi bi-arrow-down-up sort-icon"></i></th>
+                <th class="sortable d-none d-sm-table-cell" data-col="4" data-type="number">Clean Laps <i class="bi bi-arrow-down-up sort-icon"></i></th>
+                <th class="sortable d-none d-md-table-cell" data-col="5" data-type="number">Consistency <i class="bi bi-arrow-down-up sort-icon"></i></th>
                 <th>Labels</th>
                 <th></th>
             </tr>
@@ -121,7 +126,7 @@
             <tr data-labels="{{ (s.labels or [])|join(',') }}" data-track="{{ s.track.name if s.track else '' }}" data-source="{{ s.data_source or '' }}">
                 <td data-sort="{{ s.date }}T{{ s.session_start or '00:00' }}">{{ s.date.strftime('%-d %b %Y') }}{% if s.session_start %} · {{ s.session_start }}{% endif %}{% if s.needs_reingest %}<i class="bi bi-arrow-repeat reingest-icon" title="Needs reingestion — track corners were updated"></i>{% endif %}</td>
                 <td>{% if s.track %}{{ s.track.name }}{% else %}<span title="No track assigned — add a track for full analysis"><i class="bi bi-exclamation-triangle-fill" style="color: var(--bb-red, #e53e3e);"></i> —</span>{% endif %}</td>
-                <td>
+                <td class="d-none d-md-table-cell">
                     {% if s.data_source == 'gopro' %}
                     <i class="bi bi-camera-video" title="GoPro"></i> GoPro
                     {% elif s.data_source %}
@@ -129,8 +134,8 @@
                     {% else %}—{% endif %}
                 </td>
                 <td data-sort="{{ s.best_lap_time or 999999 }}">{% if s.best_lap_time %}{{ '%d:%06.3f'|format(s.best_lap_time // 60, s.best_lap_time % 60) }}{% else %}—{% endif %}</td>
-                <td data-sort="{{ s.clean_laps or 0 }}">{{ s.clean_laps or '—' }} / {{ s.total_laps or '—' }}</td>
-                <td data-sort="{{ s.consistency_pct or 0 }}">{{ "%.1f"|format(s.consistency_pct) if s.consistency_pct else '—' }}%</td>
+                <td class="d-none d-sm-table-cell" data-sort="{{ s.clean_laps or 0 }}">{{ s.clean_laps or '—' }} / {{ s.total_laps or '—' }}</td>
+                <td class="d-none d-md-table-cell" data-sort="{{ s.consistency_pct or 0 }}">{{ "%.1f"|format(s.consistency_pct) if s.consistency_pct else '—' }}%</td>
                 <td>
                     {% if s.labels %}
                     {% for label in s.labels %}
@@ -139,7 +144,7 @@
                     {% else %}—{% endif %}
                 </td>
                 <td class="text-nowrap">
-                    <a href="{{ url_for('dashboard.view', session_id=s.id) }}" class="btn btn-sm btn-outline-primary" title="Dashboard"><i class="bi bi-speedometer2"></i>Dashboard</a>
+                    <a href="{{ url_for('dashboard.view', session_id=s.id) }}" class="btn btn-sm btn-outline-primary" title="Dashboard"><i class="bi bi-speedometer2"></i><span class="d-none d-sm-inline">Dashboard</span></a>
                     {% if s.user_id == current_user.id %}
                     <button class="btn btn-sm btn-outline-secondary{{ ' share-active' if s.share_token }}" title="Share"
                             data-share-url="{{ url_for('sessions.share', session_id=s.id) }}"
