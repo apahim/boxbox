@@ -3,6 +3,8 @@
 import plotly.graph_objects as go
 import numpy as np
 
+import scripts.analysis.utils  # noqa: F401  — registers boxbox_dark template
+
 
 def create_gg_diagram(df, best_lap=None):
     """Create a GG diagram (friction circle) with quadrant coloring."""
@@ -72,8 +74,8 @@ def create_gg_diagram(df, best_lap=None):
     for ax, ay, text in annotations:
         fig.add_annotation(
             x=ax, y=ay, text=text, showarrow=False,
-            font=dict(size=10, color="#555"),
-            bgcolor="rgba(255,255,255,0.6)",
+            font=dict(size=10, color="#8b949e"),
+            bgcolor="rgba(22,27,34,0.85)",
         )
 
     # Axis labels as annotations
@@ -98,7 +100,7 @@ def create_gg_diagram(df, best_lap=None):
         title=title,
         xaxis=dict(title="Lateral G", scaleanchor="y", scaleratio=1),
         yaxis=dict(title="Longitudinal G"),
-        template="plotly_white",
+        template="boxbox_dark",
         height=500,
     )
 

@@ -193,7 +193,7 @@ def create_corner_analysis(df, laptimes_df=None, time_col="seconds", track_corne
         title=title,
         xaxis_title=x_label,
         yaxis_title="Speed (km/h)",
-        template="plotly_white",
+        template="boxbox_dark",
         height=400,
     )
 
@@ -334,21 +334,21 @@ def create_corner_comparison_table(df, laptimes_df=None, time_col="seconds", tra
     fig = go.Figure(data=[go.Table(
         header=dict(
             values=headers,
-            fill_color="#3498db",
-            font=dict(color="white", size=12),
+            fill_color="#30363d",
+            font=dict(color="#e6edf3", size=12),
             align="center",
         ),
         cells=dict(
             values=[corner_labels, best_mins, avg_mins, std_devs, best_entries, best_exits],
-            fill_color=[["#f0f8ff" if i % 2 == 0 else "white" for i in range(len(corner_labels))]] * 6,
+            fill_color=[["#1c2333" if i % 2 == 0 else "#161b22" for i in range(len(corner_labels))]] * 6,
             align="center",
-            font=dict(size=11),
+            font=dict(size=11, color="#e6edf3"),
         ),
     )])
 
     fig.update_layout(
         title="Corner Comparison (Clean Laps)",
-        template="plotly_white",
+        template="boxbox_dark",
         height=max(200, 60 + 35 * len(corner_labels)),
     )
 
@@ -452,7 +452,7 @@ def create_corner_min_speed_chart(df, laptimes_df=None, time_col="seconds", trac
         title="Min Speed per Corner (All Clean Laps)",
         xaxis_title="Corner",
         yaxis_title="Min Speed (km/h)",
-        template="plotly_white",
+        template="boxbox_dark",
         height=400,
     )
 

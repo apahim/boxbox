@@ -9,13 +9,29 @@ from app.models import Session, ChartData, Track, Lap
 
 
 def api_login_required(f):
-    """Require authentication and session access for API endpoints."""
+    """Require authentication and session access for API endpoints.
+
+    Supports share_token query parameter as an alternative to login,
+    scoped to the specific session ID in the URL.
+    """
     @wraps(f)
     def decorated(*args, **kwargs):
+        session_id = kwargs.get('session_id')
+
+        # Share token grants read-only access to a specific session
+        if session_id:
+            share_token = request.args.get('share_token')
+            if share_token:
+                session = Session.query.filter_by(
+                    id=session_id, share_token=share_token
+                ).first()
+                if session:
+                    kwargs['session'] = session
+                    return f(*args, **kwargs)
+
         if not current_user.is_authenticated:
             return jsonify(error='Authentication required'), 401
 
-        session_id = kwargs.get('session_id')
         if session_id:
             session = db.session.get(Session, session_id)
             if not session:

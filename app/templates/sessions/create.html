@@ -275,11 +275,53 @@ csvFile.addEventListener('change', function() {
     if (csvFile.files.length > 0) {
         nameEl.textContent = csvFile.files[0].name;
         info.style.display = '';
+        prefillDateFromCSV(csvFile.files[0]);
     } else {
         info.style.display = 'none';
     }
     checkStep1Ready();
 });
+
+function prefillDateFromCSV(file) {
+    var reader = new FileReader();
+    reader.onload = function(e) {
+        var text = e.target.result;
+        var lines = text.split('\n');
+        // Find header row (starts with "timestamp,")
+        var headerIdx = -1;
+        for (var i = 0; i < Math.min(lines.length, 20); i++) {
+            if (lines[i].toLowerCase().startsWith('timestamp,')) {
+                headerIdx = i;
+                break;
+            }
+        }
+        if (headerIdx < 0) return;
+        // Data starts 3 rows after header (units, source, then data)
+        var dataIdx = headerIdx + 3;
+        if (dataIdx >= lines.length) return;
+        var firstVal = lines[dataIdx].split(',')[0].trim();
+        var ts = parseFloat(firstVal);
+        if (isNaN(ts) || ts < 1e9 || ts > 2e10) return;
+        var dt = new Date(ts * 1000);
+        // Pre-fill date (YYYY-MM-DD)
+        var dateField = document.getElementById('date');
+        if (!dateField.value) {
+            var yyyy = dt.getFullYear();
+            var mm = String(dt.getMonth() + 1).padStart(2, '0');
+            var dd = String(dt.getDate()).padStart(2, '0');
+            dateField.value = yyyy + '-' + mm + '-' + dd;
+        }
+        // Pre-fill session start time (HH:MM)
+        var timeField = document.getElementById('session_start');
+        if (!timeField.value) {
+            var hh = String(dt.getHours()).padStart(2, '0');
+            var mi = String(dt.getMinutes()).padStart(2, '0');
+            timeField.value = hh + ':' + mi;
+        }
+    };
+    // Read only the first 8KB — enough for headers + first data row
+    reader.readAsText(file.slice(0, 8192));
+}
 
 // GoPro extraction
 goProFile.addEventListener('change', async function() {

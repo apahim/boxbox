@@ -7,7 +7,35 @@ import struct
 import traceback
 
 import numpy as np
+import plotly.graph_objects as go
 import plotly.io as pio
+
+# ---- BoxBox dark Plotly template ----
+_bb_dark = go.layout.Template()
+_bb_dark.layout = go.Layout(
+    paper_bgcolor="#161b22",
+    plot_bgcolor="#0d1117",
+    font=dict(color="#e6edf3"),
+    title_font=dict(color="#e6edf3"),
+    xaxis=dict(
+        gridcolor="#30363d",
+        zerolinecolor="#30363d",
+        linecolor="#30363d",
+        tickfont=dict(color="#8b949e"),
+        title_font=dict(color="#8b949e"),
+    ),
+    yaxis=dict(
+        gridcolor="#30363d",
+        zerolinecolor="#30363d",
+        linecolor="#30363d",
+        tickfont=dict(color="#8b949e"),
+        title_font=dict(color="#8b949e"),
+    ),
+    legend=dict(font=dict(color="#8b949e")),
+    colorway=["#3b82f6", "#22c55e", "#e53e3e", "#f59e0b",
+              "#8b5cf6", "#06b6d4", "#ec4899", "#f97316"],
+)
+pio.templates["boxbox_dark"] = _bb_dark
 
 # Matches plotly's binary array format: {"dtype":"f8","bdata":"base64..."}
 _BDATA_RE = re.compile(r'\{"dtype":"([^"]+)","bdata":"([^"]+)"\}')
@@ -151,10 +179,10 @@ def add_wind_arrow(fig, weather):
         x=0.02, y=0.08,
         xref="paper", yref="paper",
         showarrow=False,
-        font=dict(size=18, color="#333"),
+        font=dict(size=18, color="#e6edf3"),
         textangle=plotly_angle,
-        bgcolor="rgba(255,255,255,0.8)",
-        bordercolor="#999",
+        bgcolor="rgba(22,27,34,0.85)",
+        bordercolor="#30363d",
         borderwidth=1,
         borderpad=4,
     )
@@ -163,8 +191,8 @@ def add_wind_arrow(fig, weather):
         x=0.02, y=0.02,
         xref="paper", yref="paper",
         showarrow=False,
-        font=dict(size=10, color="#666"),
-        bgcolor="rgba(255,255,255,0.8)",
+        font=dict(size=10, color="#8b949e"),
+        bgcolor="rgba(22,27,34,0.85)",
         borderpad=2,
     )
 

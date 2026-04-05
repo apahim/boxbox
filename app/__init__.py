@@ -3,11 +3,13 @@ from flask_sqlalchemy import SQLAlchemy
 from flask_migrate import Migrate
 from flask_login import LoginManager, current_user
 from flask_wtf.csrf import CSRFProtect
+from authlib.integrations.flask_client import OAuth
 
 db = SQLAlchemy()
 migrate = Migrate()
 login_manager = LoginManager()
 csrf = CSRFProtect()
+oauth = OAuth()
 
 
 def create_app(config_name=None):
@@ -28,6 +30,13 @@ def create_app(config_name=None):
     login_manager.init_app(app)
     csrf.init_app(app)
     login_manager.login_view = 'auth.login'
+
+    oauth.init_app(app)
+    oauth.register(
+        name='google',
+        server_metadata_url='https://accounts.google.com/.well-known/openid-configuration',
+        client_kwargs={'scope': 'openid email profile'},
+    )
 
     from app.models import User
 
@@ -52,8 +61,7 @@ def create_app(config_name=None):
     app.register_blueprint(dashboard_bp, url_prefix='/dashboard')
 
     # CLI commands
-    from app.cli import create_user, seed_tracks, import_session, reingest_session
-    app.cli.add_command(create_user)
+    from app.cli import seed_tracks, import_session, reingest_session
     app.cli.add_command(seed_tracks)
     app.cli.add_command(import_session)
     app.cli.add_command(reingest_session)

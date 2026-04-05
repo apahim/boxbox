@@ -1,6 +1,5 @@
 from datetime import datetime, timezone
 
-import bcrypt
 from flask_login import UserMixin
 
 from app import db
@@ -11,19 +10,11 @@ class User(UserMixin, db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     email = db.Column(db.String(255), unique=True, nullable=False)
-    password_hash = db.Column(db.LargeBinary, nullable=False)
+    google_id = db.Column(db.String(255), unique=True, nullable=True)
     display_name = db.Column(db.String(100), nullable=False)
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
 
     sessions = db.relationship('Session', backref='user', lazy='dynamic')
-
-    def set_password(self, password):
-        self.password_hash = bcrypt.hashpw(
-            password.encode('utf-8'), bcrypt.gensalt()
-        )
-
-    def check_password(self, password):
-        return bcrypt.checkpw(password.encode('utf-8'), self.password_hash)
 
 
 class Track(db.Model):
@@ -96,6 +87,7 @@ class Session(db.Model):
     labels = db.Column(db.JSON, default=list)
     data_source = db.Column(db.String(20), default='racechrono')
     needs_reingest = db.Column(db.Boolean, default=False, nullable=False)
+    share_token = db.Column(db.String(32), unique=True, nullable=True, index=True)
 
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
 

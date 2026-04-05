@@ -6,20 +6,20 @@ from app.models import User, Track, TrackCorner
 
 
 class TestUser:
-    def test_set_and_check_password(self, app):
-        user = User(email='test@test.com', display_name='Test')
-        user.set_password('secret123')
-        assert user.check_password('secret123')
-        assert not user.check_password('wrong')
+    def test_user_creation(self, db_session):
+        user = User(email='test@test.com', display_name='Test', google_id='g-123')
+        db_session.add(user)
+        db_session.commit()
+        assert user.id is not None
+        assert user.email == 'test@test.com'
+        assert user.google_id == 'g-123'
 
     def test_email_unique(self, db_session):
-        u1 = User(email='dup@test.com', display_name='A')
-        u1.set_password('pass')
+        u1 = User(email='dup@test.com', display_name='A', google_id='g-1')
         db_session.add(u1)
         db_session.commit()
 
-        u2 = User(email='dup@test.com', display_name='B')
-        u2.set_password('pass')
+        u2 = User(email='dup@test.com', display_name='B', google_id='g-2')
         db_session.add(u2)
         with pytest.raises(IntegrityError):
             db_session.commit()

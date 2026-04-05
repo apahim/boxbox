@@ -55,7 +55,7 @@ def create_laptime_bar_chart(laptimes_df, time_col="seconds"):
         xaxis_title="Lap",
         yaxis_title="Time",
         yaxis_range=[best_time - 0.5, worst_time + 0.5],
-        template="plotly_white",
+        template="boxbox_dark",
         height=400,
     )
 
@@ -85,7 +85,7 @@ def create_delta_to_best_chart(laptimes_df, time_col="seconds"):
         title="Delta to Best Lap",
         xaxis_title="Lap",
         yaxis_title="Delta (seconds)",
-        template="plotly_white",
+        template="boxbox_dark",
         height=350,
     )
 
@@ -141,15 +141,15 @@ def create_rolling_average_chart(laptimes_df, time_col="seconds", window=3):
                 y=seg_avg,
                 text=f"{label}: {format_laptime(seg_avg)}",
                 showarrow=False,
-                font=dict(size=10, color="#555"),
-                bgcolor="rgba(255,255,255,0.7)",
+                font=dict(size=10, color="#8b949e"),
+                bgcolor="rgba(22,27,34,0.85)",
             )
 
     fig.update_layout(
         title="Lap Time Trend",
         xaxis_title="Lap",
         yaxis_title="Time",
-        template="plotly_white",
+        template="boxbox_dark",
         height=350,
     )
 
@@ -182,7 +182,7 @@ def create_laptime_histogram(laptimes_df, time_col="seconds"):
         title="Lap Time Distribution",
         xaxis_title="Time (seconds)",
         yaxis_title="Count",
-        template="plotly_white",
+        template="boxbox_dark",
         height=350,
     )
 

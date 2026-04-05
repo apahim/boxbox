@@ -12,6 +12,7 @@ flask-wtf
 email-validator
 psycopg2-binary
 gunicorn
-bcrypt
+authlib
+requests
 timezonefinder
 pytest

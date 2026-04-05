@@ -22,6 +22,8 @@ services:
       SECRET_KEY: dev-secret-change-me
       FLASK_ENV: development
       MAPKIT_TOKEN: ${MAPKIT_TOKEN:-}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
     volumes:
       - ./app:/app/app
       - ./scripts:/app/scripts

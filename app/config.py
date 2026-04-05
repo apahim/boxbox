@@ -7,6 +7,8 @@ class Config:
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     MAPKIT_TOKEN = os.environ.get('MAPKIT_TOKEN', '')
     MAX_CONTENT_LENGTH = 150 * 1024 * 1024  # 150MB upload limit
+    GOOGLE_CLIENT_ID = os.environ.get('GOOGLE_CLIENT_ID')
+    GOOGLE_CLIENT_SECRET = os.environ.get('GOOGLE_CLIENT_SECRET')
 
 
 class TestingConfig(Config):
@@ -15,3 +17,5 @@ class TestingConfig(Config):
     WTF_CSRF_ENABLED = False
     SECRET_KEY = 'test-secret'
     MAPKIT_TOKEN = 'test-token'  # skip validation in tests
+    GOOGLE_CLIENT_ID = 'test-google-client-id'
+    GOOGLE_CLIENT_SECRET = 'test-google-client-secret'

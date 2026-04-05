@@ -110,19 +110,19 @@ def create_speed_traces(df, laptimes_df=None, time_col="seconds", track_corners=
         if "distance" in corner:
             fig.add_vline(
                 x=corner["distance"], line_dash="dash",
-                line_color="rgba(0,0,0,0.3)", line_width=1,
+                line_color="rgba(139,148,158,0.3)", line_width=1,
             )
             fig.add_annotation(
                 x=corner["distance"], y=1.02, yref="paper",
                 text=corner["label"], showarrow=False,
-                font=dict(size=10, color="#555"),
+                font=dict(size=10, color="#8b949e"),
             )
 
     fig.update_layout(
         title="Speed Traces (Envelope View)",
         xaxis_title="Distance (m)",
         yaxis_title="Speed (km/h)",
-        template="plotly_white",
+        template="boxbox_dark",
         height=400,
         showlegend=True,
     )
@@ -227,7 +227,7 @@ def create_cumulative_time_delta(df, laptimes_df=None, time_col="seconds", track
     ))
     fig.add_trace(go.Scatter(
         x=dist_grid, y=cum_delta, mode="lines",
-        line=dict(color="#2c3e50", width=2),
+        line=dict(color="#e6edf3", width=2),
         name="Time Delta",
         hovertemplate="Distance: %{x:.0f}m<br>Delta: %{y:.3f}s<extra></extra>",
     ))
@@ -237,19 +237,19 @@ def create_cumulative_time_delta(df, laptimes_df=None, time_col="seconds", track
         if "distance" in corner and corner["distance"] <= dist_grid[-1]:
             fig.add_vline(
                 x=corner["distance"], line_dash="dash",
-                line_color="rgba(0,0,0,0.2)", line_width=1,
+                line_color="rgba(139,148,158,0.2)", line_width=1,
             )
             fig.add_annotation(
                 x=corner["distance"], y=1.02, yref="paper",
                 text=corner["label"], showarrow=False,
-                font=dict(size=9, color="#555"),
+                font=dict(size=9, color="#8b949e"),
             )
 
     fig.update_layout(
         title=f"Cumulative Time Delta: Best (L{best_lap}) vs Median (L{median_lap})",
         xaxis_title="Distance (m)",
         yaxis_title="Time Delta (s)",
-        template="plotly_white",
+        template="boxbox_dark",
         height=350,
         showlegend=True,
     )
@@ -328,7 +328,7 @@ def create_throttle_brake_phases(df, laptimes_df=None, time_col="seconds", targe
     # Speed line on top
     fig.add_trace(go.Scatter(
         x=dist_norm, y=speed_kmh, mode="lines",
-        line=dict(color="#2c3e50", width=2),
+        line=dict(color="#e6edf3", width=2),
         name=f"Speed (L{best_lap})",
         hovertemplate="Distance: %{x:.0f}m<br>Speed: %{y:.1f} km/h<extra></extra>",
     ))
@@ -357,8 +357,8 @@ def create_throttle_brake_phases(df, laptimes_df=None, time_col="seconds", targe
                 x=dist_norm[h], y=speed_kmh[h],
                 text="hesitation", showarrow=True,
                 arrowhead=2, arrowsize=0.8,
-                font=dict(size=9, color="#e67e22"),
-                bgcolor="rgba(255,255,255,0.8)",
+                font=dict(size=9, color="#f59e0b"),
+                bgcolor="rgba(22,27,34,0.85)",
             )
 
     # Add legend entries for phases
@@ -375,7 +375,7 @@ def create_throttle_brake_phases(df, laptimes_df=None, time_col="seconds", targe
         title=f"Throttle/Brake Phases (Lap {best_lap})",
         xaxis_title="Distance (m)",
         yaxis_title="Speed (km/h)",
-        template="plotly_white",
+        template="boxbox_dark",
         height=400,
         showlegend=True,
     )
@@ -463,18 +463,18 @@ def create_best_vs_comparison_speed(df, laptimes_df=None, time_col="seconds", tr
             for row in [1, 2]:
                 fig.add_vline(
                     x=corner["distance"], line_dash="dash",
-                    line_color="rgba(0,0,0,0.2)", line_width=1,
+                    line_color="rgba(139,148,158,0.2)", line_width=1,
                     row=row, col=1,
                 )
             fig.add_annotation(
                 x=corner["distance"], y=1.02, yref="y domain",
                 text=corner["label"], showarrow=False,
-                font=dict(size=9, color="#555"),
+                font=dict(size=9, color="#8b949e"),
                 row=1, col=1,
             )
 
     fig.update_layout(
-        template="plotly_white", height=500, showlegend=True,
+        template="boxbox_dark", height=500, showlegend=True,
     )
     fig.update_xaxes(title_text="Distance (m)", row=2, col=1)
     fig.update_yaxes(title_text="Speed (km/h)", row=1, col=1)

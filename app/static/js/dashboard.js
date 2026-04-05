@@ -4,9 +4,12 @@
     if (!meta) return;
     var apiBase = meta.dataset.apiBase;
     var mapkitToken = meta.dataset.mapkitToken;
+    var shareToken = meta.dataset.shareToken || "";
 
     function api(path) {
-        return fetch(apiBase + path, { credentials: "same-origin" })
+        var url = apiBase + path;
+        if (shareToken) url += (url.indexOf("?") !== -1 ? "&" : "?") + "share_token=" + shareToken;
+        return fetch(url, { credentials: "same-origin" })
             .then(function(r) {
                 if (!r.ok) return null;
                 return r.json();
@@ -129,7 +132,7 @@
             var html = '<div class="row mt-3"><div class="col-12"><div class="card p-2">';
             html += '<h6 class="card-title text-center mb-2">Sector Times</h6>';
             html += '<div class="table-responsive"><table class="table table-sm table-hover text-center mb-0" style="font-size:0.85rem;">';
-            html += '<thead class="table-primary"><tr><th>Lap</th>';
+            html += '<thead><tr><th>Lap</th>';
             sectorNames.forEach(function(h) { html += '<th>' + h + '</th>'; });
             html += '<th>Total</th><th>Delta</th></tr></thead><tbody>';
 
@@ -144,7 +147,7 @@
             }
 
             if (data.theoretical_row) {
-                html += '<tr class="table-success fw-bold"><td>Ideal</td>';
+                html += '<tr class="row-ideal fw-bold"><td>Ideal</td>';
                 data.theoretical_row.sectors.forEach(function(s) { html += '<td>' + s.value + '</td>'; });
                 html += '<td>' + data.theoretical_row.total + '</td><td>-</td></tr>';
             }
@@ -301,7 +304,7 @@
                 html += '<div class="row"><div class="col-12"><div class="card p-2">';
                 html += '<h6 class="card-title text-center mb-2">Corner Ranking (Worst First)</h6>';
                 html += '<div class="table-responsive"><table class="table table-sm table-hover text-center mb-0" style="font-size:0.85rem;">';
-                html += '<thead class="table-primary"><tr><th>Corner</th><th>Type</th><th>Avg Time Loss</th><th>Best Min Speed</th><th>Avg Min Speed</th><th>Consistency</th><th>Main Issue</th></tr></thead><tbody>';
+                html += '<thead><tr><th>Corner</th><th>Type</th><th>Avg Time Loss</th><th>Best Min Speed</th><th>Avg Min Speed</th><th>Consistency</th><th>Main Issue</th></tr></thead><tbody>';
                 data.summary_rows.forEach(function(row) {
                     var archBadge = row.archetype === "entry-dependent" ? '<span class="badge bg-danger">Entry</span>' :
                                     row.archetype === "exit-dependent" ? '<span class="badge bg-success">Exit</span>' :
@@ -332,7 +335,7 @@
                     var isVisible = data.best_lap && String(lapKey) === String(data.best_lap);
                     html += '<div class="corner-lap-breakdown" id="corner-lap-' + lapKey + '" style="' + (isVisible ? '' : 'display:none;') + '">';
                     html += '<div class="table-responsive"><table class="table table-sm table-hover text-center mb-0" style="font-size:0.85rem;">';
-                    html += '<thead class="table-light"><tr><th>Corner</th><th>Time Loss</th><th>Root Cause</th><th>Entry</th><th>Min Speed</th><th>Exit</th><th>Braking Dist</th></tr></thead><tbody>';
+                    html += '<thead><tr><th>Corner</th><th>Time Loss</th><th>Root Cause</th><th>Entry</th><th>Min Speed</th><th>Exit</th><th>Braking Dist</th></tr></thead><tbody>';
                     data.lap_breakdowns[lapKey].forEach(function(r) {
                         var rcBadge = r.root_cause === "entry" ? '<span class="badge" style="background-color:#e67e22;">Entry</span>' :
                                       r.root_cause === "mid" ? '<span class="badge" style="background-color:#f1c40f;color:#333;">Mid</span>' :

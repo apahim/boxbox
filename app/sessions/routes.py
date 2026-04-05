@@ -1,5 +1,6 @@
 import json
 import os
+import secrets
 import tempfile
 
 from flask import render_template, redirect, url_for, flash, request, jsonify
@@ -29,8 +30,11 @@ def list_sessions():
             label_counts[l] = label_counts.get(l, 0) + 1
     sorted_labels = sorted(label_counts, key=lambda l: label_counts[l], reverse=True)
 
+    # Collect distinct data sources for filter dropdown
+    data_sources = sorted(set(s.data_source for s in sessions if s.data_source))
+
     return render_template('sessions/list.html', sessions=sessions,
-                           sorted_labels=sorted_labels)
+                           sorted_labels=sorted_labels, data_sources=data_sources)
 
 
 @bp.route('/create', methods=['GET', 'POST'])
@@ -224,3 +228,34 @@ def reingest(session_id):
     if success:
         return jsonify(ok=True)
     return jsonify(error='Could not reingest — original telemetry file not available.'), 422
+
+
+@bp.route('/<int:session_id>/share', methods=['POST'])
+@login_required
+def share(session_id):
+    session = Session.query.get_or_404(session_id)
+
+    if session.user_id != current_user.id:
+        return jsonify(error='You can only share your own sessions.'), 403
+
+    if not session.share_token:
+        session.share_token = secrets.token_urlsafe(16)
+        db.session.commit()
+
+    return jsonify(
+        share_token=session.share_token,
+        url=url_for('dashboard.shared_view', token=session.share_token, _external=True),
+    )
+
+
+@bp.route('/<int:session_id>/unshare', methods=['POST'])
+@login_required
+def unshare(session_id):
+    session = Session.query.get_or_404(session_id)
+
+    if session.user_id != current_user.id:
+        return jsonify(error='You can only unshare your own sessions.'), 403
+
+    session.share_token = None
+    db.session.commit()
+    return jsonify(ok=True)

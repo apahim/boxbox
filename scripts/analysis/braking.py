@@ -148,7 +148,7 @@ def create_braking_consistency_chart(df, laptimes_df=None, time_col="seconds", t
         title="Braking Consistency by Corner",
         xaxis_title="Corner",
         yaxis_title="Braking Point Distance (m)",
-        template="plotly_white",
+        template="boxbox_dark",
         height=400,
     )
 
@@ -265,7 +265,7 @@ def create_brake_release_chart(df, laptimes_df=None, time_col="seconds", track_c
     fig.update_yaxes(title_text="Depth (m)", row=2, col=1)
     fig.update_layout(
         title="Brake Release Timing Analysis",
-        template="plotly_white",
+        template="boxbox_dark",
         height=600,
     )
 

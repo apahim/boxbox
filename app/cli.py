@@ -12,24 +12,6 @@ from app.models import (
 )
 
 
-@click.command('create-user')
-@click.option('--email', required=True, help='User email')
-@click.option('--password', required=True, help='User password')
-@click.option('--name', required=True, help='Display name')
-@with_appcontext
-def create_user(email, password, name):
-    """Create a new user from the command line."""
-    if User.query.filter_by(email=email.lower()).first():
-        click.echo(f'Error: User with email {email} already exists.')
-        raise SystemExit(1)
-
-    user = User(email=email.lower(), display_name=name)
-    user.set_password(password)
-    db.session.add(user)
-    db.session.commit()
-    click.echo(f'User "{name}" ({email}) created successfully.')
-
-
 @click.command('seed-tracks')
 @click.option('--file', 'tracks_file', required=True,
               help='Path to tracks YAML file')

@@ -36,6 +36,16 @@
     th.sortable:hover { color: var(--bb-blue); }
     th.sortable .sort-icon { font-size: 0.65rem; margin-left: 3px; opacity: 0.4; }
     th.sortable.sort-asc .sort-icon, th.sortable.sort-desc .sort-icon { opacity: 1; color: var(--bb-blue); }
+    .share-popover { position: fixed; z-index: 1000; background: var(--bb-surface-alt);
+        border: 1px solid var(--bb-border); border-radius: 8px; padding: 10px 12px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.4); width: 320px; }
+    .share-popover input { font-size: 0.8rem; background: var(--bb-surface); color: var(--bb-text);
+        border: 1px solid var(--bb-border); }
+    .share-popover .btn { font-size: 0.75rem; }
+    .share-active { color: var(--bb-blue) !important; border-color: rgba(59,130,246,0.4) !important; }
+    .session-label-source { background: rgba(255,255,255,0.08) !important; color: var(--bb-text-muted) !important;
+        border: 1px solid var(--bb-border) !important; font-weight: normal; }
+    .session-label-source i { font-size: 0.6rem; }
 </style>
 {% endblock %}
 
@@ -56,6 +66,17 @@
             <option value="">All tracks</option>
             {% for t in all_tracks %}
             <option value="{{ t }}">{{ t }}</option>
+            {% endfor %}
+        </select>
+    </div>
+    {% endif %}
+    {% if data_sources|length > 1 %}
+    <div class="filter-group">
+        <span class="filter-group-label">Source</span>
+        <select class="track-filter" id="sourceFilter">
+            <option value="">All sources</option>
+            {% for src in data_sources %}
+            <option value="{{ src }}">{{ src }}</option>
             {% endfor %}
         </select>
     </div>
@@ -95,24 +116,35 @@
         </thead>
         <tbody>
             {% for s in sessions %}
-            <tr data-labels="{{ (s.labels or [])|join(',') }}" data-track="{{ s.track.name if s.track else '' }}">
+            <tr data-labels="{{ (s.labels or [])|join(',') }}" data-track="{{ s.track.name if s.track else '' }}" data-source="{{ s.data_source or '' }}">
                 <td data-sort="{{ s.date }}">{{ s.date }}{% if s.needs_reingest %}<i class="bi bi-arrow-repeat reingest-icon" title="Needs reingestion — track corners were updated"></i>{% endif %}</td>
                 <td>{{ s.track.name if s.track else '—' }}</td>
                 <td data-sort="{{ s.best_lap_time or 999999 }}">{{ "%.3f"|format(s.best_lap_time) if s.best_lap_time else '—' }}s</td>
                 <td data-sort="{{ s.clean_laps or 0 }}">{{ s.clean_laps or '—' }} / {{ s.total_laps or '—' }}</td>
                 <td data-sort="{{ s.consistency_pct or 0 }}">{{ "%.1f"|format(s.consistency_pct) if s.consistency_pct else '—' }}%</td>
                 <td>
+                    {% if s.data_source == 'gopro' %}
+                    <span class="badge session-label session-label-source"><i class="bi bi-camera-video"></i> GoPro</span>
+                    {% elif s.data_source %}
+                    <span class="badge session-label session-label-source"><i class="bi bi-stopwatch"></i> RaceChrono</span>
+                    {% endif %}
                     {% if s.labels %}
                     {% for label in s.labels %}
                     <span class="badge session-label" data-label="{{ label }}">{{ label }}</span>
                     {% endfor %}
-                    {% else %}
+                    {% elif not s.data_source %}
                     —
                     {% endif %}
                 </td>
                 <td class="text-nowrap">
                     <a href="{{ url_for('dashboard.view', session_id=s.id) }}" class="btn btn-sm btn-outline-primary" title="Dashboard"><i class="bi bi-speedometer2"></i>Dashboard</a>
                     {% if s.user_id == current_user.id %}
+                    <button class="btn btn-sm btn-outline-secondary{{ ' share-active' if s.share_token }}" title="Share"
+                            data-share-url="{{ url_for('sessions.share', session_id=s.id) }}"
+                            data-unshare-url="{{ url_for('sessions.unshare', session_id=s.id) }}"
+                            data-csrf="{{ csrf_token() }}"
+                            data-shared="{{ s.share_token or '' }}"
+                            onclick="handleShare(this)"><i class="bi bi-link-45deg"></i></button>
                     {% if s.needs_reingest %}
                     <button class="btn btn-sm btn-outline-warning reingest-btn" title="Reingest session"
                             data-url="{{ url_for('sessions.reingest', session_id=s.id) }}"
@@ -329,11 +361,13 @@ if (overflowBtn) {
 var filters = document.querySelectorAll('.label-filter');
 var allBtn = document.querySelector('.label-filter[data-label=""]');
 var trackFilter = document.getElementById('trackFilter');
+var sourceFilter = document.getElementById('sourceFilter');
 
 function applyFilters() {
     var active = document.querySelectorAll('.label-filter.active[data-label]:not([data-label=""])');
     var selectedLabels = Array.prototype.map.call(active, function(f) { return f.dataset.label; });
     var selectedTrack = trackFilter ? trackFilter.value : '';
+    var selectedSource = sourceFilter ? sourceFilter.value : '';
 
     if (selectedLabels.length === 0) {
         allBtn.classList.add('active');
@@ -346,6 +380,8 @@ function applyFilters() {
         var show = true;
         // Track filter
         if (selectedTrack && row.dataset.track !== selectedTrack) show = false;
+        // Source filter
+        if (show && selectedSource && row.dataset.source !== selectedSource) show = false;
         // Label filter (AND)
         if (show && selectedLabels.length > 0) {
             var rowLabels = (row.dataset.labels || '').split(',');
@@ -370,6 +406,9 @@ filters.forEach(function(f) {
 
 if (trackFilter) {
     trackFilter.addEventListener('change', function() { applyFilters(); });
+}
+if (sourceFilter) {
+    sourceFilter.addEventListener('change', function() { applyFilters(); });
 }
 
 // ── Column sorting ──
@@ -421,6 +460,101 @@ if (thead && tbody) {
             });
             rows.forEach(function(row) { tbody.appendChild(row); });
         });
+    });
+}
+
+// ── Share ──
+var activePopover = null;
+
+function closePopover() {
+    if (activePopover) { activePopover.remove(); activePopover = null; }
+}
+
+document.addEventListener('click', function(e) {
+    if (activePopover && !activePopover.contains(e.target) && !e.target.closest('[data-share-url]')) {
+        closePopover();
+    }
+});
+
+function showSharePopover(btn, url) {
+    closePopover();
+    var pop = document.createElement('div');
+    pop.className = 'share-popover';
+    pop.innerHTML =
+        '<div class="d-flex gap-2 mb-2">' +
+            '<input type="text" class="form-control form-control-sm" value="' + url + '" readonly onclick="this.select()">' +
+            '<button class="btn btn-sm btn-outline-primary" onclick="copyShareLink(this)" title="Copy"><i class="bi bi-clipboard"></i></button>' +
+        '</div>' +
+        '<button class="btn btn-sm btn-outline-danger w-100" onclick="removeShare(this)" ' +
+            'data-unshare-url="' + btn.dataset.unshareUrl + '" ' +
+            'data-csrf="' + btn.dataset.csrf + '" ' +
+            'data-btn-id="' + btn.dataset.shareUrl + '">Remove link</button>';
+    document.body.appendChild(pop);
+    var rect = btn.getBoundingClientRect();
+    pop.style.top = (rect.bottom + 4) + 'px';
+    pop.style.left = Math.max(8, rect.right - pop.offsetWidth) + 'px';
+    activePopover = pop;
+}
+
+function copyShareLink(copyBtn) {
+    var input = copyBtn.closest('.d-flex').querySelector('input');
+    navigator.clipboard.writeText(input.value).then(function() {
+        copyBtn.innerHTML = '<i class="bi bi-check"></i>';
+        setTimeout(function() { copyBtn.innerHTML = '<i class="bi bi-clipboard"></i>'; }, 1500);
+    });
+}
+
+function removeShare(removeBtn) {
+    var csrf = removeBtn.dataset.csrf;
+    fetch(removeBtn.dataset.unshareUrl, {
+        method: 'POST',
+        headers: { 'X-Requested-With': 'fetch', 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: 'csrf_token=' + encodeURIComponent(csrf),
+        credentials: 'same-origin',
+    }).then(function(resp) {
+        if (resp.ok) {
+            var shareBtn = document.querySelector('[data-share-url="' + removeBtn.dataset.btnId + '"]');
+            if (shareBtn) {
+                shareBtn.dataset.shared = '';
+                shareBtn.classList.remove('share-active');
+            }
+            closePopover();
+        }
+    });
+}
+
+function handleShare(btn) {
+    // If already showing popover for this button, close it
+    if (activePopover) {
+        closePopover();
+        return;
+    }
+
+    if (btn.dataset.shared) {
+        // Already shared — show popover with existing link
+        var existingUrl = window.location.origin + '/dashboard/share/' + btn.dataset.shared;
+        showSharePopover(btn, existingUrl);
+        return;
+    }
+
+    // Generate new share link
+    btn.disabled = true;
+    fetch(btn.dataset.shareUrl, {
+        method: 'POST',
+        headers: { 'X-Requested-With': 'fetch', 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: 'csrf_token=' + encodeURIComponent(btn.dataset.csrf),
+        credentials: 'same-origin',
+    }).then(function(resp) { return resp.json(); })
+    .then(function(data) {
+        btn.disabled = false;
+        if (data.url) {
+            btn.dataset.shared = data.share_token;
+            btn.classList.add('share-active');
+            showSharePopover(btn, data.url);
+        }
+    }).catch(function() {
+        btn.disabled = false;
+        alert('Could not generate share link.');
     });
 }
 </script>

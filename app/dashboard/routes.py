@@ -17,4 +17,13 @@ def view(session_id):
         abort(403)
 
     mapkit_token = current_app.config.get('MAPKIT_TOKEN', '')
-    return render_template('dashboard/view.html', session=session, mapkit_token=mapkit_token)
+    return render_template('dashboard/view.html', session=session, mapkit_token=mapkit_token,
+                           shared=False)
+
+
+@bp.route('/share/<token>')
+def shared_view(token):
+    session = Session.query.filter_by(share_token=token).first_or_404()
+    mapkit_token = current_app.config.get('MAPKIT_TOKEN', '')
+    return render_template('dashboard/view.html', session=session, mapkit_token=mapkit_token,
+                           shared=True)
