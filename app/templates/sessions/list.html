@@ -135,7 +135,7 @@
                 </td>
                 <td data-sort="{{ s.best_lap_time or 999999 }}">{% if s.best_lap_time %}{{ '%d:%06.3f'|format(s.best_lap_time // 60, s.best_lap_time % 60) }}{% else %}—{% endif %}</td>
                 <td class="d-none d-sm-table-cell" data-sort="{{ s.clean_laps or 0 }}">{{ s.clean_laps or '—' }} / {{ s.total_laps or '—' }}</td>
-                <td class="d-none d-md-table-cell" data-sort="{{ s.consistency_pct or 0 }}">{{ "%.1f"|format(s.consistency_pct) if s.consistency_pct else '—' }}%</td>
+                <td class="d-none d-md-table-cell" data-sort="{{ s.consistency_pct if s.consistency_pct == s.consistency_pct else 0 }}">{% if s.consistency_pct and s.consistency_pct == s.consistency_pct %}{{ "%.1f"|format(s.consistency_pct) }}%{% else %}—{% endif %}</td>
                 <td>
                     {% if s.labels %}
                     {% for label in s.labels %}
