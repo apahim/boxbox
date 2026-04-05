@@ -87,11 +87,11 @@ def create():
             csv_file.save(temp_path)
 
             # Create session record
-            track = Track.query.get(form.track_id.data)
+            track = Track.query.get(form.track_id.data) if form.track_id.data else None
 
             session = Session(
                 user_id=current_user.id,
-                track_id=track.id,
+                track_id=track.id if track else None,
                 date=session_date,
                 session_start=form.session_start.data.strftime('%H:%M') if form.session_start.data else None,
                 data_source=data_source,
@@ -101,16 +101,20 @@ def create():
             db.session.flush()  # Get session.id
 
             # Get track corners
-            corners = TrackCorner.query.filter_by(track_id=track.id).order_by(TrackCorner.sort_order).all()
-            track_corners = [
-                {
-                    'name': c.name, 'lat': c.lat, 'lon': c.lon,
-                    'trap_lat1': c.trap_lat1, 'trap_lon1': c.trap_lon1,
-                    'trap_lat2': c.trap_lat2, 'trap_lon2': c.trap_lon2,
-                }
-                for c in corners
-            ] if corners else None
-            track_coords = (track.lat, track.lon, track.timezone) if track else None
+            if track:
+                corners = TrackCorner.query.filter_by(track_id=track.id).order_by(TrackCorner.sort_order).all()
+                track_corners = [
+                    {
+                        'name': c.name, 'lat': c.lat, 'lon': c.lon,
+                        'trap_lat1': c.trap_lat1, 'trap_lon1': c.trap_lon1,
+                        'trap_lat2': c.trap_lat2, 'trap_lon2': c.trap_lon2,
+                    }
+                    for c in corners
+                ] if corners else None
+                track_coords = (track.lat, track.lon, track.timezone)
+            else:
+                track_corners = None
+                track_coords = None
 
             # Run ingest pipeline
             from app.sessions.ingest import ingest_session
@@ -160,7 +164,7 @@ def edit(session_id):
 
     # Populate choices
     tracks = Track.query.order_by(Track.name).all()
-    form.track_id.choices = [(t.id, t.name) for t in tracks]
+    form.track_id.choices = [(0, '— No track —')] + [(t.id, t.name) for t in tracks]
 
     if request.method == 'GET':
         form.date.data = session.date
@@ -172,8 +176,9 @@ def edit(session_id):
 
     if form.validate_on_submit():
         session.date = form.date.data
-        if form.track_id.data != session.track_id:
-            session.track_id = form.track_id.data
+        new_track_id = form.track_id.data  # None for "No track" (coerced by form)
+        if new_track_id != session.track_id:
+            session.track_id = new_track_id
             session.needs_reingest = True
         session.session_start = form.session_start.data.strftime('%H:%M') if form.session_start.data else None
 

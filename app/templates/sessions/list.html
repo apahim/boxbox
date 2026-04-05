@@ -58,6 +58,7 @@
 {% if sessions %}
 <!-- Filters -->
 {% set all_tracks = sessions|map(attribute='track')|select|map(attribute='name')|unique|sort|list %}
+{% set has_trackless = sessions|selectattr('track_id', 'none')|list|length > 0 %}
 <div class="filter-bar">
     {% if all_tracks %}
     <div class="filter-group">
@@ -119,7 +120,7 @@
             {% for s in sessions %}
             <tr data-labels="{{ (s.labels or [])|join(',') }}" data-track="{{ s.track.name if s.track else '' }}" data-source="{{ s.data_source or '' }}">
                 <td data-sort="{{ s.date }}T{{ s.session_start or '00:00' }}">{{ s.date.strftime('%-d %b %Y') }}{% if s.session_start %} · {{ s.session_start }}{% endif %}{% if s.needs_reingest %}<i class="bi bi-arrow-repeat reingest-icon" title="Needs reingestion — track corners were updated"></i>{% endif %}</td>
-                <td>{{ s.track.name if s.track else '—' }}</td>
+                <td>{% if s.track %}{{ s.track.name }}{% else %}<span title="No track assigned — add a track for full analysis"><i class="bi bi-exclamation-triangle-fill" style="color: var(--bb-red, #e53e3e);"></i> —</span>{% endif %}</td>
                 <td>
                     {% if s.data_source == 'gopro' %}
                     <i class="bi bi-camera-video" title="GoPro"></i> GoPro

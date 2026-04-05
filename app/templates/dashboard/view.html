@@ -53,6 +53,25 @@
     </div>
 </div>
 
+{% if not session.track %}
+<div class="alert d-flex align-items-start gap-2 mt-2 mb-3" style="background: rgba(245, 158, 11, 0.1); border: 1px solid rgba(245, 158, 11, 0.3); color: var(--bb-amber, #f59e0b); border-radius: 8px;">
+    <i class="bi bi-exclamation-triangle-fill mt-1"></i>
+    <div>
+        <strong>No track assigned.</strong> Add a track to unlock:
+        <ul class="mb-1 mt-1" style="padding-left: 1.2rem;">
+            <li>Weather conditions</li>
+            <li>Corner-by-corner analysis</li>
+            <li>Sector time breakdown</li>
+        </ul>
+        {% if not shared %}
+        <a href="{{ url_for('sessions.edit', session_id=session.id) }}" class="btn btn-sm btn-outline-warning">
+            <i class="bi bi-pencil"></i> Edit session to add a track
+        </a>
+        {% endif %}
+    </div>
+</div>
+{% endif %}
+
 <ul class="nav nav-tabs mt-1" id="dashboardTabs" role="tablist">
     <li class="nav-item" role="presentation">
         <button class="nav-link active" id="overview-tab" data-bs-toggle="tab" data-bs-target="#tab-overview" type="button" role="tab">Session Overview</button>

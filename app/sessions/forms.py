@@ -4,9 +4,18 @@ from wtforms import StringField, SelectField, SubmitField, DateField, TimeField,
 from wtforms.validators import DataRequired, Optional
 
 
+def _coerce_optional_int(val):
+    """Coerce to int, returning None for empty/zero values."""
+    try:
+        v = int(val)
+        return v if v else None
+    except (ValueError, TypeError):
+        return None
+
+
 class SessionEditForm(FlaskForm):
     date = DateField('Date', validators=[DataRequired()])
-    track_id = SelectField('Track', coerce=int, validators=[DataRequired()])
+    track_id = SelectField('Track', coerce=_coerce_optional_int, validators=[Optional()])
     session_start = TimeField('Session Start', validators=[Optional()])
     labels = HiddenField('Labels', default='[]')
     submit = SubmitField('Save Changes')
@@ -18,7 +27,7 @@ class SessionCreateForm(FlaskForm):
     ])
     data_source = HiddenField('Data Source', default='racechrono')
     date = DateField('Date', validators=[DataRequired()])
-    track_id = SelectField('Track', coerce=int, validators=[DataRequired()])
+    track_id = SelectField('Track', coerce=_coerce_optional_int, validators=[Optional()])
     session_start = TimeField('Session Start', validators=[Optional()])
     labels = HiddenField('Labels', default='[]')
     submit = SubmitField('Upload & Process')

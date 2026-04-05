@@ -65,7 +65,7 @@ class Session(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
-    track_id = db.Column(db.Integer, db.ForeignKey('tracks.id'), nullable=False)
+    track_id = db.Column(db.Integer, db.ForeignKey('tracks.id'), nullable=True)
     date = db.Column(db.Date, nullable=False)
     session_start = db.Column(db.String(10))
 
