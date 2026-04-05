@@ -3,11 +3,12 @@ import re
 
 from flask import render_template, redirect, url_for, flash, request, current_app, jsonify
 from flask_login import login_required, current_user
+from sqlalchemy import func
 
 from app import db
 from app.tracks import bp
 from app.tracks.forms import TrackForm
-from app.models import Track, TrackCorner, Session
+from app.models import Track, TrackCorner, Session, Telemetry
 
 
 def _slugify(name):
@@ -155,13 +156,31 @@ def edit(slug):
             'lat2': track.sf_lat2, 'lon2': track.sf_lon2,
         }
 
+    # Find unassigned sessions whose GPS data matches this track
+    first_telem = db.session.query(
+        Telemetry.session_id,
+        func.min(Telemetry.id).label('first_id'),
+    ).group_by(Telemetry.session_id).subquery()
+
+    matching_sessions = db.session.query(Session).join(
+        first_telem, Session.id == first_telem.c.session_id,
+    ).join(
+        Telemetry, Telemetry.id == first_telem.c.first_id,
+    ).filter(
+        Session.track_id.is_(None),
+        Session.user_id == current_user.id,
+        ((Telemetry.latitude - track.lat) * (Telemetry.latitude - track.lat)
+         + (Telemetry.longitude - track.lon) * (Telemetry.longitude - track.lon)) <= 0.002,
+    ).order_by(Session.date.desc()).all()
+
     return render_template('tracks/edit.html',
                            track=track,
                            corners=corners_list,
                            corners_json=json.dumps(corners_list),
                            sf_gate_json=json.dumps(sf_gate),
                            session_count=session_count,
-                           mapkit_token=mapkit_token)
+                           mapkit_token=mapkit_token,
+                           matching_sessions=matching_sessions)
 
 
 @bp.route('/<slug>/delete', methods=['POST'])
@@ -186,3 +205,22 @@ def delete(slug):
         return jsonify(ok=True)
     flash('Track deleted.', 'success')
     return redirect(url_for('tracks.list_tracks'))
+
+
+@bp.route('/<slug>/assign-sessions', methods=['POST'])
+@login_required
+def assign_sessions(slug):
+    track = Track.query.filter_by(slug=slug).first_or_404()
+    data = request.get_json()
+    session_ids = data.get('session_ids', [])
+
+    count = 0
+    for sid in session_ids:
+        s = db.session.get(Session, sid)
+        if s and s.user_id == current_user.id and s.track_id is None:
+            s.track_id = track.id
+            s.needs_reingest = True
+            count += 1
+
+    db.session.commit()
+    return jsonify(ok=True, count=count)

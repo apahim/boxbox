@@ -85,6 +85,30 @@
     <a href="{{ url_for('tracks.list_tracks') }}" class="btn btn-sm btn-outline-secondary"><i class="bi bi-arrow-left"></i> Tracks</a>
 </div>
 
+{% if matching_sessions %}
+<div class="alert mb-3" id="matchAlert" style="background:rgba(59,130,246,0.08); border:1px solid rgba(59,130,246,0.25); border-radius:8px; color:var(--bb-text);">
+    <div class="d-flex justify-content-between align-items-start">
+        <div><i class="bi bi-link-45deg"></i> <strong>{{ matching_sessions|length }} session{{ 's' if matching_sessions|length != 1 else '' }} match{{ '' if matching_sessions|length != 1 else 'es' }} this track's location</strong></div>
+        <button type="button" class="btn-close btn-close-white btn-sm" onclick="this.closest('.alert').remove()"></button>
+    </div>
+    <div class="mt-2">
+    {% for s in matching_sessions %}
+        <div class="form-check">
+            <input class="form-check-input match-session-cb" type="checkbox" value="{{ s.id }}" id="ms{{ s.id }}" checked>
+            <label class="form-check-label" for="ms{{ s.id }}">
+                {{ s.date.strftime('%-d %b %Y') }}{% if s.session_start %} &middot; {{ s.session_start }}{% endif %}
+                {% if s.data_source %}<span class="text-muted">&middot; {{ s.data_source }}</span>{% endif %}
+            </label>
+        </div>
+    {% endfor %}
+    </div>
+    <button class="btn btn-sm btn-primary mt-2" id="assignBtn" onclick="assignSessions()">
+        Assign Selected
+    </button>
+    <div class="mt-1" style="font-size:0.75rem; color:var(--bb-text-muted);">Sessions will be reingested with this track's gate and corners.</div>
+</div>
+{% endif %}
+
 <div class="track-editor">
     <div id="map-container">
         <div id="map-fallback">
@@ -140,6 +164,41 @@
 
 {% block extra_scripts %}
 <script src="{{ url_for('static', filename='js/mapkit-helpers.js') }}"></script>
+{% if matching_sessions %}
+<script>
+window.assignSessions = function() {
+    var ids = [];
+    document.querySelectorAll('.match-session-cb:checked').forEach(function(cb) {
+        ids.push(parseInt(cb.value));
+    });
+    if (!ids.length) return;
+
+    var btn = document.getElementById('assignBtn');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Assigning\u2026';
+
+    fetch('{{ url_for("tracks.assign_sessions", slug=track.slug) }}', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'fetch' },
+        body: JSON.stringify({ session_ids: ids }),
+        credentials: 'same-origin',
+    }).then(function(r) { return r.json(); })
+    .then(function(data) {
+        if (data.ok) {
+            var el = document.getElementById('matchAlert');
+            el.innerHTML = '<i class="bi bi-check-circle"></i> ' + data.count + ' session' +
+                (data.count !== 1 ? 's' : '') + ' assigned to this track. They will update on next reingest.';
+            el.style.background = 'rgba(46,204,113,0.08)';
+            el.style.borderColor = 'rgba(46,204,113,0.25)';
+            setTimeout(function() { el.remove(); }, 5000);
+        }
+    }).catch(function() {
+        btn.disabled = false;
+        btn.innerHTML = 'Assign Selected';
+    });
+};
+</script>
+{% endif %}
 <script>
 (function() {
     var corners = {{ corners_json | safe }};
