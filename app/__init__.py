@@ -91,11 +91,11 @@ def _add_security_headers(app):
 
         csp = (
             "default-src 'self'; "
-            "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdn.plot.ly https://cdn.apple-mapkit.com; "
+            "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net https://cdn.plot.ly https://cdn.apple-mapkit.com; "
             "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://fonts.googleapis.com; "
             "font-src 'self' https://cdn.jsdelivr.net https://fonts.gstatic.com; "
             "img-src 'self' data: https://*.apple-mapkit.com https://*.googleapis.com; "
-            "connect-src 'self' https://*.apple-mapkit.com https://cdn.apple-mapkit.com; "
+            "connect-src 'self' https://*.apple-mapkit.com https://cdn.apple-mapkit.com https://cdn.jsdelivr.net; "
         )
         response.headers['Content-Security-Policy'] = csp
 
