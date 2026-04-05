@@ -216,7 +216,13 @@
                     else brakingMapRef = MapHelpers.setupTrackMap("brakingMap", "brakingCanvas", "brakingMapWrap", data);
                 });
                 api("/charts/sector_map/" + lap).then(function(data) {
-                    if (!data) return;
+                    if (!data) {
+                        if (meta.dataset.hasCorners !== "true") {
+                            var wrap = document.getElementById("sectorMapWrap");
+                            if (wrap) wrap.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--bb-text-muted);font-size:0.85rem;text-align:center;padding:1rem;"><div><i class="bi bi-signpost-split" style="font-size:1.5rem;display:block;margin-bottom:0.5rem;"></i>Add corners to the track to see sector maps</div></div>';
+                        }
+                        return;
+                    }
                     if (sectorMapRef) sectorMapRef.update(data);
                     else sectorMapRef = MapHelpers.setupTrackMap("sectorMap", "sectorCanvas", "sectorMapWrap", data);
                 });
