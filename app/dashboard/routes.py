@@ -3,7 +3,7 @@ from flask_login import login_required, current_user
 
 from app import db
 from app.dashboard import bp
-from app.models import Session
+from app.models import Session, TrackCorner
 
 
 @bp.route('/<int:session_id>')
@@ -16,14 +16,27 @@ def view(session_id):
     if session.user_id != current_user.id:
         abort(403)
 
+    has_corners = False
+    has_gate = False
+    if session.track:
+        has_corners = TrackCorner.query.filter_by(track_id=session.track_id).first() is not None
+        has_gate = session.track.sf_lat1 is not None
+
     mapkit_token = current_app.config.get('MAPKIT_TOKEN', '')
     return render_template('dashboard/view.html', session=session, mapkit_token=mapkit_token,
-                           shared=False)
+                           shared=False, has_corners=has_corners, has_gate=has_gate)
 
 
 @bp.route('/share/<token>')
 def shared_view(token):
     session = Session.query.filter_by(share_token=token).first_or_404()
+
+    has_corners = False
+    has_gate = False
+    if session.track:
+        has_corners = TrackCorner.query.filter_by(track_id=session.track_id).first() is not None
+        has_gate = session.track.sf_lat1 is not None
+
     mapkit_token = current_app.config.get('MAPKIT_TOKEN', '')
     return render_template('dashboard/view.html', session=session, mapkit_token=mapkit_token,
-                           shared=True)
+                           shared=True, has_corners=has_corners, has_gate=has_gate)

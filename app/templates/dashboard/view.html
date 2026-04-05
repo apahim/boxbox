@@ -17,7 +17,9 @@
       data-api-base="{{ url_for('api.session_summary', session_id=session.id) | replace('/summary', '') }}"
       data-share-token="{{ session.share_token if shared else '' }}"
       data-track-id="{{ session.track_id }}"
-      data-session-id-val="{{ session.id }}">
+      data-session-id-val="{{ session.id }}"
+      data-has-corners="{{ 'true' if has_corners else 'false' }}"
+      data-has-gate="{{ 'true' if has_gate else 'false' }}">
 
 <div class="row mb-4">
     <div class="col">
@@ -59,6 +61,7 @@
     <div>
         <strong>No track assigned.</strong> Add a track to unlock:
         <ul class="mb-1 mt-1" style="padding-left: 1.2rem;">
+            <li>Start/finish gate for accurate lap detection</li>
             <li>Weather conditions</li>
             <li>Corner-by-corner analysis</li>
             <li>Sector time breakdown</li>

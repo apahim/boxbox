@@ -2,7 +2,6 @@
 
 import numpy as np
 import plotly.graph_objects as go
-from scipy.signal import find_peaks
 
 from scripts.analysis.outliers import detect_outliers
 
@@ -26,6 +25,9 @@ def detect_sectors(df, best_lap, n_sectors=3, manual_sectors=None, track_corners
     if manual_sectors:
         boundaries = [0.0] + sorted(manual_sectors) + [1.0]
         return boundaries
+
+    if not track_corners:
+        return None
 
     if "distance_traveled" not in df.columns or "lap_number" not in df.columns:
         return None
@@ -76,34 +78,7 @@ def detect_sectors(df, best_lap, n_sectors=3, manual_sectors=None, track_corners
             boundaries.append(1.0)
             return boundaries
 
-    # Fallback: speed-based detection
-    speed_col = "speed_gps" if "speed_gps" in df.columns else "speed"
-    if speed_col not in df.columns:
-        return None
-
-    speed = lap_data[speed_col].values
-    kernel_size = min(15, len(speed) // 5)
-    if kernel_size > 1:
-        speed_smooth = np.convolve(speed, np.ones(kernel_size) / kernel_size, mode="same")
-    else:
-        speed_smooth = speed
-
-    # Find speed peaks (top of straights)
-    peaks, properties = find_peaks(speed_smooth, prominence=0.5, distance=len(speed) // (n_sectors + 2))
-    if len(peaks) < n_sectors:
-        # Fall back to equal spacing
-        return [i / n_sectors for i in range(n_sectors + 1)]
-
-    # Sort by prominence and pick top n_sectors
-    prom_order = np.argsort(properties["prominences"])[::-1]
-    top_peaks = sorted(peaks[prom_order[:n_sectors]])
-
-    boundaries = [0.0]
-    for p in top_peaks:
-        boundaries.append(dist_norm[p] / lap_length)
-    boundaries.append(1.0)
-
-    return boundaries
+    return None
 
 
 def compute_sector_times(df, laptimes_df, sector_boundaries, time_col="seconds"):

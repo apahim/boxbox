@@ -2,7 +2,6 @@
 
 import numpy as np
 import plotly.graph_objects as go
-from scipy.signal import find_peaks
 
 from scripts.analysis.utils import format_laptime
 
@@ -80,6 +79,9 @@ def detect_corners(df, best_lap=None, track_corners=None, prominence=0.5, min_di
     Returns:
         Tuple of (corner_indices, lap_data) or (None, None) if insufficient data.
     """
+    if not track_corners:
+        return None, None
+
     speed_col = "speed_gps" if "speed_gps" in df.columns else "speed"
     if speed_col not in df.columns:
         return None, None
@@ -92,7 +94,7 @@ def detect_corners(df, best_lap=None, track_corners=None, prominence=0.5, min_di
     if len(lap_data) < min_distance * 2:
         return None, None
 
-    # GPS-based matching when track corners are defined
+    # GPS-based matching from track-defined corners
     if track_corners:
         lat_col = lon_col = None
         for col in lap_data.columns:
@@ -123,19 +125,7 @@ def detect_corners(df, best_lap=None, track_corners=None, prominence=0.5, min_di
 
             return np.array(peaks), lap_data
 
-    # Fallback: speed-based detection
-    speed = lap_data[speed_col].values
-    # Smooth speed
-    kernel_size = min(10, len(speed) // 5)
-    if kernel_size > 1:
-        speed_smooth = np.convolve(speed, np.ones(kernel_size) / kernel_size, mode="same")
-    else:
-        speed_smooth = speed
-
-    inverted = -speed_smooth
-    peaks, properties = find_peaks(inverted, prominence=prominence, distance=min_distance)
-
-    return peaks, lap_data
+    return None, None
 
 
 def create_corner_analysis(df, laptimes_df=None, time_col="seconds", track_corners=None):

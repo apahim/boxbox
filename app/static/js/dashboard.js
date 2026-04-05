@@ -140,7 +140,13 @@
 
         // Sector table
         api("/sectors").then(function(data) {
-            if (!data || !data.rows) return;
+            if (!data || !data.rows) {
+                if (meta.dataset.hasCorners !== "true" && meta.dataset.trackId) {
+                    var sc = document.getElementById("sectorTableContainer");
+                    sc.innerHTML = '<div class="card p-3 text-center text-muted mt-3"><i class="bi bi-pie-chart" style="font-size:1.5rem;"></i><p class="mt-2 mb-0">Add corners to the track to see sector times.</p></div>';
+                }
+                return;
+            }
             var container = document.getElementById("sectorTableContainer");
             var headers = data.headers || [];
             var sectorNames = headers;
@@ -296,6 +302,17 @@
     // ---- Corner Analysis ----
     function loadCorners() {
         tabsLoaded.corners = true;
+        var hasCorners = meta.dataset.hasCorners === "true";
+
+        if (!hasCorners) {
+            var container = document.getElementById("cornerTableContainer");
+            var trackId = meta.dataset.trackId;
+            var msg = trackId
+                ? "No corners defined for this track. Add corners in the track editor to unlock corner-by-corner analysis, sector breakdown, and braking consistency."
+                : "No track assigned. Add a track and define its corners to unlock corner analysis.";
+            container.innerHTML = '<div class="card p-4 text-center text-muted"><i class="bi bi-signpost-split" style="font-size:2rem;"></i><p class="mt-2 mb-0">' + msg + '</p></div>';
+            return;
+        }
 
         // Corner map
         if (mapkitToken) {
