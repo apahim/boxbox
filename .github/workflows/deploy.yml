@@ -62,7 +62,7 @@ jobs:
           key: ${{ secrets.DROPLET_SSH_KEY }}
           script: |
             cd ~/boxbox
-            docker compose -f docker-compose.prod.yml pull web
-            docker compose -f docker-compose.prod.yml up -d web
+            docker compose -f docker-compose.prod.yml --env-file .env.production pull web
+            docker compose -f docker-compose.prod.yml --env-file .env.production up -d web
             sleep 5
-            curl -f http://localhost:5000/health || echo "Health check failed"
+            docker compose -f docker-compose.prod.yml --env-file .env.production exec web curl -f http://localhost:5000/health || echo "Health check failed"
