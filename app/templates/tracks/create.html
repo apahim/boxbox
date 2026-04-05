@@ -179,12 +179,8 @@
                 item.textContent = place.name + (place.formattedAddress ? ' — ' + place.formattedAddress : '');
                 item.addEventListener('click', function() {
                     var coord = place.coordinate;
-                    map.setCenterAnimated(coord, true);
-                    // Zoom in to the result
-                    var span = new mapkit.CoordinateSpan(0.01, 0.01);
-                    if (place.region) {
-                        span = place.region.span;
-                    }
+                    // Zoom tight enough to see a kart track (~300m)
+                    var span = new mapkit.CoordinateSpan(0.003, 0.003);
                     map.setRegionAnimated(new mapkit.CoordinateRegion(coord, span), true);
                     searchResults.style.display = 'none';
                     searchInput.value = place.name;

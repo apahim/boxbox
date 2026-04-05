@@ -42,9 +42,10 @@ def list_sessions():
 def create():
     form = SessionCreateForm()
 
-    # Populate track choices
+    # Populate track choices and coordinates for GPS auto-matching
     tracks = Track.query.order_by(Track.name).all()
     form.track_id.choices = [(t.id, t.name) for t in tracks]
+    track_coords_js = {t.id: {'name': t.name, 'lat': t.lat, 'lon': t.lon} for t in tracks}
 
     if form.validate_on_submit():
         is_fetch = request.headers.get('X-Requested-With') == 'fetch'
@@ -63,7 +64,7 @@ def create():
             if is_fetch:
                 return jsonify(error=msg), 400
             flash(msg, 'danger')
-            return render_template('sessions/create.html', form=form)
+            return render_template('sessions/create.html', form=form, track_coords_js=track_coords_js)
 
         # Parse labels
         labels = []
@@ -126,7 +127,7 @@ def create():
             if is_fetch:
                 return jsonify(error=str(e)), 500
             flash(f'Error processing CSV: {e}', 'danger')
-            return render_template('sessions/create.html', form=form)
+            return render_template('sessions/create.html', form=form, track_coords_js=track_coords_js)
         finally:
             os.close(temp_fd)
             os.unlink(temp_path)
@@ -138,7 +139,7 @@ def create():
             errors[field] = errs
         return jsonify(error='Validation failed', fields=errors), 400
 
-    return render_template('sessions/create.html', form=form)
+    return render_template('sessions/create.html', form=form, track_coords_js=track_coords_js)
 
 
 @bp.route('/<int:session_id>/edit', methods=['GET', 'POST'])
@@ -166,7 +167,9 @@ def edit(session_id):
 
     if form.validate_on_submit():
         session.date = form.date.data
-        session.track_id = form.track_id.data
+        if form.track_id.data != session.track_id:
+            session.track_id = form.track_id.data
+            session.needs_reingest = True
         session.session_start = form.session_start.data.strftime('%H:%M') if form.session_start.data else None
 
         # Parse labels

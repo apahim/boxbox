@@ -104,6 +104,15 @@
                         <h4 class="mb-1">Session details</h4>
                         <p class="text-muted mb-3" style="font-size: 0.85rem;">Tell us about this session.</p>
 
+                        <!-- No tracks alert -->
+                        <div id="no-tracks-alert" style="display:none;">
+                            <div class="alert alert-warning mb-3">
+                                <strong>No tracks yet.</strong> Add a track before uploading a session.
+                                <a href="{{ url_for('tracks.create') }}" class="btn btn-sm btn-primary ms-2"><i class="bi bi-plus-lg"></i> Add Track</a>
+                            </div>
+                        </div>
+
+                        <div id="details-fields">
                         <div class="row">
                             <div class="col-6 mb-3">
                                 {{ form.date.label(class="form-label") }}
@@ -113,8 +122,14 @@
                                 {% endfor %}
                             </div>
                             <div class="col-6 mb-3">
-                                {{ form.track_id.label(class="form-label") }}
-                                {{ form.track_id(class="form-select") }}
+                                <label class="form-label">Track</label>
+                                <div id="track-display" class="form-control" style="background: var(--bb-surface-alt); cursor: default;">
+                                    <span id="track-name" class="text-muted">Detected from GPS&hellip;</span>
+                                </div>
+                                <div id="track-warning" class="small mt-1" style="display:none; color: var(--bb-amber);">
+                                    No close match. <a href="{{ url_for('tracks.create') }}">Add a new track?</a>
+                                </div>
+                                <input type="hidden" name="track_id" id="track_id" value="">
                             </div>
                         </div>
 
@@ -133,6 +148,8 @@
                             </div>
                             <div class="tag-suggestions" id="tag-suggestions"></div>
                         </div>
+
+                        </div><!-- /details-fields -->
 
                         <div class="d-flex justify-content-between mt-4">
                             <button type="button" class="btn btn-outline-secondary" id="btn-back-2"><i class="bi bi-arrow-left"></i> Back</button>
@@ -185,6 +202,9 @@
 <script type="module">
 import { extractGoPro, detectLaps, telemetrySummary, telemetryToCSV } from "{{ url_for('static', filename='js/gopro-extract.js') }}";
 
+// ---- Track coordinates for GPS auto-matching ----
+var trackCoords = {{ track_coords_js | tojson }};
+
 // ---- State ----
 var currentStep = 1;
 var selectedSource = null;
@@ -210,6 +230,34 @@ var tagWrap = document.getElementById('tag-input-wrap');
 var tagTextInput = document.getElementById('tag-text-input');
 var tagAutocomplete = document.getElementById('tag-autocomplete');
 var tagSuggestions = document.getElementById('tag-suggestions');
+
+// ---- No-tracks check ----
+var hasNoTracks = Object.keys(trackCoords).length === 0;
+if (hasNoTracks) {
+    document.getElementById('no-tracks-alert').style.display = '';
+    document.getElementById('details-fields').style.display = 'none';
+}
+
+// ---- Auto-select track from GPS ----
+function autoSelectTrack(lat, lon) {
+    var bestId = null, bestDist = Infinity;
+    for (var id in trackCoords) {
+        var t = trackCoords[id];
+        var d = Math.pow(t.lat - lat, 2) + Math.pow(t.lon - lon, 2);
+        if (d < bestDist) { bestDist = d; bestId = id; }
+    }
+    if (bestId === null) return;
+    trackSelect.value = bestId;
+    document.getElementById('track-name').textContent = trackCoords[bestId].name;
+    document.getElementById('track-name').classList.remove('text-muted');
+    // Warn if no close match (~5km threshold)
+    var warning = document.getElementById('track-warning');
+    if (bestDist > 0.002) {
+        warning.style.display = '';
+    } else {
+        warning.style.display = 'none';
+    }
+}
 
 // ---- Wizard navigation ----
 function goToStep(step) {
@@ -318,6 +366,19 @@ function prefillDateFromCSV(file) {
             var mi = String(dt.getMinutes()).padStart(2, '0');
             timeField.value = hh + ':' + mi;
         }
+        // Auto-select track from GPS coordinates
+        var headers = lines[headerIdx].split(',').map(function(h) { return h.trim().toLowerCase(); });
+        var latIdx = -1, lonIdx = -1;
+        for (var j = 0; j < headers.length; j++) {
+            if (headers[j].indexOf('latitude') !== -1 && latIdx < 0) latIdx = j;
+            if (headers[j].indexOf('longitude') !== -1 && lonIdx < 0) lonIdx = j;
+        }
+        if (latIdx >= 0 && lonIdx >= 0) {
+            var cols = lines[dataIdx].split(',');
+            var csvLat = parseFloat(cols[latIdx]);
+            var csvLon = parseFloat(cols[lonIdx]);
+            if (!isNaN(csvLat) && !isNaN(csvLon)) autoSelectTrack(csvLat, csvLon);
+        }
     };
     // Read only the first 8KB — enough for headers + first data row
     reader.readAsText(file.slice(0, 8192));
@@ -350,6 +411,12 @@ goProFile.addEventListener('change', async function() {
             else if (pct < 90) progText.textContent = 'Extracting telemetry\u2026';
             else progText.textContent = 'Finalizing\u2026';
         });
+
+        // Auto-select track from GoPro GPS before lap detection
+        if (goProData.rows && goProData.rows.length > 0) {
+            var r = goProData.rows[0];
+            if (r.latitude && r.longitude) autoSelectTrack(r.latitude, r.longitude);
+        }
 
         await tryLapDetection();
 
@@ -384,12 +451,6 @@ async function tryLapDetection() {
     } catch (e) { sfGate = null; }
 }
 
-trackSelect.addEventListener('change', async function() {
-    if (!goProData) return;
-    await tryLapDetection();
-    showGoProSummary();
-});
-
 function showGoProSummary() {
     if (!goProData) return;
     var s = telemetrySummary(goProData);
@@ -415,7 +476,7 @@ document.getElementById('btn-next-2').addEventListener('click', function() {
     var dateVal = document.getElementById('date').value;
     var trackVal = trackSelect.value;
     if (!dateVal) { alert('Date is required.'); return; }
-    if (!trackVal) { alert('Track is required.'); return; }
+    if (!trackVal || hasNoTracks) { alert('A track is required. Please add a track first.'); return; }
     goToStep(3);
 });
 
@@ -579,8 +640,8 @@ function buildReview() {
         addRow('File', goProFile.files[0].name);
     }
     addRow('Date', document.getElementById('date').value);
-    var trackOpt = trackSelect.options[trackSelect.selectedIndex];
-    addRow('Track', trackOpt ? trackOpt.text : '');
+    var trackId = trackSelect.value;
+    addRow('Track', trackCoords[trackId] ? trackCoords[trackId].name : '');
     addRow('Session Start', document.getElementById('session_start').value);
     if (tags.length > 0) {
         addRow('Labels', tags.map(function(t) { return '<span class="badge bg-info">' + t + '</span>'; }).join(' '));

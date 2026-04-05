@@ -24,6 +24,20 @@
         return mins + ":" + secs;
     }
 
+    // Weather icon from WMO code
+    function weatherIcon(code) {
+        if (code === 0) return "bi-sun";
+        if (code <= 2) return "bi-cloud-sun";
+        if (code === 3) return "bi-clouds";
+        if (code === 45 || code === 48) return "bi-cloud-fog";
+        if (code >= 51 && code <= 57) return "bi-cloud-drizzle";
+        if (code >= 80 && code <= 82) return "bi-cloud-rain-heavy";
+        if (code >= 61 && code <= 67) return "bi-cloud-rain";
+        if (code >= 71 && code <= 86) return "bi-cloud-snow";
+        if (code >= 95) return "bi-cloud-lightning-rain";
+        return "bi-cloud";
+    }
+
     // Icon map for coaching action items
     var ICON_MAP = {
         target: "&#9678;", consistency: "&#8651;", "trending-up": "&#9650;",
@@ -75,19 +89,21 @@
             document.getElementById("statConsistency").textContent = data.consistency_pct ? data.consistency_pct + "%" : "--";
             document.getElementById("statTotalLaps").textContent = data.total_laps || "--";
 
-            // Weather badges
+            // Weather strip
             if (data.weather) {
-                var badges = document.getElementById("dashBadges");
-                var wb = document.createElement("span");
-                wb.className = "badge bg-info metadata-badge";
-                wb.textContent = (data.weather.condition || "") + " " + (data.weather.temp_c || "") + "\u00B0C";
-                badges.appendChild(wb);
-                if (data.weather.wind_kmh) {
-                    var ww = document.createElement("span");
-                    ww.className = "badge bg-info metadata-badge";
-                    ww.textContent = "Wind: " + (data.weather.wind_direction || "") + " " + data.weather.wind_kmh + " km/h";
-                    badges.appendChild(ww);
+                var strip = document.createElement("div");
+                strip.className = "weather-strip";
+                var icon = weatherIcon(data.weather.weathercode);
+                var html = '<span class="weather-condition"><i class="bi ' + icon + '"></i> ' + (data.weather.condition || "") + '</span>';
+                if (data.weather.temp_c !== null && data.weather.temp_c !== undefined) {
+                    html += '<span class="weather-temp">' + data.weather.temp_c + '\u00B0C</span>';
                 }
+                if (data.weather.wind_kmh) {
+                    html += '<span class="weather-wind"><i class="bi bi-wind"></i> ' + (data.weather.wind_direction || "") + ' ' + data.weather.wind_kmh + ' km/h</span>';
+                }
+                strip.innerHTML = html;
+                var badges = document.getElementById("dashBadges");
+                badges.parentNode.insertBefore(strip, badges);
             }
 
             // Excluded laps alert

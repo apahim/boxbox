@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}{{ session.track.name if session.track else 'Session' }} {{ session.date }} - BoxBox{% endblock %}
+{% block title %}{{ session.track.name if session.track else 'Session' }} {{ session.date.strftime('%-d %b %Y') }} - BoxBox{% endblock %}
 
 {% block extra_head %}
 <script src="https://cdn.plot.ly/plotly-3.4.0.min.js"></script>
@@ -21,12 +21,32 @@
 
 <div class="row mb-4">
     <div class="col">
-        <h1 id="dashTitle">{{ session.track.name if session.track else 'Session' }} &mdash; {{ session.date }}</h1>
-        <p class="text-muted" id="dashSubtitle"></p>
+        <div class="d-flex align-items-start justify-content-between gap-3">
+            <div>
+                <h1 id="dashTitle">{{ session.track.name if session.track else 'Session' }} &mdash; {{ session.date.strftime('%-d %b %Y') }}{% if session.session_start %} · {{ session.session_start }}{% endif %}</h1>
+                <p class="text-muted" id="dashSubtitle"></p>
+            </div>
+            {% if not shared %}
+            <button class="btn btn-sm dash-share-btn{{ ' active' if session.share_token }}"
+                    id="dashShareBtn" title="Share session"
+                    data-share-url="{{ url_for('sessions.share', session_id=session.id) }}"
+                    data-unshare-url="{{ url_for('sessions.unshare', session_id=session.id) }}"
+                    data-csrf="{{ csrf_token() }}"
+                    data-shared="{{ session.share_token or '' }}"
+                    onclick="handleShare(this)">
+                <i class="bi bi-link-45deg"></i><span class="d-none d-sm-inline"> Share</span>
+            </button>
+            {% endif %}
+        </div>
         <div class="d-flex gap-2 flex-wrap" id="dashBadges">
+            {% if session.data_source == 'gopro' %}
+            <span class="badge metadata-badge" style="background: rgba(255,255,255,0.08); color: var(--bb-text-muted);"><i class="bi bi-camera-video"></i> GoPro</span>
+            {% elif session.data_source %}
+            <span class="badge metadata-badge" style="background: rgba(255,255,255,0.08); color: var(--bb-text-muted);"><i class="bi bi-stopwatch"></i> RaceChrono</span>
+            {% endif %}
             {% if session.labels %}
             {% for label in session.labels %}
-            <span class="badge bg-info metadata-badge">{{ label }}</span>
+            <span class="badge metadata-badge" data-label="{{ label }}">{{ label }}</span>
             {% endfor %}
             {% endif %}
         </div>
@@ -159,4 +179,111 @@
 <script src="{{ url_for('static', filename='js/mapkit-helpers.js') }}"></script>
 <script src="{{ url_for('static', filename='js/raceline.js') }}"></script>
 <script src="{{ url_for('static', filename='js/dashboard.js') }}?v=3"></script>
+<script>
+(function() {
+    var C = [
+        {h:210,s:70,l:55},{h:160,s:55,l:45},{h:35,s:75,l:50},{h:280,s:50,l:55},
+        {h:350,s:60,l:55},{h:120,s:45,l:45},{h:195,s:65,l:50},{h:25,s:70,l:50},
+        {h:245,s:55,l:60},{h:330,s:50,l:50},{h:55,s:60,l:45},{h:180,s:45,l:45},
+    ];
+    function h(n){var v=0;for(var i=0;i<n.length;i++){v=((v<<5)-v)+n.charCodeAt(i);v|=0;}return Math.abs(v)%C.length;}
+    document.querySelectorAll('.metadata-badge[data-label]').forEach(function(el){
+        var c=C[h(el.dataset.label)];
+        el.style.background='hsla('+c.h+','+c.s+'%,'+c.l+'%,0.2)';
+        el.style.color='hsl('+c.h+','+c.s+'%,'+(c.l+15)+'%)';
+    });
+})();
+
+// ── Share ──
+var activePopover = null;
+
+function closePopover() {
+    if (activePopover) { activePopover.remove(); activePopover = null; }
+}
+
+document.addEventListener('click', function(e) {
+    if (activePopover && !activePopover.contains(e.target) && !e.target.closest('[data-share-url]')) {
+        closePopover();
+    }
+});
+
+function showSharePopover(btn, url) {
+    closePopover();
+    var pop = document.createElement('div');
+    pop.className = 'share-popover';
+    pop.innerHTML =
+        '<div class="d-flex gap-2 mb-2">' +
+            '<input type="text" class="form-control form-control-sm" value="' + url + '" readonly onclick="this.select()">' +
+            '<button class="btn btn-sm btn-outline-primary" onclick="copyShareLink(this)" title="Copy"><i class="bi bi-clipboard"></i></button>' +
+        '</div>' +
+        '<button class="btn btn-sm btn-outline-danger w-100" onclick="removeShare(this)" ' +
+            'data-unshare-url="' + btn.dataset.unshareUrl + '" ' +
+            'data-csrf="' + btn.dataset.csrf + '" ' +
+            'data-btn-id="' + btn.dataset.shareUrl + '">Remove link</button>';
+    document.body.appendChild(pop);
+    var rect = btn.getBoundingClientRect();
+    pop.style.top = (rect.bottom + 4) + 'px';
+    pop.style.left = Math.max(8, rect.right - pop.offsetWidth) + 'px';
+    activePopover = pop;
+}
+
+function copyShareLink(copyBtn) {
+    var input = copyBtn.closest('.d-flex').querySelector('input');
+    navigator.clipboard.writeText(input.value).then(function() {
+        copyBtn.innerHTML = '<i class="bi bi-check"></i>';
+        setTimeout(function() { copyBtn.innerHTML = '<i class="bi bi-clipboard"></i>'; }, 1500);
+    });
+}
+
+function removeShare(removeBtn) {
+    var csrf = removeBtn.dataset.csrf;
+    fetch(removeBtn.dataset.unshareUrl, {
+        method: 'POST',
+        headers: { 'X-Requested-With': 'fetch', 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: 'csrf_token=' + encodeURIComponent(csrf),
+        credentials: 'same-origin',
+    }).then(function(resp) {
+        if (resp.ok) {
+            var shareBtn = document.querySelector('[data-share-url="' + removeBtn.dataset.btnId + '"]');
+            if (shareBtn) {
+                shareBtn.dataset.shared = '';
+                shareBtn.classList.remove('share-active');
+            }
+            closePopover();
+        }
+    });
+}
+
+function handleShare(btn) {
+    if (activePopover) {
+        closePopover();
+        return;
+    }
+
+    if (btn.dataset.shared) {
+        var existingUrl = window.location.origin + '/dashboard/share/' + btn.dataset.shared;
+        showSharePopover(btn, existingUrl);
+        return;
+    }
+
+    btn.disabled = true;
+    fetch(btn.dataset.shareUrl, {
+        method: 'POST',
+        headers: { 'X-Requested-With': 'fetch', 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: 'csrf_token=' + encodeURIComponent(btn.dataset.csrf),
+        credentials: 'same-origin',
+    }).then(function(resp) { return resp.json(); })
+    .then(function(data) {
+        btn.disabled = false;
+        if (data.url) {
+            btn.dataset.shared = data.share_token;
+            btn.classList.add('share-active');
+            showSharePopover(btn, data.url);
+        }
+    }).catch(function() {
+        btn.disabled = false;
+        alert('Could not generate share link.');
+    });
+}
+</script>
 {% endblock %}

@@ -76,7 +76,7 @@
         <select class="track-filter" id="sourceFilter">
             <option value="">All sources</option>
             {% for src in data_sources %}
-            <option value="{{ src }}">{{ src }}</option>
+            <option value="{{ src }}">{% if src == 'gopro' %}GoPro{% elif src == 'racechrono' %}RaceChrono{% else %}{{ src }}{% endif %}</option>
             {% endfor %}
         </select>
     </div>
@@ -105,11 +105,12 @@
     <table class="table table-hover" id="sessionsTable">
         <thead>
             <tr>
-                <th class="sortable sort-desc" data-col="0" data-type="string">Date <i class="bi bi-arrow-down sort-icon"></i></th>
+                <th class="sortable sort-asc" data-col="0" data-type="string">Date <i class="bi bi-arrow-down sort-icon"></i></th>
                 <th class="sortable" data-col="1" data-type="string">Track <i class="bi bi-arrow-down-up sort-icon"></i></th>
-                <th class="sortable" data-col="2" data-type="number">Best Lap <i class="bi bi-arrow-down-up sort-icon"></i></th>
-                <th class="sortable" data-col="3" data-type="number">Clean Laps <i class="bi bi-arrow-down-up sort-icon"></i></th>
-                <th class="sortable" data-col="4" data-type="number">Consistency <i class="bi bi-arrow-down-up sort-icon"></i></th>
+                <th class="sortable" data-col="2" data-type="string">Source <i class="bi bi-arrow-down-up sort-icon"></i></th>
+                <th class="sortable" data-col="3" data-type="number">Best Lap <i class="bi bi-arrow-down-up sort-icon"></i></th>
+                <th class="sortable" data-col="4" data-type="number">Clean Laps <i class="bi bi-arrow-down-up sort-icon"></i></th>
+                <th class="sortable" data-col="5" data-type="number">Consistency <i class="bi bi-arrow-down-up sort-icon"></i></th>
                 <th>Labels</th>
                 <th></th>
             </tr>
@@ -117,24 +118,24 @@
         <tbody>
             {% for s in sessions %}
             <tr data-labels="{{ (s.labels or [])|join(',') }}" data-track="{{ s.track.name if s.track else '' }}" data-source="{{ s.data_source or '' }}">
-                <td data-sort="{{ s.date }}">{{ s.date }}{% if s.needs_reingest %}<i class="bi bi-arrow-repeat reingest-icon" title="Needs reingestion — track corners were updated"></i>{% endif %}</td>
+                <td data-sort="{{ s.date }}T{{ s.session_start or '00:00' }}">{{ s.date.strftime('%-d %b %Y') }}{% if s.session_start %} · {{ s.session_start }}{% endif %}{% if s.needs_reingest %}<i class="bi bi-arrow-repeat reingest-icon" title="Needs reingestion — track corners were updated"></i>{% endif %}</td>
                 <td>{{ s.track.name if s.track else '—' }}</td>
-                <td data-sort="{{ s.best_lap_time or 999999 }}">{{ "%.3f"|format(s.best_lap_time) if s.best_lap_time else '—' }}s</td>
+                <td>
+                    {% if s.data_source == 'gopro' %}
+                    <i class="bi bi-camera-video" title="GoPro"></i> GoPro
+                    {% elif s.data_source %}
+                    <i class="bi bi-stopwatch" title="RaceChrono"></i> RaceChrono
+                    {% else %}—{% endif %}
+                </td>
+                <td data-sort="{{ s.best_lap_time or 999999 }}">{% if s.best_lap_time %}{{ '%d:%06.3f'|format(s.best_lap_time // 60, s.best_lap_time % 60) }}{% else %}—{% endif %}</td>
                 <td data-sort="{{ s.clean_laps or 0 }}">{{ s.clean_laps or '—' }} / {{ s.total_laps or '—' }}</td>
                 <td data-sort="{{ s.consistency_pct or 0 }}">{{ "%.1f"|format(s.consistency_pct) if s.consistency_pct else '—' }}%</td>
                 <td>
-                    {% if s.data_source == 'gopro' %}
-                    <span class="badge session-label session-label-source"><i class="bi bi-camera-video"></i> GoPro</span>
-                    {% elif s.data_source %}
-                    <span class="badge session-label session-label-source"><i class="bi bi-stopwatch"></i> RaceChrono</span>
-                    {% endif %}
                     {% if s.labels %}
                     {% for label in s.labels %}
                     <span class="badge session-label" data-label="{{ label }}">{{ label }}</span>
                     {% endfor %}
-                    {% elif not s.data_source %}
-                    —
-                    {% endif %}
+                    {% else %}—{% endif %}
                 </td>
                 <td class="text-nowrap">
                     <a href="{{ url_for('dashboard.view', session_id=s.id) }}" class="btn btn-sm btn-outline-primary" title="Dashboard"><i class="bi bi-speedometer2"></i>Dashboard</a>
@@ -461,6 +462,10 @@ if (thead && tbody) {
             rows.forEach(function(row) { tbody.appendChild(row); });
         });
     });
+
+    // Initial sort: most recent first (date desc)
+    var dateTh = thead.querySelector('th.sort-asc[data-col="0"]');
+    if (dateTh) dateTh.click();
 }
 
 // ── Share ──
