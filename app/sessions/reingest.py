@@ -102,6 +102,7 @@ def reingest_session(session):
                     'Auto-detected track "%s" for session %d', track.name, session.id
                 )
 
+        sf_gate = None
         if track:
             corners = TrackCorner.query.filter_by(
                 track_id=track.id,
@@ -115,12 +116,17 @@ def reingest_session(session):
                 for c in corners
             ] if corners else None
             track_coords = (track.lat, track.lon, track.timezone)
+            if track.sf_lat1 is not None:
+                sf_gate = {
+                    'sf_lat1': track.sf_lat1, 'sf_lon1': track.sf_lon1,
+                    'sf_lat2': track.sf_lat2, 'sf_lon2': track.sf_lon2,
+                }
         else:
             track_corners = None
             track_coords = None
 
         current_app.logger.info('Reingesting session %d', session.id)
-        ingest_session(temp_path, session, track_coords, track_corners)
+        ingest_session(temp_path, session, track_coords, track_corners, sf_gate=sf_gate)
         session.needs_reingest = False
         db.session.commit()
         current_app.logger.info('Session %d reingested successfully', session.id)

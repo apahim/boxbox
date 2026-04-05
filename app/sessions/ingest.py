@@ -43,7 +43,7 @@ from scripts.analysis.corner_model import (
 )
 
 
-def ingest_session(csv_path, session, track_coords, track_corners):
+def ingest_session(csv_path, session, track_coords, track_corners, sf_gate=None):
     """Run full ingest pipeline for a CSV file and populate the database.
 
     Args:
@@ -63,6 +63,12 @@ def ingest_session(csv_path, session, track_coords, track_corners):
             f'CSV too large: {len(telemetry_df)} rows exceeds limit of {MAX_TELEMETRY_ROWS}'
         )
     logger.info('Loaded telemetry: %d rows', len(telemetry_df))
+
+    # 1b. Gate-based lap splitting (always takes precedence when available)
+    if sf_gate:
+        from scripts.analysis.lap_splitter import split_laps_by_gate
+        telemetry_df = split_laps_by_gate(telemetry_df, sf_gate)
+        logger.info('Applied gate-based lap splitting')
 
     # 2. Extract lap times
     laptimes_df = extract_laptimes_from_telemetry(telemetry_df)
