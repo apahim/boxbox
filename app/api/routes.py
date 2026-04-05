@@ -31,7 +31,10 @@ def api_login_required(f):
                 if session:
                     # Check token expiry
                     if session.share_token_created_at:
-                        age = datetime.now(timezone.utc) - session.share_token_created_at
+                        created = session.share_token_created_at
+                        if created.tzinfo is None:
+                            created = created.replace(tzinfo=timezone.utc)
+                        age = datetime.now(timezone.utc) - created
                         if age > SHARE_TOKEN_MAX_AGE:
                             return jsonify(error='Share link has expired'), 401
                     kwargs['session'] = session

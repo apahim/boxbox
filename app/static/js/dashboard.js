@@ -244,7 +244,7 @@
         // Fetch current session raceline + sibling sessions at the same track
         Promise.all([
             api("/raceline"),
-            trackId ? fetch("/api/evolution?track_id=" + trackId, { credentials: "same-origin" })
+            trackId && !shareToken ? fetch("/api/evolution?track_id=" + trackId, { credentials: "same-origin" })
                 .then(function(r) { return r.ok ? r.json() : []; }).catch(function() { return []; }) : Promise.resolve([])
         ]).then(function(results) {
             var currentData = results[0];
