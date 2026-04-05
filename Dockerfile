@@ -17,6 +17,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
+RUN useradd -r -s /bin/false boxbox
+
 COPY --from=builder /install /usr/local
 
 WORKDIR /app
@@ -24,7 +26,8 @@ WORKDIR /app
 COPY app/ app/
 COPY scripts/ scripts/
 COPY migrations/ migrations/
-# Note: migrations/ must exist before building. Run `flask db init` locally first.
+COPY entrypoint.sh .
+RUN chmod +x entrypoint.sh
 
 ENV FLASK_APP=app:create_app
 ENV PYTHONUNBUFFERED=1
@@ -34,4 +37,7 @@ EXPOSE 5000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
     CMD curl -f http://localhost:5000/health || exit 1
 
-CMD ["gunicorn", "--bind", "0.0.0.0:5000", "--workers", "2", "app:create_app()"]
+USER boxbox
+
+ENTRYPOINT ["./entrypoint.sh"]
+CMD ["gunicorn", "--bind", "0.0.0.0:5000", "--workers", "2", "--timeout", "120", "--graceful-timeout", "30", "app:create_app()"]

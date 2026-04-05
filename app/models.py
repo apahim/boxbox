@@ -88,6 +88,7 @@ class Session(db.Model):
     data_source = db.Column(db.String(20), default='racechrono')
     needs_reingest = db.Column(db.Boolean, default=False, nullable=False)
     share_token = db.Column(db.String(32), unique=True, nullable=True, index=True)
+    share_token_created_at = db.Column(db.DateTime, nullable=True)
 
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
 

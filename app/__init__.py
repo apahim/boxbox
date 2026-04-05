@@ -1,8 +1,14 @@
-from flask import Flask, jsonify, redirect, url_for
+import hashlib
+import logging
+import time
+
+from flask import Flask, jsonify, redirect, render_template, request, url_for
 from flask_sqlalchemy import SQLAlchemy
 from flask_migrate import Migrate
 from flask_login import LoginManager, current_user
 from flask_wtf.csrf import CSRFProtect
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
 from authlib.integrations.flask_client import OAuth
 
 db = SQLAlchemy()
@@ -10,6 +16,89 @@ migrate = Migrate()
 login_manager = LoginManager()
 csrf = CSRFProtect()
 oauth = OAuth()
+limiter = Limiter(key_func=get_remote_address, default_limits=["60/minute"],
+                  storage_uri="memory://")
+
+
+def _configure_logging(app):
+    if not app.debug and not app.testing:
+        handler = logging.StreamHandler()
+        handler.setLevel(logging.INFO)
+        handler.setFormatter(logging.Formatter(
+            '%(asctime)s %(levelname)s %(name)s: %(message)s'
+        ))
+        app.logger.addHandler(handler)
+        app.logger.setLevel(logging.INFO)
+
+
+def _validate_env(app):
+    """Ensure critical env vars are set for production."""
+    if app.config.get('TESTING') or app.debug:
+        return
+
+    if not app.config.get('MAPKIT_TOKEN'):
+        raise RuntimeError('MAPKIT_TOKEN environment variable is required')
+
+    if app.config.get('SECRET_KEY') == 'dev-secret-change-me':
+        raise RuntimeError('SECRET_KEY must be changed for production')
+
+    if app.config.get('SQLALCHEMY_DATABASE_URI', '').startswith('sqlite:'):
+        raise RuntimeError('DATABASE_URL must be set to a PostgreSQL URI for production')
+
+    if not app.config.get('GOOGLE_CLIENT_ID') or not app.config.get('GOOGLE_CLIENT_SECRET'):
+        raise RuntimeError('GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET are required')
+
+
+def _register_error_handlers(app):
+    def wants_json():
+        return request.headers.get('X-Requested-With') == 'fetch'
+
+    @app.errorhandler(403)
+    def forbidden(e):
+        if wants_json():
+            return jsonify(error='Forbidden'), 403
+        return render_template('errors/403.html'), 403
+
+    @app.errorhandler(404)
+    def not_found(e):
+        if wants_json():
+            return jsonify(error='Not found'), 404
+        return render_template('errors/404.html'), 404
+
+    @app.errorhandler(429)
+    def rate_limited(e):
+        if wants_json():
+            return jsonify(error='Too many requests'), 429
+        return render_template('errors/429.html'), 429
+
+    @app.errorhandler(500)
+    def internal_error(e):
+        app.logger.exception('Unhandled exception')
+        if wants_json():
+            return jsonify(error='Internal server error'), 500
+        return render_template('errors/500.html'), 500
+
+
+def _add_security_headers(app):
+    @app.after_request
+    def set_security_headers(response):
+        response.headers['X-Content-Type-Options'] = 'nosniff'
+        response.headers['X-Frame-Options'] = 'DENY'
+
+        if not app.debug:
+            response.headers['Strict-Transport-Security'] = 'max-age=31536000; includeSubDomains'
+
+        csp = (
+            "default-src 'self'; "
+            "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdn.plot.ly https://cdn.apple-mapkit.com; "
+            "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://fonts.googleapis.com; "
+            "font-src 'self' https://cdn.jsdelivr.net https://fonts.gstatic.com; "
+            "img-src 'self' data: https://*.apple-mapkit.com https://*.googleapis.com; "
+            "connect-src 'self' https://*.apple-mapkit.com https://cdn.apple-mapkit.com; "
+        )
+        response.headers['Content-Security-Policy'] = csp
+
+        return response
 
 
 def create_app(config_name=None):
@@ -22,13 +111,14 @@ def create_app(config_name=None):
         from app.config import Config
         app.config.from_object(Config)
 
-    if not app.config.get('TESTING') and not app.config.get('MAPKIT_TOKEN'):
-        raise RuntimeError('MAPKIT_TOKEN environment variable is required')
+    _configure_logging(app)
+    _validate_env(app)
 
     db.init_app(app)
     migrate.init_app(app, db)
     login_manager.init_app(app)
     csrf.init_app(app)
+    limiter.init_app(app)
     login_manager.login_view = 'auth.login'
 
     oauth.init_app(app)
@@ -66,7 +156,18 @@ def create_app(config_name=None):
     app.cli.add_command(import_session)
     app.cli.add_command(reingest_session)
 
+    _register_error_handlers(app)
+    _add_security_headers(app)
+
+    # Cache-busting version for static assets
+    app.config['ASSET_VERSION'] = hashlib.md5(str(time.time()).encode()).hexdigest()[:8]
+
+    @app.context_processor
+    def inject_asset_version():
+        return {'asset_v': app.config['ASSET_VERSION']}
+
     @app.route('/health')
+    @limiter.exempt
     def health():
         return jsonify(status='ok')
 

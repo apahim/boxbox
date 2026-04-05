@@ -1,12 +1,15 @@
 import json
+import logging
 import os
 import secrets
 import tempfile
 
-from flask import render_template, redirect, url_for, flash, request, jsonify
+from flask import current_app, render_template, redirect, url_for, flash, request, jsonify
 from flask_login import login_required, current_user
 
-from app import db
+logger = logging.getLogger(__name__)
+
+from app import db, limiter
 from app.sessions import bp
 from app.sessions.forms import SessionCreateForm, SessionEditForm
 from app.models import (
@@ -39,6 +42,7 @@ def list_sessions():
 
 @bp.route('/create', methods=['GET', 'POST'])
 @login_required
+@limiter.limit("5/minute", methods=["POST"])
 def create():
     form = SessionCreateForm()
 
@@ -124,9 +128,10 @@ def create():
 
         except Exception as e:
             db.session.rollback()
+            logger.exception('CSV ingest failed')
             if is_fetch:
-                return jsonify(error=str(e)), 500
-            flash(f'Error processing CSV: {e}', 'danger')
+                return jsonify(error='Error processing telemetry file. Please check the format and try again.'), 500
+            flash('Error processing telemetry file. Please check the format and try again.', 'danger')
             return render_template('sessions/create.html', form=form, track_coords_js=track_coords_js)
         finally:
             os.close(temp_fd)
@@ -199,15 +204,23 @@ def delete(session_id):
         return redirect(url_for('sessions.list_sessions'))
 
     # Bulk SQL deletes — much faster than ORM cascade
-    Telemetry.query.filter_by(session_id=session.id).delete()
-    Lap.query.filter_by(session_id=session.id).delete()
-    CornerRecord.query.filter_by(session_id=session.id).delete()
-    CornerSummary.query.filter_by(session_id=session.id).delete()
-    SectorTime.query.filter_by(session_id=session.id).delete()
-    ChartData.query.filter_by(session_id=session.id).delete()
-    SessionUpload.query.filter_by(session_id=session.id).delete()
-    db.session.delete(session)
-    db.session.commit()
+    try:
+        Telemetry.query.filter_by(session_id=session.id).delete()
+        Lap.query.filter_by(session_id=session.id).delete()
+        CornerRecord.query.filter_by(session_id=session.id).delete()
+        CornerSummary.query.filter_by(session_id=session.id).delete()
+        SectorTime.query.filter_by(session_id=session.id).delete()
+        ChartData.query.filter_by(session_id=session.id).delete()
+        SessionUpload.query.filter_by(session_id=session.id).delete()
+        db.session.delete(session)
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+        logger.exception('Failed to delete session %d', session_id)
+        if is_fetch:
+            return jsonify(error='Failed to delete session.'), 500
+        flash('Failed to delete session.', 'danger')
+        return redirect(url_for('sessions.list_sessions'))
 
     if is_fetch:
         return jsonify(ok=True)
@@ -242,7 +255,9 @@ def share(session_id):
         return jsonify(error='You can only share your own sessions.'), 403
 
     if not session.share_token:
+        from datetime import datetime, timezone
         session.share_token = secrets.token_urlsafe(16)
+        session.share_token_created_at = datetime.now(timezone.utc)
         db.session.commit()
 
     return jsonify(

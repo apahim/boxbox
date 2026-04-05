@@ -6,12 +6,14 @@ they are in the static pipeline.
 """
 
 import gzip
+import logging
 import os
-import traceback
 
 import numpy as np
 
 from app import db
+
+logger = logging.getLogger(__name__)
 from app.models import (
     Lap, Telemetry, CornerRecord, CornerSummary,
     SectorTime, ChartData, SessionUpload,
@@ -54,13 +56,18 @@ def ingest_session(csv_path, session, track_coords, track_corners):
         The session object with all computed fields populated.
     """
     # 1. Parse CSV
+    MAX_TELEMETRY_ROWS = 500_000
     telemetry_df = load_racechrono_session(csv_path)
-    print(f"  Loaded telemetry: {len(telemetry_df)} rows")
+    if len(telemetry_df) > MAX_TELEMETRY_ROWS:
+        raise ValueError(
+            f'CSV too large: {len(telemetry_df)} rows exceeds limit of {MAX_TELEMETRY_ROWS}'
+        )
+    logger.info('Loaded telemetry: %d rows', len(telemetry_df))
 
     # 2. Extract lap times
     laptimes_df = extract_laptimes_from_telemetry(telemetry_df)
     laptimes_df = filter_non_race_laps(laptimes_df)
-    print(f"  Extracted {len(laptimes_df)} race laps")
+    logger.info('Extracted %d race laps', len(laptimes_df))
 
     # 3. Generate summary
     summary = generate_summary(laptimes_df, telemetry_df)
@@ -88,9 +95,9 @@ def ingest_session(csv_path, session, track_coords, track_corners):
             if weather:
                 session.weather = weather
                 summary["weather"] = weather
-                print(f"  Weather: {weather['condition']}, {weather['temp_c']}C")
+                logger.info('Weather: %s, %sC', weather['condition'], weather['temp_c'])
         except Exception as e:
-            print(f"  Warning: weather fetch failed: {e}")
+            logger.warning('Weather fetch failed: %s', e)
 
     # 5. Store laps with outlier detection
     clean_df, excluded = detect_outliers(laptimes_df)
@@ -129,9 +136,9 @@ def ingest_session(csv_path, session, track_coords, track_corners):
         )
         if corner_analysis_raw:
             _store_corner_analysis(session.id, corner_analysis_raw)
-            print(f"  Corner analysis: {len(corner_analysis_raw.get('summaries', []))} corners")
+            logger.info('Corner analysis: %d corners', len(corner_analysis_raw.get('summaries', [])))
     except Exception as e:
-        print(f"  Warning: corner analysis failed: {e}")
+        logger.warning('Corner analysis failed: %s', e)
 
     # 8. Sector analysis
     sector_data = None
@@ -141,9 +148,9 @@ def ingest_session(csv_path, session, track_coords, track_corners):
         )
         if sector_data:
             _store_sector_times(session.id, sector_data)
-            print(f"  Sectors stored")
+            logger.info('Sectors stored')
     except Exception as e:
-        print(f"  Warning: sector analysis failed: {e}")
+        logger.warning('Sector analysis failed: %s', e)
 
     # 9. Precompute all chart data
     _precompute_charts(
@@ -163,7 +170,7 @@ def ingest_session(csv_path, session, track_coords, track_corners):
         if coaching:
             session.coaching = coaching
     except Exception as e:
-        print(f"  Warning: coaching failed: {e}")
+        logger.warning('Coaching failed: %s', e)
 
     # 11. Store compressed CSV
     try:
@@ -176,10 +183,11 @@ def ingest_session(csv_path, session, track_coords, track_corners):
         )
         db.session.add(upload)
     except Exception as e:
-        print(f"  Warning: CSV backup failed: {e}")
+        logger.warning('CSV backup failed: %s', e)
 
     db.session.commit()
-    print(f"  Ingest complete: {session.total_laps} laps, {session.clean_laps} clean, best {session.best_lap_time}")
+    logger.info('Ingest complete: %d laps, %d clean, best %s',
+                session.total_laps, session.clean_laps, session.best_lap_time)
     return session
 
 
@@ -266,7 +274,7 @@ def _insert_telemetry(session_id, telemetry_df):
     for start in range(0, len(records), batch_size):
         db.session.bulk_insert_mappings(Telemetry, records[start:start + batch_size])
     db.session.flush()
-    print(f"  Telemetry: {len(records)} rows inserted")
+    logger.info('Telemetry: %d rows inserted', len(records))
 
 
 def _is_nan(val):
@@ -399,7 +407,7 @@ def _precompute_charts(session_id, telemetry_df, laptimes_df, clean_df,
         for lap, data in speed_maps.items():
             _store_chart(session_id, "speed_map", str(lap), data)
     except Exception as e:
-        print(f"  Warning: speed maps failed: {e}")
+        logger.warning('Speed maps failed: %s', e)
 
     # Braking maps
     try:
@@ -409,7 +417,7 @@ def _precompute_charts(session_id, telemetry_df, laptimes_df, clean_df,
         for lap, data in braking_maps.items():
             _store_chart(session_id, "braking_map", str(lap), data)
     except Exception as e:
-        print(f"  Warning: braking maps failed: {e}")
+        logger.warning('Braking maps failed: %s', e)
 
     # Sector delta maps
     if sector_data:
@@ -421,7 +429,7 @@ def _precompute_charts(session_id, telemetry_df, laptimes_df, clean_df,
             for lap, data in sector_maps.items():
                 _store_chart(session_id, "sector_map", str(lap), data)
         except Exception as e:
-            print(f"  Warning: sector maps failed: {e}")
+            logger.warning('Sector maps failed: %s', e)
 
     # Cumulative delta charts (Plotly → JSON)
     try:
@@ -431,7 +439,7 @@ def _precompute_charts(session_id, telemetry_df, laptimes_df, clean_df,
         for lap, fig_json in cum_delta.items():
             _store_chart(session_id, "cumulative_delta", str(lap), fig_json)
     except Exception as e:
-        print(f"  Warning: cumulative delta failed: {e}")
+        logger.warning('Cumulative delta failed: %s', e)
 
     # Throttle/brake charts (Plotly → JSON)
     try:
@@ -439,7 +447,7 @@ def _precompute_charts(session_id, telemetry_df, laptimes_df, clean_df,
         for lap, fig_json in tb.items():
             _store_chart(session_id, "throttle_brake", str(lap), fig_json)
     except Exception as e:
-        print(f"  Warning: throttle/brake failed: {e}")
+        logger.warning('Throttle/brake failed: %s', e)
 
     # Corner map data
     if corner_analysis_raw:
@@ -452,7 +460,7 @@ def _precompute_charts(session_id, telemetry_df, laptimes_df, clean_df,
             if corner_template:
                 _store_chart(session_id, "corner_analysis", "overview", corner_template)
         except Exception as e:
-            print(f"  Warning: corner map/template failed: {e}")
+            logger.warning('Corner map/template failed: %s', e)
 
     # Raceline data (single-session, computed from in-memory DataFrame)
     try:
@@ -460,7 +468,7 @@ def _precompute_charts(session_id, telemetry_df, laptimes_df, clean_df,
         if raceline:
             _store_chart(session_id, "raceline", "overview", raceline)
     except Exception as e:
-        print(f"  Warning: raceline data failed: {e}")
+        logger.warning('Raceline data failed: %s', e)
 
     # Sector data for the sectors tab
     if sector_data:
@@ -479,7 +487,7 @@ def _precompute_charts(session_id, telemetry_df, laptimes_df, clean_df,
     _store_chart(session_id, "lap_list", "overview", lap_list)
 
     db.session.flush()
-    print(f"  Charts precomputed for {len(clean_laps)} clean laps")
+    logger.info('Charts precomputed for %d clean laps', len(clean_laps))
 
 
 def _store_chart_from_fig(session_id, chart_type, chart_key, func, *args, **kwargs):
@@ -489,7 +497,7 @@ def _store_chart_from_fig(session_id, chart_type, chart_key, func, *args, **kwar
         json_data = fig_to_json(fig)
         _store_chart(session_id, chart_type, chart_key, json_data)
     except Exception as e:
-        print(f"  Warning: {chart_type} failed: {e}")
+        logger.warning('%s failed: %s', chart_type, e)
 
 
 def _build_raceline_data(telemetry_df, laptimes_df, clean_df):
