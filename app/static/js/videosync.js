@@ -3,7 +3,7 @@ window.VideoSync = (function() {
     var vsMap = null, vsOverlays = [];
     var currentLap = null, currentMapMode = "none";
     var video = null, canvas = null, mapWrap = null;
-    var sessionId = null, apiBase = null, shareToken = "";
+    var sessionId = null, apiBase = null, shareToken = "", csrfToken = "";
     var trackMapRef = null;
     var mapDataCache = {};
     var rafId = null;
@@ -240,7 +240,7 @@ window.VideoSync = (function() {
     function saveFilename(filename) {
         fetch(apiBase + "/video-filename", {
             method: "PUT",
-            headers: { "Content-Type": "application/json", "X-Requested-With": "fetch" },
+            headers: { "Content-Type": "application/json", "X-Requested-With": "fetch", "X-CSRFToken": csrfToken },
             credentials: "same-origin",
             body: JSON.stringify({ filename: filename })
         }).catch(function() {});
@@ -250,6 +250,7 @@ window.VideoSync = (function() {
         sessionId = opts.sessionId;
         apiBase = opts.apiBase;
         shareToken = opts.shareToken || "";
+        csrfToken = opts.csrfToken || "";
         var videoFilename = opts.videoFilename || "";
 
         canvas = document.getElementById("vsPositionCanvas");

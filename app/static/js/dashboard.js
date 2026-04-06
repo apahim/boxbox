@@ -420,7 +420,8 @@
                     sessionId: parseInt(meta.dataset.sessionIdVal),
                     apiBase: apiBase,
                     shareToken: shareToken,
-                    videoFilename: meta.dataset.videoFilename || ""
+                    videoFilename: meta.dataset.videoFilename || "",
+                    csrfToken: meta.dataset.csrf || ""
                 });
             });
         });

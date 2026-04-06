@@ -21,7 +21,8 @@
       data-has-corners="{{ 'true' if has_corners else 'false' }}"
       data-has-gate="{{ 'true' if has_gate else 'false' }}"
       data-data-source="{{ session.data_source or '' }}"
-      data-video-filename="{{ session.video_filename or '' }}">
+      data-video-filename="{{ session.video_filename or '' }}"
+      data-csrf="{{ csrf_token() }}">
 
 <div class="row mb-4">
     <div class="col">

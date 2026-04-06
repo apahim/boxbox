@@ -96,6 +96,8 @@ def _add_security_headers(app):
             "font-src 'self' https://cdn.jsdelivr.net https://fonts.gstatic.com; "
             "img-src 'self' data: https://*.apple-mapkit.com https://*.googleapis.com; "
             "connect-src 'self' https://*.apple-mapkit.com https://cdn.apple-mapkit.com https://cdn.jsdelivr.net; "
+            "worker-src blob:; "
+            "media-src 'self' blob:; "
         )
         response.headers['Content-Security-Policy'] = csp
 
