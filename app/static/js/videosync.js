@@ -8,7 +8,7 @@ window.VideoSync = (function() {
     var mapDataCache = {};
     var rafId = null;
     var racelineLaps = null;
-    var lapStart = 0, lapEnd = 0;
+    var lapStart = 0, lapEnd = 0, clamping = false;
 
     function api(path) {
         var url = apiBase + path;
@@ -62,12 +62,6 @@ window.VideoSync = (function() {
     }
 
     function animLoop() {
-        if (video && video.currentTime >= lapEnd) {
-            video.currentTime = lapEnd;
-            video.pause();
-            drawPositionDot();
-            return;
-        }
         drawPositionDot();
         if (video && !video.paused && !video.ended) {
             rafId = requestAnimationFrame(animLoop);
@@ -239,11 +233,16 @@ window.VideoSync = (function() {
     }
 
     function clampToLap() {
-        if (!video || !currentLap) return;
-        if (video.currentTime < lapStart) video.currentTime = lapStart;
-        if (video.currentTime >= lapEnd) {
-            video.currentTime = lapEnd;
+        if (!video || !currentLap || clamping) return;
+        if (video.currentTime < lapStart) {
+            clamping = true;
+            video.currentTime = lapStart;
+            clamping = false;
+        } else if (video.currentTime >= lapEnd) {
+            clamping = true;
             video.pause();
+            video.currentTime = lapEnd;
+            clamping = false;
         }
     }
 
