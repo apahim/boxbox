@@ -7,6 +7,7 @@ window.VideoSync = (function() {
     var trackMapRef = null;
     var mapDataCache = {};
     var rafId = null;
+    var racelineLaps = null;
 
     function api(path) {
         var url = apiBase + path;
@@ -50,7 +51,6 @@ window.VideoSync = (function() {
         var x = pt.x - rect.left - window.scrollX;
         var y = pt.y - rect.top - window.scrollY;
 
-        // White dot with dark border
         ctx.strokeStyle = "rgba(0,0,0,0.7)";
         ctx.lineWidth = 2;
         ctx.fillStyle = "#ffffff";
@@ -103,7 +103,6 @@ window.VideoSync = (function() {
                 drawPositionDot();
             });
         } else {
-            // Re-fit to new lap
             var latMin = Math.min.apply(null, lap.lat), latMax = Math.max.apply(null, lap.lat);
             var lonMin = Math.min.apply(null, lap.lon), lonMax = Math.max.apply(null, lap.lon);
             var pad = 0.15;
@@ -116,8 +115,6 @@ window.VideoSync = (function() {
     function applyMapMode(lap, mode) {
         currentMapMode = mode;
 
-        // For heatmap modes, we need the setupTrackMap infrastructure
-        // which creates its own map. Instead, we'll draw dots on a separate canvas.
         if (mode === "none") {
             clearMap();
             addPolyline(lap, "#22c55e");
@@ -134,7 +131,6 @@ window.VideoSync = (function() {
 
         api("/charts/" + chartType + "/" + lap.lap).then(function(data) {
             if (!data) {
-                // Fallback to plain line
                 clearMap();
                 addPolyline(lap, "#22c55e");
                 return;
@@ -146,12 +142,10 @@ window.VideoSync = (function() {
 
     function renderHeatmap(lap, data) {
         clearMap();
-        // Draw heatmap dots on a separate canvas layer
         var heatCanvas = document.getElementById("vsHeatCanvas");
         if (!heatCanvas) return;
         MapHelpers.drawDots(heatCanvas, vsMap, data);
 
-        // Also add corner labels and colorbar
         var overlayContainer = mapWrap.querySelector(".vs-map-overlays");
         if (!overlayContainer) {
             overlayContainer = document.createElement("div");
@@ -189,7 +183,6 @@ window.VideoSync = (function() {
                 el.className = "corner-label";
                 el.textContent = c.label;
                 overlayContainer.appendChild(el);
-                // Position label
                 var rect = mapWrap.getBoundingClientRect();
                 var pt = vsMap.convertCoordinateToPointOnPage(new mapkit.Coordinate(c.lat, c.lon));
                 if (pt) {
@@ -199,7 +192,6 @@ window.VideoSync = (function() {
             });
         }
 
-        // Redraw heatmap on region changes
         vsMap.addEventListener("region-change-end", function redrawHeat() {
             if (currentMapMode === "none") {
                 vsMap.removeEventListener("region-change-end", redrawHeat);
@@ -207,7 +199,6 @@ window.VideoSync = (function() {
             }
             var hc = document.getElementById("vsHeatCanvas");
             if (hc) MapHelpers.drawDots(hc, vsMap, data);
-            // Reposition corner labels
             if (data.corners && overlayContainer.parentNode) {
                 var rect = mapWrap.getBoundingClientRect();
                 var labels = overlayContainer.querySelectorAll(".corner-label");
@@ -230,7 +221,6 @@ window.VideoSync = (function() {
         initMap(lap);
         applyMapMode(lap, currentMapMode);
 
-        // Auto-seek video to lap start
         if (video && video.src && lap.t_offset != null) {
             video.currentTime = lap.t_offset;
         }
@@ -246,36 +236,29 @@ window.VideoSync = (function() {
         }).catch(function() {});
     }
 
-    function init(racelineData, opts) {
-        sessionId = opts.sessionId;
-        apiBase = opts.apiBase;
-        shareToken = opts.shareToken || "";
-        csrfToken = opts.csrfToken || "";
-        var videoFilename = opts.videoFilename || "";
+    function loadVideo(file) {
+        var url = URL.createObjectURL(file);
+        var prompt = document.getElementById("vsPrompt");
+        var player = document.getElementById("vsPlayer");
 
+        // Transition to player state
+        prompt.style.display = "none";
+        player.style.display = "";
+
+        // Set up references now that player is visible
         canvas = document.getElementById("vsPositionCanvas");
         mapWrap = document.getElementById("vsMapWrap");
         video = document.getElementById("vsVideo");
+        video.src = url;
 
-        if (!racelineData || !racelineData.laps || racelineData.laps.length === 0) {
-            document.getElementById("vsContent").innerHTML =
-                '<div class="text-center text-muted p-5"><i class="bi bi-exclamation-circle" style="font-size:2rem;"></i><p class="mt-2">No raceline data available. Try reingesting this session.</p></div>';
-            return;
-        }
-
-        // Check for t_offset support
-        var hasOffset = racelineData.laps.some(function(l) { return l.t_offset != null; });
-        if (!hasOffset) {
-            document.getElementById("vsContent").innerHTML =
-                '<div class="text-center text-muted p-5"><i class="bi bi-arrow-repeat" style="font-size:2rem;"></i><p class="mt-2">This session needs to be reingested to enable video sync.<br>Go to the session editor and click "Reingest".</p></div>';
-            return;
-        }
+        document.getElementById("vsFileLabel").textContent = file.name;
+        saveFilename(file.name);
 
         // Populate lap selector
         var lapSelect = document.getElementById("vsLapSelect");
         lapSelect.innerHTML = "";
         var bestLap = null;
-        racelineData.laps.forEach(function(lap) {
+        racelineLaps.forEach(function(lap) {
             if (lap.is_outlier) return;
             var opt = document.createElement("option");
             opt.value = lap.lap;
@@ -286,48 +269,16 @@ window.VideoSync = (function() {
 
         lapSelect.addEventListener("change", function() {
             var lapNum = parseInt(this.value);
-            var lap = racelineData.laps.find(function(l) { return l.lap === lapNum; });
+            var lap = racelineLaps.find(function(l) { return l.lap === lapNum; });
             if (lap) selectLap(lap);
         });
 
         // Map mode selector
-        var modeSelect = document.getElementById("vsMapMode");
-        modeSelect.addEventListener("change", function() {
+        document.getElementById("vsMapMode").addEventListener("change", function() {
             if (currentLap) applyMapMode(currentLap, this.value);
         });
 
-        // Video file picker
-        var fileInput = document.getElementById("vsFileInput");
-        var fileLabel = document.getElementById("vsFileLabel");
-        var fileBtn = document.getElementById("vsFileBtn");
-
-        if (videoFilename) {
-            fileLabel.textContent = "Re-select: " + videoFilename;
-            fileLabel.title = videoFilename;
-        }
-
-        fileBtn.addEventListener("click", function() { fileInput.click(); });
-
-        fileInput.addEventListener("change", function() {
-            if (this.files.length === 0) return;
-            var file = this.files[0];
-            var url = URL.createObjectURL(file);
-            video.src = url;
-            fileLabel.textContent = file.name;
-            fileLabel.title = file.name;
-            saveFilename(file.name);
-
-            // Auto-seek to current lap
-            video.addEventListener("loadedmetadata", function onMeta() {
-                video.removeEventListener("loadedmetadata", onMeta);
-                if (currentLap && currentLap.t_offset != null) {
-                    video.currentTime = currentLap.t_offset;
-                }
-                drawPositionDot();
-            });
-        });
-
-        // Sync dot to video playback
+        // Video sync events
         video.addEventListener("play", function() {
             if (rafId) cancelAnimationFrame(rafId);
             rafId = requestAnimationFrame(animLoop);
@@ -343,11 +294,85 @@ window.VideoSync = (function() {
             if (rafId) { cancelAnimationFrame(rafId); rafId = null; }
         });
 
-        // Initial lap
-        if (bestLap) {
-            selectLap(bestLap);
-        } else if (racelineData.laps.length > 0) {
-            selectLap(racelineData.laps[0]);
+        // Auto-seek to lap start once metadata loads
+        video.addEventListener("loadedmetadata", function onMeta() {
+            video.removeEventListener("loadedmetadata", onMeta);
+            var lap = bestLap || racelineLaps[0];
+            if (lap) selectLap(lap);
+        });
+    }
+
+    function init(racelineData, opts) {
+        sessionId = opts.sessionId;
+        apiBase = opts.apiBase;
+        shareToken = opts.shareToken || "";
+        csrfToken = opts.csrfToken || "";
+        var videoFilename = opts.videoFilename || "";
+
+        if (!racelineData || !racelineData.laps || racelineData.laps.length === 0) {
+            document.getElementById("vsContent").innerHTML =
+                '<div class="text-center text-muted p-5"><i class="bi bi-exclamation-circle" style="font-size:2rem;"></i><p class="mt-2">No raceline data available. Try reingesting this session.</p></div>';
+            return;
+        }
+
+        var hasOffset = racelineData.laps.some(function(l) { return l.t_offset != null; });
+        if (!hasOffset) {
+            document.getElementById("vsContent").innerHTML =
+                '<div class="text-center text-muted p-5"><i class="bi bi-arrow-repeat" style="font-size:2rem;"></i><p class="mt-2">This session needs to be reingested to enable video sync.<br>Go to the session editor and click "Reingest".</p></div>';
+            return;
+        }
+
+        racelineLaps = racelineData.laps;
+
+        // Set prompt button label
+        var promptBtnLabel = document.getElementById("vsPromptBtnLabel");
+        if (videoFilename) {
+            promptBtnLabel.textContent = "Re-select: " + videoFilename;
+        }
+
+        // File input (shared by prompt and change-video link)
+        var fileInput = document.getElementById("vsFileInput");
+        fileInput.addEventListener("change", function() {
+            if (this.files.length === 0) return;
+            loadVideo(this.files[0]);
+        });
+
+        // Prompt button click
+        document.getElementById("vsPromptBtn").addEventListener("click", function() {
+            fileInput.click();
+        });
+
+        // Clicking the drop zone itself (not the button) also opens picker
+        var prompt = document.getElementById("vsPrompt");
+        prompt.addEventListener("click", function(e) {
+            if (e.target.closest("button")) return;
+            fileInput.click();
+        });
+
+        // Drag & drop
+        prompt.addEventListener("dragover", function(e) {
+            e.preventDefault();
+            prompt.classList.add("drag-over");
+        });
+        prompt.addEventListener("dragleave", function() {
+            prompt.classList.remove("drag-over");
+        });
+        prompt.addEventListener("drop", function(e) {
+            e.preventDefault();
+            prompt.classList.remove("drag-over");
+            var files = e.dataTransfer.files;
+            if (files.length > 0 && files[0].type.startsWith("video/")) {
+                loadVideo(files[0]);
+            }
+        });
+
+        // Change video link (in player state)
+        var changeLink = document.getElementById("vsChangeVideo");
+        if (changeLink) {
+            changeLink.addEventListener("click", function(e) {
+                e.preventDefault();
+                fileInput.click();
+            });
         }
     }
 

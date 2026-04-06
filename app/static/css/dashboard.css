@@ -81,6 +81,22 @@
 #vsMapWrap { height: 450px; }
 .vs-video-player { max-height: 450px; object-fit: contain; }
 
+.vs-drop-zone {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 3rem 2rem;
+    border: 2px dashed var(--bb-border);
+    border-radius: 12px;
+    background: var(--bb-surface);
+    cursor: pointer;
+    transition: border-color 0.2s, background 0.2s;
+}
+.vs-drop-zone:hover { border-color: var(--bb-text-muted); background: rgba(255,255,255,0.03); }
+.vs-drop-zone.drag-over { border-color: var(--bb-blue); background: rgba(59,130,246,0.06); }
+
 @media (max-width: 576px) {
     h1 { font-size: 1.4rem; }
     .stat-value { font-size: 1.3rem; }
