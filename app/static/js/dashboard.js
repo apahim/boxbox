@@ -45,7 +45,7 @@
     };
 
     // ---- Tab lazy loading ----
-    var tabsLoaded = { overview: false, deepdive: false, raceline: false, corners: false };
+    var tabsLoaded = { overview: false, deepdive: false, raceline: false, corners: false, videosync: false };
     var speedMapRef = null, brakingMapRef = null, sectorMapRef = null;
     var lapList = [];
 
@@ -60,6 +60,7 @@
             if (target === "deepdive-tab" && !tabsLoaded.deepdive) loadDeepDive();
             if (target === "raceline-tab" && !tabsLoaded.raceline) loadRaceline();
             if (target === "corners-tab" && !tabsLoaded.corners) loadCorners();
+            if (target === "videosync-tab" && !tabsLoaded.videosync) loadVideoSync();
 
             // Resize Plotly charts in newly shown tab
             var pane = document.querySelector(event.target.dataset.bsTarget);
@@ -406,6 +407,23 @@
             if (data) Plotly.react("brakingConsistencyDiv", data.data, data.layout, {responsive: true});
         });
 
+    }
+
+    // ---- Video Sync ----
+    function loadVideoSync() {
+        tabsLoaded.videosync = true;
+        if (!mapkitToken) return;
+        api("/raceline").then(function(data) {
+            if (!data) return;
+            MapHelpers.waitForMapKit(function() {
+                VideoSync.init(data, {
+                    sessionId: parseInt(meta.dataset.sessionIdVal),
+                    apiBase: apiBase,
+                    shareToken: shareToken,
+                    videoFilename: meta.dataset.videoFilename || ""
+                });
+            });
+        });
     }
 
     // Init MapKit if token present

@@ -536,8 +536,10 @@ def _build_raceline_data(telemetry_df, laptimes_df, clean_df):
         lon_vals = lap_data[lon_col].values
 
         t_vals = None
+        t_offset = None
         if "elapsed_time" in lap_data.columns:
             t_vals = lap_data["elapsed_time"].values.copy()
+            t_offset = float(t_vals[0])
             t_vals = t_vals - t_vals[0]
 
         # Downsample to ~200 points
@@ -558,6 +560,7 @@ def _build_raceline_data(telemetry_df, laptimes_df, clean_df):
             "lat": [round(float(v), 6) for v in lat_vals],
             "lon": [round(float(v), 6) for v in lon_vals],
             "t": [round(float(v), 3) for v in t_vals] if t_vals is not None else None,
+            "t_offset": round(t_offset, 3) if t_offset is not None else None,
         })
 
     if not laps:

@@ -87,6 +87,8 @@ def session_summary(session_id, session):
             {'lap': l.lap_number, 'seconds': l.seconds, 'reason': l.outlier_reason}
             for l in excluded_laps
         ],
+        data_source=session.data_source,
+        video_filename=session.video_filename,
     )
 
 
@@ -172,6 +174,18 @@ def session_sectors(session_id, session):
     if not cd:
         return jsonify(error='No sector data'), 404
     return jsonify(cd.data)
+
+
+@bp.route('/sessions/<int:session_id>/video-filename', methods=['PUT'])
+@api_login_required
+def session_video_filename(session_id, session):
+    """Save the local video filename for this session."""
+    data = request.get_json(silent=True)
+    if not data or 'filename' not in data:
+        return jsonify(error='filename required'), 400
+    session.video_filename = data['filename'] or None
+    db.session.commit()
+    return jsonify(ok=True)
 
 
 @bp.route('/sessions/<int:session_id>/raceline')
