@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+
+{% block title %}Privacy Policy - BoxBox{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-body p-4">
+                <h2 class="mb-4">Privacy Policy</h2>
+                <p class="text-muted mb-4">Last updated: April 2026</p>
+
+                <h5>1. Data We Collect</h5>
+                <ul>
+                    <li><strong>Account information</strong>: email address, display name, and Google account identifier (via Google OAuth).</li>
+                    <li><strong>Telemetry data</strong>: GPS coordinates, speed, acceleration, and other sensor data from uploaded CSV files or GoPro videos.</li>
+                    <li><strong>Track definitions</strong>: coordinates, corner positions, and start/finish gate locations you define.</li>
+                </ul>
+
+                <h5>2. How We Use Your Data</h5>
+                <p>Your data is used <strong>solely</strong> to provide telemetry analysis, lap timing, and performance visualisations within BoxBox. We do not use your data for advertising, profiling, or any purpose beyond the service itself.</p>
+
+                <h5>3. Data Sharing</h5>
+                <p>We do <strong>not</strong> sell, rent, or share your personal data with third parties. When you share a session dashboard via a share link, only the data for that specific session is accessible through the unique token.</p>
+
+                <h5>4. Third-Party Services</h5>
+                <ul>
+                    <li><strong>Google OAuth</strong>: used for authentication. Google receives your authentication request but BoxBox does not share telemetry data with Google.</li>
+                    <li><strong>Open-Meteo</strong>: used to fetch weather data for your sessions. Only track coordinates and session dates are sent &mdash; no personal information.</li>
+                    <li><strong>Apple MapKit</strong>: used to render maps. Map tile requests are handled by Apple &mdash; no personal or telemetry data is sent.</li>
+                </ul>
+
+                <h5>5. Cookies</h5>
+                <p>BoxBox uses a single <strong>session cookie</strong> for authentication. We do not use analytics cookies, tracking pixels, or any third-party tracking.</p>
+
+                <h5>6. Data Storage</h5>
+                <p>Your data is stored in a PostgreSQL database. Original telemetry files are stored in compressed form for re-processing. All data is stored on infrastructure managed by the BoxBox team.</p>
+
+                <h5>7. Data Retention</h5>
+                <p>During the beta period, data may be purged without notice. You can delete your account and <strong>all</strong> associated data at any time from your profile page. Deletion is immediate and irreversible.</p>
+
+                <h5>8. Your Rights</h5>
+                <ul>
+                    <li><strong>Access</strong>: you can view all your data through the BoxBox interface.</li>
+                    <li><strong>Deletion</strong>: you can delete your account and all data from your profile page.</li>
+                    <li><strong>Portability</strong>: your original uploaded files are preserved and can be re-downloaded in the future.</li>
+                </ul>
+
+                <h5>9. Contact</h5>
+                <p>For privacy-related questions, please <a href="https://github.com/apahim/boxbox/issues" target="_blank">open an issue on GitHub</a>.</p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

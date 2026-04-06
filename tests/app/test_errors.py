@@ -42,11 +42,13 @@ def test_unauthenticated_redirect(client):
 def test_delete_nonexistent_session_404(client, app):
     """Deleting a non-existent session returns 404."""
     # Login as a test user
+    from datetime import datetime, timezone
     from app import db
     from app.models import User
 
     with app.app_context():
-        user = User(email='test@example.com', display_name='Test', google_id='g123')
+        user = User(email='test@example.com', display_name='Test', google_id='g123',
+                     terms_accepted_at=datetime.now(timezone.utc))
         db.session.add(user)
         db.session.commit()
 

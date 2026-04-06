@@ -1,0 +1,84 @@
+{% extends "base.html" %}
+
+{% block title %}Profile - BoxBox{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-6">
+        <h2 class="mb-4">Your Profile</h2>
+
+        <div class="card mb-4">
+            <div class="card-body">
+                <table class="table table-borderless mb-0">
+                    <tr>
+                        <td class="text-muted" style="width:40%;">Display Name</td>
+                        <td>{{ current_user.display_name }}</td>
+                    </tr>
+                    <tr>
+                        <td class="text-muted">Email</td>
+                        <td>{{ current_user.email }}</td>
+                    </tr>
+                    <tr>
+                        <td class="text-muted">Member Since</td>
+                        <td>{{ current_user.created_at.strftime('%-d %b %Y') if current_user.created_at else '—' }}</td>
+                    </tr>
+                    <tr>
+                        <td class="text-muted">Sessions</td>
+                        <td>{{ session_count }}</td>
+                    </tr>
+                    <tr>
+                        <td class="text-muted">Tracks</td>
+                        <td>{{ track_count }}</td>
+                    </tr>
+                    <tr>
+                        <td class="text-muted">Terms Accepted</td>
+                        <td>{{ current_user.terms_accepted_at.strftime('%-d %b %Y') if current_user.terms_accepted_at else 'Not yet' }}</td>
+                    </tr>
+                </table>
+            </div>
+        </div>
+
+        <div class="card border-danger">
+            <div class="card-body">
+                <h5 class="text-danger mb-2"><i class="bi bi-exclamation-triangle"></i> Danger Zone</h5>
+                <p class="mb-3" style="font-size: 0.85rem;">Delete your account and all associated data (sessions, telemetry, tracks). This action is <strong>permanent and cannot be undone</strong>.</p>
+                <button class="btn btn-outline-danger" data-bs-toggle="modal" data-bs-target="#deleteModal">
+                    Delete My Account
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Delete confirmation modal -->
+<div class="modal fade" id="deleteModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header border-danger">
+                <h5 class="modal-title text-danger">Delete Account</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p>This will permanently delete:</p>
+                <ul>
+                    <li>Your account and profile</li>
+                    <li>All {{ session_count }} session{{ 's' if session_count != 1 else '' }} and their telemetry data</li>
+                    <li>All {{ track_count }} track{{ 's' if track_count != 1 else '' }} and their corners</li>
+                </ul>
+                <p class="mb-2"><strong>Type DELETE to confirm:</strong></p>
+                <input type="text" class="form-control" id="deleteConfirmInput" autocomplete="off"
+                       oninput="document.getElementById('deleteConfirmBtn').disabled = this.value !== 'DELETE';">
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <form method="POST" action="{{ url_for('auth.delete_account') }}" style="display:inline;">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button type="submit" class="btn btn-danger" id="deleteConfirmBtn" disabled>
+                        Delete Everything
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

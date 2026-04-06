@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+
+{% block title %}Terms & Conditions - BoxBox{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-body p-4">
+                <h2 class="mb-4">Terms & Conditions</h2>
+                <p class="text-muted mb-4">Last updated: April 2026</p>
+
+                <h5>1. Beta Service</h5>
+                <p>BoxBox is currently in <strong>beta</strong>. The service is provided "as is" without warranties of any kind, express or implied. We make no guarantees regarding uptime, availability, or data retention during the beta period.</p>
+
+                <h5>2. Data Retention</h5>
+                <p>During the beta period, <strong>data may be deleted at any time</strong> without prior notice. This includes telemetry data, session records, track definitions, and any analysis results. We recommend keeping your original telemetry files as a backup.</p>
+
+                <h5>3. Your Data</h5>
+                <p>You retain ownership of the telemetry data you upload. BoxBox processes this data solely to provide you with analysis and visualisations. We do not sell or share your data with third parties.</p>
+
+                <h5>4. Account</h5>
+                <p>BoxBox uses Google OAuth for authentication. We store your email address, display name, and Google account identifier. You can delete your account and all associated data at any time from your <a href="{{ url_for('auth.profile') if current_user.is_authenticated else '#' }}">profile page</a>.</p>
+
+                <h5>5. Acceptable Use</h5>
+                <p>You agree to use BoxBox for its intended purpose: analysing motorsport telemetry data. Do not upload data that is not your own or that you do not have permission to use.</p>
+
+                <h5>6. Limitation of Liability</h5>
+                <p>BoxBox and its operators are not liable for any loss of data, interruption of service, or any damages arising from the use of this service. Use at your own risk.</p>
+
+                <h5>7. Changes to Terms</h5>
+                <p>We may update these terms from time to time. Continued use of BoxBox after changes constitutes acceptance of the updated terms. Significant changes will require re-acceptance.</p>
+
+                <h5>8. Contact</h5>
+                <p>For questions about these terms, please <a href="https://github.com/apahim/boxbox/issues" target="_blank">open an issue on GitHub</a>.</p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

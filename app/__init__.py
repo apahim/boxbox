@@ -153,6 +153,9 @@ def create_app(config_name=None):
     from app.dashboard import bp as dashboard_bp
     app.register_blueprint(dashboard_bp, url_prefix='/dashboard')
 
+    from app.legal import bp as legal_bp
+    app.register_blueprint(legal_bp)
+
     # CLI commands
     from app.cli import seed_tracks, import_session, reingest_session
     app.cli.add_command(seed_tracks)
@@ -161,6 +164,21 @@ def create_app(config_name=None):
 
     _register_error_handlers(app)
     _add_security_headers(app)
+
+    @app.before_request
+    def check_terms_accepted():
+        if not current_user.is_authenticated:
+            return
+        if current_user.terms_accepted_at:
+            return
+        allowed = {
+            'auth.login', 'auth.logout', 'auth.callback', 'auth.login_google',
+            'legal.terms', 'legal.privacy', 'legal.accept_terms', 'static',
+            'dashboard.shared_view', 'health',
+        }
+        if request.endpoint in allowed:
+            return
+        return redirect(url_for('legal.accept_terms'))
 
     # Cache-busting version for static assets
     app.config['ASSET_VERSION'] = hashlib.md5(str(time.time()).encode()).hexdigest()[:8]

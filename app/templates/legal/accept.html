@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+
+{% block title %}Accept Terms - BoxBox{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-body p-4">
+                <h2 class="mb-2">Welcome to BoxBox</h2>
+                <p class="text-muted mb-4">Before you get started, please review and accept our terms.</p>
+
+                <div class="card mb-4" style="background: var(--bb-surface-alt); max-height: 400px; overflow-y: auto;">
+                    <div class="card-body" style="font-size: 0.85rem;">
+                        <h5>Terms & Conditions (Summary)</h5>
+                        <ul>
+                            <li>BoxBox is a <strong>beta service</strong> &mdash; provided "as is" with no guarantees.</li>
+                            <li><strong>Data may be deleted</strong> at any time during the beta period. Keep your original telemetry files.</li>
+                            <li>Your data is used solely for telemetry analysis. We do not sell or share it.</li>
+                            <li>You can <strong>delete your account</strong> and all data at any time.</li>
+                            <li>We use Google OAuth, Open-Meteo (weather), and Apple MapKit (maps). No tracking cookies.</li>
+                        </ul>
+                        <p class="mb-0">Read the full <a href="{{ url_for('legal.terms') }}" target="_blank">Terms & Conditions</a> and <a href="{{ url_for('legal.privacy') }}" target="_blank">Privacy Policy</a>.</p>
+                    </div>
+                </div>
+
+                <form method="POST" id="accept-form">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <div class="form-check mb-3">
+                        <input class="form-check-input" type="checkbox" id="acceptCheck"
+                               onchange="document.getElementById('acceptBtn').disabled = !this.checked;">
+                        <label class="form-check-label" for="acceptCheck">
+                            I have read and accept the <a href="{{ url_for('legal.terms') }}" target="_blank">Terms & Conditions</a> and <a href="{{ url_for('legal.privacy') }}" target="_blank">Privacy Policy</a>
+                        </label>
+                    </div>
+                    <button type="submit" class="btn btn-primary" id="acceptBtn" disabled>
+                        Continue to BoxBox
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
