@@ -22,6 +22,9 @@ from app.models import (
 @bp.route('/')
 @login_required
 def list_sessions():
+    if not current_user.demo_seeded:
+        return redirect(url_for('sessions.welcome'))
+
     query = Session.query.filter_by(user_id=current_user.id).order_by(Session.date.desc())
 
     sessions = query.all()
@@ -288,3 +291,37 @@ def unshare(session_id):
     session.share_token = None
     db.session.commit()
     return jsonify(ok=True)
+
+
+@bp.route('/welcome')
+@login_required
+def welcome():
+    if current_user.demo_seeded:
+        return redirect(url_for('sessions.list_sessions'))
+    return render_template('sessions/welcome.html')
+
+
+@bp.route('/skip-demo', methods=['POST'])
+@login_required
+def skip_demo():
+    current_user.demo_seeded = True
+    db.session.commit()
+    return jsonify(ok=True)
+
+
+@bp.route('/seed-demo', methods=['POST'])
+@login_required
+def seed_demo():
+    if current_user.demo_seeded:
+        return jsonify(success=True)
+
+    try:
+        from app.demo_data.seed import seed_demo_data
+        seed_demo_data(current_user)
+        return jsonify(success=True)
+    except Exception:
+        logger.exception('Demo seed failed for user %s', current_user.email)
+        # Mark as seeded anyway so user isn't stuck
+        current_user.demo_seeded = True
+        db.session.commit()
+        return jsonify(success=False, error='Demo data could not be loaded.'), 500

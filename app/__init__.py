@@ -157,10 +157,11 @@ def create_app(config_name=None):
     app.register_blueprint(legal_bp)
 
     # CLI commands
-    from app.cli import seed_tracks, import_session, reingest_session
+    from app.cli import seed_tracks, import_session, reingest_session, seed_demo
     app.cli.add_command(seed_tracks)
     app.cli.add_command(import_session)
     app.cli.add_command(reingest_session)
+    app.cli.add_command(seed_demo)
 
     _register_error_handlers(app)
     _add_security_headers(app)

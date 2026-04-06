@@ -137,6 +137,42 @@ def import_session(race_dir, user_email):
     click.echo(f'Session {session.id} imported successfully.')
 
 
+@click.command('seed-demo')
+@click.option('--user-email', default=None, help='Seed demo for a specific user')
+@click.option('--all', 'seed_all', is_flag=True, help='Seed demo for all users without it')
+@with_appcontext
+def seed_demo(user_email, seed_all):
+    """Seed demo data (track + session) for users."""
+    from app.demo_data.seed import seed_demo_data
+
+    if user_email:
+        user = User.query.filter_by(email=user_email.lower()).first()
+        if not user:
+            click.echo(f'Error: no user with email {user_email}')
+            raise SystemExit(1)
+        if user.demo_seeded:
+            click.echo(f'User {user_email} already has demo data.')
+            return
+        click.echo(f'Seeding demo data for {user_email}...')
+        seed_demo_data(user)
+        click.echo('Done.')
+    elif seed_all:
+        users = User.query.filter_by(demo_seeded=False).all()
+        if not users:
+            click.echo('All users already have demo data.')
+            return
+        for user in users:
+            click.echo(f'Seeding demo data for {user.email}...')
+            try:
+                seed_demo_data(user)
+                click.echo(f'  Done.')
+            except Exception as e:
+                click.echo(f'  Failed: {e}')
+    else:
+        click.echo('Specify --user-email or --all')
+        raise SystemExit(1)
+
+
 @click.command('reingest-session')
 @click.argument('session_id', type=int)
 @with_appcontext

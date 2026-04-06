@@ -1,0 +1,59 @@
+kiltorcan_raceway:
+  name: Kiltorcan Raceway
+  lat: 52.463307
+  lon: -7.182059
+  timezone: Europe/Dublin
+  sf_gate:
+    lat1: 52.462737221191055
+    lon1: -7.18176346258881
+    lat2: 52.46275390604022
+    lon2: -7.181501955751606
+  corners:
+    - name: T1
+      sort_order: 0
+      trap_lat1: 52.462319267020185
+      trap_lon1: -7.181538533779673
+      trap_lat2: 52.46214061370914
+      trap_lon2: -7.181286317074552
+    - name: T2
+      sort_order: 1
+      trap_lat1: 52.46312174053281
+      trap_lon1: -7.1822259755682865
+      trap_lat2: 52.46323889809279
+      trap_lon2: -7.182053853186659
+    - name: T3
+      sort_order: 2
+      trap_lat1: 52.462551809176226
+      trap_lon1: -7.1823913969957225
+      trap_lat2: 52.46243358371438
+      trap_lon2: -7.182488637549891
+    - name: T4
+      sort_order: 3
+      trap_lat1: 52.46346958003747
+      trap_lon1: -7.181984369828712
+      trap_lat2: 52.463312328061015
+      trap_lon2: -7.182056883768524
+    - name: T5
+      sort_order: 4
+      trap_lat1: 52.463231978317495
+      trap_lon1: -7.182716463587127
+      trap_lat2: 52.46311365892861
+      trap_lon2: -7.182843292259491
+    - name: T6
+      sort_order: 5
+      trap_lat1: 52.46412641473355
+      trap_lon1: -7.181682531154696
+      trap_lat2: 52.46395815365047
+      trap_lon2: -7.181777435253355
+    - name: T7
+      sort_order: 6
+      trap_lat1: 52.463827911891784
+      trap_lon1: -7.182207636433635
+      trap_lat2: 52.46372691250355
+      trap_lon2: -7.182360270890388
+    - name: T8
+      sort_order: 7
+      trap_lat1: 52.46433714393284
+      trap_lon1: -7.1815217767292445
+      trap_lat2: 52.46420277322529
+      trap_lon2: -7.181633497021142

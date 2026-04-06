@@ -13,6 +13,8 @@ class User(UserMixin, db.Model):
     google_id = db.Column(db.String(255), unique=True, nullable=True)
     display_name = db.Column(db.String(100), nullable=False)
     terms_accepted_at = db.Column(db.DateTime, nullable=True)
+    demo_seeded = db.Column(db.Boolean, default=False, nullable=False,
+                            server_default='false')
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
 
     sessions = db.relationship('Session', backref='user', lazy='dynamic')

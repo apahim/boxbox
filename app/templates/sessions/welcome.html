@@ -1,0 +1,179 @@
+{% extends "base.html" %}
+
+{% block title %}Welcome - BoxBox{% endblock %}
+
+{% block extra_head %}
+<style>
+    .welcome-card {
+        max-width: 520px;
+        margin: 60px auto;
+        background: var(--bb-surface);
+        border: 1px solid var(--bb-border);
+        border-radius: 12px;
+        padding: 40px;
+        text-align: center;
+    }
+    .welcome-card h2 {
+        margin-bottom: 8px;
+    }
+    .welcome-card .lead {
+        color: var(--bb-text-muted);
+        font-size: 0.95rem;
+        margin-bottom: 28px;
+    }
+    .demo-option {
+        text-align: left;
+        background: var(--bb-surface-alt);
+        border: 1px solid var(--bb-border);
+        border-radius: 8px;
+        padding: 16px 20px;
+        margin-bottom: 24px;
+        cursor: pointer;
+        transition: border-color 0.15s;
+    }
+    .demo-option:hover {
+        border-color: var(--bb-blue);
+    }
+    .demo-option label {
+        cursor: pointer;
+        font-weight: 500;
+    }
+    .demo-option .form-text {
+        margin-top: 4px;
+        font-size: 0.8rem;
+        color: var(--bb-text-muted);
+    }
+    .progress-wrapper {
+        text-align: left;
+        margin-top: 20px;
+    }
+    .progress-wrapper .progress {
+        height: 6px;
+        background: var(--bb-surface-alt);
+        border-radius: 3px;
+    }
+    .stage-text {
+        font-size: 0.8rem;
+        color: var(--bb-text-muted);
+        margin-top: 8px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="welcome-card" id="welcome-view">
+    <h2>Welcome to BoxBox</h2>
+    <p class="lead">Your kart telemetry dashboard is ready.</p>
+
+    <div class="demo-option" onclick="document.getElementById('load-demo').click()">
+        <div class="form-check">
+            <input class="form-check-input" type="checkbox" id="load-demo" checked>
+            <label class="form-check-label" for="load-demo">
+                Load a demo session
+            </label>
+            <div class="form-text">
+                Includes a sample session with telemetry data so you can
+                explore the dashboard right away.
+            </div>
+        </div>
+    </div>
+
+    <button class="btn btn-primary w-100" id="btn-start">Get Started</button>
+</div>
+
+<div class="welcome-card" id="progress-view" style="display:none;">
+    <h2>Setting up your account</h2>
+    <p class="lead">This will only take a moment.</p>
+    <div class="progress-wrapper">
+        <div class="progress">
+            <div class="progress-bar" id="seed-progress-bar"
+                 role="progressbar" style="width:0%; transition: width 0.5s ease;"></div>
+        </div>
+        <div class="stage-text" id="seed-stage-text">Preparing...</div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+(function() {
+    var btnStart = document.getElementById('btn-start');
+    var loadDemo = document.getElementById('load-demo');
+    var welcomeView = document.getElementById('welcome-view');
+    var progressView = document.getElementById('progress-view');
+    var progressBar = document.getElementById('seed-progress-bar');
+    var stageText = document.getElementById('seed-stage-text');
+
+    var stages = [
+        { pct: 15, text: 'Loading demo track\u2026' },
+        { pct: 30, text: 'Processing telemetry data\u2026' },
+        { pct: 50, text: 'Analyzing lap times\u2026' },
+        { pct: 65, text: 'Computing corner analysis\u2026' },
+        { pct: 80, text: 'Generating charts\u2026' },
+        { pct: 92, text: 'Almost ready\u2026' },
+    ];
+
+    btnStart.addEventListener('click', function() {
+        if (!loadDemo.checked) {
+            // Skip demo — just mark as seeded and go
+            fetch('{{ url_for("sessions.skip_demo") }}', {
+                method: 'POST',
+                headers: {
+                    'X-Requested-With': 'fetch',
+                    'X-CSRFToken': '{{ csrf_token() }}'
+                }
+            }).then(function() {
+                window.location.href = '{{ url_for("sessions.list_sessions") }}';
+            });
+            return;
+        }
+
+        // Show progress
+        welcomeView.style.display = 'none';
+        progressView.style.display = '';
+
+        // Animate stages
+        var stageIdx = 0;
+        var stageTimer = setInterval(function() {
+            if (stageIdx < stages.length) {
+                progressBar.style.width = stages[stageIdx].pct + '%';
+                stageText.textContent = stages[stageIdx].text;
+                stageIdx++;
+            }
+        }, 2500);
+
+        // Fire seed request
+        fetch('{{ url_for("sessions.seed_demo") }}', {
+            method: 'POST',
+            headers: {
+                'X-Requested-With': 'fetch',
+                'X-CSRFToken': '{{ csrf_token() }}'
+            }
+        })
+        .then(function(resp) { return resp.json(); })
+        .then(function(data) {
+            clearInterval(stageTimer);
+            if (data.success) {
+                progressBar.style.width = '100%';
+                stageText.textContent = 'Done!';
+                setTimeout(function() {
+                    window.location.href = '{{ url_for("sessions.list_sessions") }}';
+                }, 500);
+            } else {
+                stageText.textContent = 'Something went wrong. Redirecting\u2026';
+                setTimeout(function() {
+                    window.location.href = '{{ url_for("sessions.list_sessions") }}';
+                }, 1500);
+            }
+        })
+        .catch(function() {
+            clearInterval(stageTimer);
+            stageText.textContent = 'Something went wrong. Redirecting\u2026';
+            setTimeout(function() {
+                window.location.href = '{{ url_for("sessions.list_sessions") }}';
+            }, 1500);
+        });
+    });
+})();
+</script>
+{% endblock %}
