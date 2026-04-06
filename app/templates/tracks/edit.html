@@ -395,13 +395,13 @@ window.reingestSession = function(sessionId, btn) {
             sfGate.lat1 = e.target.coordinate.latitude;
             sfGate.lon1 = e.target.coordinate.longitude;
             document.getElementById('sf-gate-json').value = JSON.stringify(sfGate);
-            markDirty(); renderAll(); updateSfOverlay();
+            markDirty(); renderAll(); updateSfPolylineAndLabel();
         });
         var ann2 = makeDot(coord2, '#2ecc71', function(e) {
             sfGate.lat2 = e.target.coordinate.latitude;
             sfGate.lon2 = e.target.coordinate.longitude;
             document.getElementById('sf-gate-json').value = JSON.stringify(sfGate);
-            markDirty(); renderAll(); updateSfOverlay();
+            markDirty(); renderAll(); updateSfPolylineAndLabel();
         });
 
         var label = new mapkit.Annotation(midCoord, function() {
@@ -583,12 +583,12 @@ window.reingestSession = function(sessionId, btn) {
             var ann1 = makeDot(coord1, dotColor, function(e) {
                 corners[i].trap_lat1 = e.target.coordinate.latitude;
                 corners[i].trap_lon1 = e.target.coordinate.longitude;
-                markDirty(); renderAll(); updateMapOverlays();
+                markDirty(); renderAll(); updateCornerPolylineAndLabel(i);
             });
             var ann2 = makeDot(coord2, dotColor, function(e) {
                 corners[i].trap_lat2 = e.target.coordinate.latitude;
                 corners[i].trap_lon2 = e.target.coordinate.longitude;
-                markDirty(); renderAll(); updateMapOverlays();
+                markDirty(); renderAll(); updateCornerPolylineAndLabel(i);
             });
 
             var labelText = c.name || 'T' + (i + 1);
@@ -610,6 +610,47 @@ window.reingestSession = function(sessionId, btn) {
             map.addAnnotation(label);
             overlays.push({ polyline: polyline, ann1: ann1, ann2: ann2, label: label });
         });
+    }
+
+    // ── Targeted overlay updates (no destroy/rebuild) ──
+    function updateCornerPolylineAndLabel(i) {
+        if (!map || !overlays[i]) return;
+        var o = overlays[i];
+        var c = corners[i];
+
+        // Recreate polyline (MapKit polylines are immutable)
+        if (o.polyline) map.removeOverlay(o.polyline);
+        var coord1 = new mapkit.Coordinate(c.trap_lat1, c.trap_lon1);
+        var coord2 = new mapkit.Coordinate(c.trap_lat2, c.trap_lon2);
+        var isSelected = (i === selectedIdx);
+        o.polyline = new mapkit.PolylineOverlay([coord1, coord2], {
+            style: new mapkit.Style({
+                lineWidth: isSelected ? 4 : 3,
+                strokeColor: isSelected ? '#ffffff' : '#e74c3c',
+                strokeOpacity: 0.9,
+            }),
+        });
+        map.addOverlay(o.polyline);
+
+        // Move label to new midpoint
+        var mid = midpoint(c);
+        if (o.label) o.label.coordinate = new mapkit.Coordinate(mid.lat, mid.lon);
+    }
+
+    function updateSfPolylineAndLabel() {
+        if (!map || !sfOverlays || !sfGate) return;
+
+        if (sfOverlays.polyline) map.removeOverlay(sfOverlays.polyline);
+        var coord1 = new mapkit.Coordinate(sfGate.lat1, sfGate.lon1);
+        var coord2 = new mapkit.Coordinate(sfGate.lat2, sfGate.lon2);
+        sfOverlays.polyline = new mapkit.PolylineOverlay([coord1, coord2], {
+            style: new mapkit.Style({ lineWidth: 4, strokeColor: '#2ecc71', strokeOpacity: 0.9 }),
+        });
+        map.addOverlay(sfOverlays.polyline);
+
+        var midCoord = new mapkit.Coordinate(
+            (sfGate.lat1 + sfGate.lat2) / 2, (sfGate.lon1 + sfGate.lon2) / 2);
+        if (sfOverlays.label) sfOverlays.label.coordinate = midCoord;
     }
 
     // ── Map init ──
