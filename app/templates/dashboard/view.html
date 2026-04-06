@@ -44,7 +44,7 @@
             {% endif %}
         </div>
         <div class="d-flex gap-2 flex-wrap" id="dashBadges">
-            {% if session.data_source == 'gopro' %}
+            {% if session.data_source == 'gopro' and not shared %}
             <span class="badge metadata-badge" style="background: rgba(255,255,255,0.08); color: var(--bb-text-muted);"><i class="bi bi-camera-video"></i> GoPro</span>
             {% elif session.data_source %}
             <span class="badge metadata-badge" style="background: rgba(255,255,255,0.08); color: var(--bb-text-muted);"><i class="bi bi-stopwatch"></i> RaceChrono</span>
@@ -91,7 +91,7 @@
     <li class="nav-item" role="presentation">
         <button class="nav-link" id="corners-tab" data-bs-toggle="tab" data-bs-target="#tab-corners" type="button" role="tab">Corner Analysis</button>
     </li>
-    {% if session.data_source == 'gopro' %}
+    {% if session.data_source == 'gopro' and not shared %}
     <li class="nav-item" role="presentation">
         <button class="nav-link" id="videosync-tab" data-bs-toggle="tab" data-bs-target="#tab-videosync" type="button" role="tab"><i class="bi bi-camera-video"></i> Video Sync</button>
     </li>
@@ -201,7 +201,7 @@
 
 </div>
 
-{% if session.data_source == 'gopro' %}
+{% if session.data_source == 'gopro' and not shared %}
 <!-- Video Sync Tab -->
 <div class="tab-pane fade" id="tab-videosync" role="tabpanel">
     <h3 class="section-title">Video Sync</h3>
