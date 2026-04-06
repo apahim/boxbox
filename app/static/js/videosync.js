@@ -8,6 +8,7 @@ window.VideoSync = (function() {
     var mapDataCache = {};
     var rafId = null;
     var racelineLaps = null;
+    var lapStart = 0, lapEnd = 0;
 
     function api(path) {
         var url = apiBase + path;
@@ -61,6 +62,12 @@ window.VideoSync = (function() {
     }
 
     function animLoop() {
+        if (video && video.currentTime >= lapEnd) {
+            video.currentTime = lapEnd;
+            video.pause();
+            drawPositionDot();
+            return;
+        }
         drawPositionDot();
         if (video && !video.paused && !video.ended) {
             rafId = requestAnimationFrame(animLoop);
@@ -218,13 +225,26 @@ window.VideoSync = (function() {
         currentLap = lap;
         if (!lap) return;
 
+        // Compute lap time boundaries in video time
+        lapStart = lap.t_offset || 0;
+        lapEnd = lapStart + (lap.t && lap.t.length > 0 ? lap.t[lap.t.length - 1] : 0);
+
         initMap(lap);
         applyMapMode(lap, currentMapMode);
 
         if (video && video.src && lap.t_offset != null) {
-            video.currentTime = lap.t_offset;
+            video.currentTime = lapStart;
         }
         drawPositionDot();
+    }
+
+    function clampToLap() {
+        if (!video || !currentLap) return;
+        if (video.currentTime < lapStart) video.currentTime = lapStart;
+        if (video.currentTime >= lapEnd) {
+            video.currentTime = lapEnd;
+            video.pause();
+        }
     }
 
     function saveFilename(filename) {
@@ -280,6 +300,7 @@ window.VideoSync = (function() {
 
         // Video sync events
         video.addEventListener("play", function() {
+            clampToLap();
             if (rafId) cancelAnimationFrame(rafId);
             rafId = requestAnimationFrame(animLoop);
         });
@@ -288,7 +309,11 @@ window.VideoSync = (function() {
             drawPositionDot();
         });
         video.addEventListener("seeked", function() {
+            clampToLap();
             drawPositionDot();
+        });
+        video.addEventListener("timeupdate", function() {
+            clampToLap();
         });
         video.addEventListener("ended", function() {
             if (rafId) { cancelAnimationFrame(rafId); rafId = null; }
