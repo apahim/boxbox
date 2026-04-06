@@ -4,7 +4,7 @@
 
 {% block extra_head %}
 {% if mapkit_token %}
-<script src="https://cdn.apple-mapkit.com/mk/5.x.x/mapkit.js" crossorigin></script>
+<script src="https://cdn.apple-mapkit.com/mk/5.x.x/mapkit.js" crossorigin async></script>
 {% endif %}
 <style>
     .track-editor { position: relative; }
@@ -113,6 +113,11 @@
         <div id="map-fallback">
             <p>Map requires a MapKit token. Corners can still be managed via the panel.</p>
         </div>
+        {% if mapkit_token %}
+        <div id="map-loading" style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--bb-text-muted);gap:8px;">
+            <span class="spinner-border spinner-border-sm"></span> Loading map&hellip;
+        </div>
+        {% endif %}
         <div id="map-empty" style="display:none">Start by drawing a start/finish line, then add corner trap lines</div>
     </div>
 
@@ -613,6 +618,8 @@ window.reingestSession = function(sessionId, btn) {
 
         var fallback = document.getElementById('map-fallback');
         if (fallback) fallback.style.display = 'none';
+        var loading = document.getElementById('map-loading');
+        if (loading) loading.style.display = 'none';
 
         var container = document.getElementById('map-container');
         var mapDiv = document.createElement('div');
@@ -666,8 +673,10 @@ window.reingestSession = function(sessionId, btn) {
     renderAll();
 
     if (mapkitToken) {
-        MapHelpers.initMapKit(mapkitToken);
-        MapHelpers.waitForMapKit(initMap);
+        MapHelpers.waitForMapKit(function() {
+            mapkit.init({ authorizationCallback: function(done) { done(mapkitToken); } });
+            initMap();
+        });
     }
 })();
 </script>
