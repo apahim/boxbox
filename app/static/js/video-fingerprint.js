@@ -16,4 +16,3 @@ async function computeVideoFingerprint(file) {
 }
 
 window.computeVideoFingerprint = computeVideoFingerprint;
-export { computeVideoFingerprint };
