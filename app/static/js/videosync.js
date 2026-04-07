@@ -243,7 +243,7 @@ window.VideoSync = (function() {
         });
     }
 
-    function selectLap(lap) {
+    function selectLap(lap, skipSeek) {
         currentLap = lap;
         if (!lap) return;
 
@@ -254,7 +254,7 @@ window.VideoSync = (function() {
         initMap(lap);
         applyMapMode(lap, currentMapMode);
 
-        if (video && video.src && lap.t_offset != null) {
+        if (!skipSeek && video && video.src && lap.t_offset != null) {
             video.currentTime = lapStart;
         }
         drawPositionDot();
@@ -266,10 +266,6 @@ window.VideoSync = (function() {
             clamping = true;
             video.pause();
             video.currentTime = lapEnd;
-            clamping = false;
-        } else if (video.currentTime < lapStart && video.paused) {
-            clamping = true;
-            video.currentTime = lapStart;
             clamping = false;
         }
     }
@@ -385,11 +381,11 @@ window.VideoSync = (function() {
             setMapInteraction(true);
             zoomToFullTrack();
         });
-        // Wait for canplay — iOS needs buffered data before it can seek
+        // Wait for canplay — skip initial seek to avoid iOS blob URL seeking issues
         video.addEventListener("canplay", function onReady() {
             video.removeEventListener("canplay", onReady);
             var lap = bestLap || racelineLaps[0];
-            if (lap) selectLap(lap);
+            if (lap) selectLap(lap, true);
         });
 
         // Set source and explicitly load — required for iOS Safari
