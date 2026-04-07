@@ -264,6 +264,7 @@ window.VideoSync = (function() {
         if (!video || !currentLap || clamping) return;
         if (video.currentTime < lapStart) {
             clamping = true;
+            if (!video.paused) video.pause();
             video.currentTime = lapStart;
             clamping = false;
         } else if (video.currentTime >= lapEnd) {
@@ -385,8 +386,9 @@ window.VideoSync = (function() {
             setMapInteraction(true);
             zoomToFullTrack();
         });
-        video.addEventListener("loadedmetadata", function onMeta() {
-            video.removeEventListener("loadedmetadata", onMeta);
+        // Wait for canplay — iOS needs buffered data before it can seek
+        video.addEventListener("canplay", function onReady() {
+            video.removeEventListener("canplay", onReady);
             var lap = bestLap || racelineLaps[0];
             if (lap) selectLap(lap);
         });
