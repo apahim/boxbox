@@ -392,7 +392,6 @@ window.VideoSync = (function() {
             isPlaying = false;
             if (rafId) { cancelAnimationFrame(rafId); rafId = null; }
             setMapInteraction(true);
-            zoomToFullTrack();
             drawPositionDot();
         });
         video.addEventListener("seeked", function() {
