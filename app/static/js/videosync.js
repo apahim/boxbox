@@ -10,6 +10,7 @@ window.VideoSync = (function() {
     var racelineLaps = null;
     var lapStart = 0, lapEnd = 0, clamping = false;
     var fullTrackRegion = null, isPlaying = false;
+    var hasZoomedIn = false;
     var expectedHash = "";
 
     function api(path) {
@@ -80,13 +81,13 @@ window.VideoSync = (function() {
     }
 
     function zoomToFollow() {
-        if (!vsMap) return;
-        // Zoom in to ~0.002 degree span for close tracking
-        var span = new mapkit.CoordinateSpan(0.002, 0.002);
+        if (!vsMap || !currentLap || !video) return;
         var tOffset = currentLap.t_offset || 0;
         var t = video.currentTime - tOffset;
         var pos = interpPos(currentLap, t);
         if (!pos) return;
+        // Zoom in to a reasonable follow level, then panToDot handles panning
+        var span = new mapkit.CoordinateSpan(0.002, 0.002);
         var region = new mapkit.CoordinateRegion(
             new mapkit.Coordinate(pos.lat, pos.lon), span
         );
@@ -259,6 +260,7 @@ window.VideoSync = (function() {
 
     function selectLap(lap) {
         currentLap = lap;
+        hasZoomedIn = false;
         if (!lap) return;
 
         // Compute lap time boundaries in video time
@@ -297,7 +299,7 @@ window.VideoSync = (function() {
         }).catch(function() {});
     }
 
-    function showHashMismatch(file) {
+    function showHashMismatch() {
         var prompt = document.getElementById("vsPrompt");
         var existing = document.getElementById("vsHashMismatch");
         if (existing) existing.remove();
@@ -305,23 +307,16 @@ window.VideoSync = (function() {
         var div = document.createElement("div");
         div.id = "vsHashMismatch";
         div.className = "text-center p-4";
-        div.innerHTML = '<div class="text-warning mb-3"><i class="bi bi-exclamation-triangle" style="font-size:2rem;"></i></div>'
-            + '<p class="mb-2"><strong>This doesn\'t appear to be the original video</strong></p>'
-            + '<p class="text-muted mb-3" style="font-size:0.85rem;">The selected file doesn\'t match the video used to extract telemetry. Sync may be incorrect.</p>'
-            + '<div class="d-flex justify-content-center gap-2">'
-            + '<button class="btn btn-outline-secondary btn-sm" id="vsHashBack">Go back</button>'
-            + '<button class="btn btn-warning btn-sm" id="vsHashProceed">Load anyway</button>'
-            + '</div>';
+        div.innerHTML = '<div class="text-danger mb-3"><i class="bi bi-x-circle" style="font-size:2rem;"></i></div>'
+            + '<p class="mb-2"><strong>This is not the original video</strong></p>'
+            + '<p class="text-muted mb-3" style="font-size:0.85rem;">The selected file doesn\'t match the video used to extract telemetry.<br>Please select the original GoPro file.</p>'
+            + '<button class="btn btn-outline-secondary btn-sm" id="vsHashBack">Go back</button>';
         prompt.style.display = "none";
         prompt.parentNode.insertBefore(div, prompt.nextSibling);
 
         document.getElementById("vsHashBack").addEventListener("click", function() {
             div.remove();
             prompt.style.display = "";
-        });
-        document.getElementById("vsHashProceed").addEventListener("click", function() {
-            div.remove();
-            doLoadVideo(file);
         });
     }
 
@@ -334,7 +329,7 @@ window.VideoSync = (function() {
             if (hash === expectedHash) {
                 doLoadVideo(file);
             } else {
-                showHashMismatch(file);
+                showHashMismatch();
             }
         });
     }
@@ -386,7 +381,10 @@ window.VideoSync = (function() {
             clampToLap();
             isPlaying = true;
             setMapInteraction(false);
-            zoomToFollow();
+            if (!hasZoomedIn) {
+                zoomToFollow();
+                hasZoomedIn = true;
+            }
             if (rafId) cancelAnimationFrame(rafId);
             rafId = requestAnimationFrame(animLoop);
         });
