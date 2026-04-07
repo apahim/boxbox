@@ -331,7 +331,6 @@ window.VideoSync = (function() {
         canvas = document.getElementById("vsPositionCanvas");
         mapWrap = document.getElementById("vsMapWrap");
         video = document.getElementById("vsVideo");
-        video.src = url;
 
         document.getElementById("vsFileLabel").textContent = file.name;
         saveFilename(file.name);
@@ -360,7 +359,7 @@ window.VideoSync = (function() {
             if (currentLap) applyMapMode(currentLap, this.value);
         });
 
-        // Video sync events
+        // Video sync events — register BEFORE setting src
         video.addEventListener("play", function() {
             clampToLap();
             isPlaying = true;
@@ -387,13 +386,15 @@ window.VideoSync = (function() {
             setMapInteraction(true);
             zoomToFullTrack();
         });
-
-        // Auto-seek to lap start once metadata loads
         video.addEventListener("loadedmetadata", function onMeta() {
             video.removeEventListener("loadedmetadata", onMeta);
             var lap = bestLap || racelineLaps[0];
             if (lap) selectLap(lap);
         });
+
+        // Set source and explicitly load — required for iOS Safari
+        video.src = url;
+        video.load();
     }
 
     function init(racelineData, opts) {
