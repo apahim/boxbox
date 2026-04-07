@@ -10,7 +10,6 @@ window.VideoSync = (function() {
     var racelineLaps = null;
     var lapStart = 0, lapEnd = 0, clamping = false;
     var fullTrackRegion = null, isPlaying = false;
-    var hasZoomedIn = false;
     var expectedHash = "";
 
     function api(path) {
@@ -78,20 +77,6 @@ window.VideoSync = (function() {
         var pos = interpPos(currentLap, t);
         if (!pos) return;
         vsMap.setCenterAnimated(new mapkit.Coordinate(pos.lat, pos.lon), false);
-    }
-
-    function zoomToFollow() {
-        if (!vsMap || !currentLap || !video) return;
-        var tOffset = currentLap.t_offset || 0;
-        var t = video.currentTime - tOffset;
-        var pos = interpPos(currentLap, t);
-        if (!pos) return;
-        // Zoom in to a reasonable follow level, then panToDot handles panning
-        var span = new mapkit.CoordinateSpan(0.002, 0.002);
-        var region = new mapkit.CoordinateRegion(
-            new mapkit.Coordinate(pos.lat, pos.lon), span
-        );
-        vsMap.setRegionAnimated(region, true);
     }
 
     function zoomToFullTrack() {
@@ -260,7 +245,6 @@ window.VideoSync = (function() {
 
     function selectLap(lap) {
         currentLap = lap;
-        hasZoomedIn = false;
         if (!lap) return;
 
         // Compute lap time boundaries in video time
@@ -381,10 +365,6 @@ window.VideoSync = (function() {
             clampToLap();
             isPlaying = true;
             setMapInteraction(false);
-            if (!hasZoomedIn) {
-                zoomToFollow();
-                hasZoomedIn = true;
-            }
             if (rafId) cancelAnimationFrame(rafId);
             rafId = requestAnimationFrame(animLoop);
         });
