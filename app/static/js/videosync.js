@@ -10,6 +10,7 @@ window.VideoSync = (function() {
     var racelineLaps = null;
     var lapStart = 0, lapEnd = 0, clamping = false;
     var fullTrackRegion = null, isPlaying = false;
+    var expectedHash = "";
 
     function api(path) {
         var url = apiBase + path;
@@ -296,7 +297,49 @@ window.VideoSync = (function() {
         }).catch(function() {});
     }
 
+    function showHashMismatch(file) {
+        var prompt = document.getElementById("vsPrompt");
+        var existing = document.getElementById("vsHashMismatch");
+        if (existing) existing.remove();
+
+        var div = document.createElement("div");
+        div.id = "vsHashMismatch";
+        div.className = "text-center p-4";
+        div.innerHTML = '<div class="text-warning mb-3"><i class="bi bi-exclamation-triangle" style="font-size:2rem;"></i></div>'
+            + '<p class="mb-2"><strong>This doesn\'t appear to be the original video</strong></p>'
+            + '<p class="text-muted mb-3" style="font-size:0.85rem;">The selected file doesn\'t match the video used to extract telemetry. Sync may be incorrect.</p>'
+            + '<div class="d-flex justify-content-center gap-2">'
+            + '<button class="btn btn-outline-secondary btn-sm" id="vsHashBack">Go back</button>'
+            + '<button class="btn btn-warning btn-sm" id="vsHashProceed">Load anyway</button>'
+            + '</div>';
+        prompt.style.display = "none";
+        prompt.parentNode.insertBefore(div, prompt.nextSibling);
+
+        document.getElementById("vsHashBack").addEventListener("click", function() {
+            div.remove();
+            prompt.style.display = "";
+        });
+        document.getElementById("vsHashProceed").addEventListener("click", function() {
+            div.remove();
+            doLoadVideo(file);
+        });
+    }
+
     function loadVideo(file) {
+        if (!expectedHash) {
+            doLoadVideo(file);
+            return;
+        }
+        computeVideoFingerprint(file).then(function(hash) {
+            if (hash === expectedHash) {
+                doLoadVideo(file);
+            } else {
+                showHashMismatch(file);
+            }
+        });
+    }
+
+    function doLoadVideo(file) {
         var url = URL.createObjectURL(file);
         var prompt = document.getElementById("vsPrompt");
         var player = document.getElementById("vsPlayer");
@@ -381,6 +424,7 @@ window.VideoSync = (function() {
         apiBase = opts.apiBase;
         shareToken = opts.shareToken || "";
         csrfToken = opts.csrfToken || "";
+        expectedHash = opts.videoHash || "";
         var videoFilename = opts.videoFilename || "";
 
         if (!racelineData || !racelineData.laps || racelineData.laps.length === 0) {

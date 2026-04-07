@@ -92,6 +92,8 @@ def create():
             # Create session record
             track = Track.query.get(form.track_id.data) if form.track_id.data else None
 
+            video_hash = request.form.get('video_hash') if data_source == 'gopro' else None
+
             session = Session(
                 user_id=current_user.id,
                 track_id=track.id if track else None,
@@ -99,6 +101,7 @@ def create():
                 session_start=form.session_start.data.strftime('%H:%M') if form.session_start.data else None,
                 data_source=data_source,
                 labels=labels,
+                video_hash=video_hash,
             )
             db.session.add(session)
             db.session.flush()  # Get session.id

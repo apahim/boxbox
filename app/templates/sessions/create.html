@@ -206,6 +206,7 @@
 {% block extra_scripts %}
 <script type="module">
 import { extractGoPro, detectLaps, telemetrySummary, telemetryToCSV } from "{{ url_for('static', filename='js/gopro-extract.js') }}";
+import { computeVideoFingerprint } from "{{ url_for('static', filename='js/video-fingerprint.js') }}";
 
 // ---- Track coordinates for GPS auto-matching ----
 var trackCoords = {{ track_coords_js | tojson }};
@@ -214,6 +215,7 @@ var trackCoords = {{ track_coords_js | tojson }};
 var currentStep = 1;
 var selectedSource = null;
 var goProData = null;
+var goProVideoHash = null;
 var sfGate = null;
 var tags = [];
 var knownLabels = []; // from API + defaults
@@ -423,6 +425,9 @@ goProFile.addEventListener('change', async function() {
         }
 
         await tryLapDetection();
+
+        // Compute video fingerprint for later verification
+        goProVideoHash = await computeVideoFingerprint(file);
 
         progBar.style.width = '100%';
         progBar.classList.remove('progress-bar-animated');
@@ -695,6 +700,9 @@ document.getElementById('btn-upload').addEventListener('click', async function()
         var csvBlob = telemetryToCSV(goProData);
         formData.delete('gopro_csv');
         formData.append('gopro_csv', new File([csvBlob], 'gopro_telemetry.csv', { type: 'text/csv' }));
+        if (goProVideoHash) {
+            formData.append('video_hash', goProVideoHash);
+        }
     }
 
     try {

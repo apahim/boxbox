@@ -22,6 +22,7 @@
       data-has-gate="{{ 'true' if has_gate else 'false' }}"
       data-data-source="{{ session.data_source or '' }}"
       data-video-filename="{{ session.video_filename or '' }}"
+      data-video-hash="{{ session.video_hash or '' }}"
       data-csrf="{{ csrf_token() }}">
 
 <div class="row mb-4">
@@ -274,6 +275,7 @@
 {% block extra_scripts %}
 <script src="{{ url_for('static', filename='js/mapkit-helpers.js') }}"></script>
 <script src="{{ url_for('static', filename='js/raceline.js') }}"></script>
+<script src="{{ url_for('static', filename='js/video-fingerprint.js') }}"></script>
 <script src="{{ url_for('static', filename='js/videosync.js') }}"></script>
 <script src="{{ url_for('static', filename='js/dashboard.js') }}?v={{ asset_v }}"></script>
 <script>

@@ -421,6 +421,7 @@
                     apiBase: apiBase,
                     shareToken: shareToken,
                     videoFilename: meta.dataset.videoFilename || "",
+                    videoHash: meta.dataset.videoHash || "",
                     csrfToken: meta.dataset.csrf || ""
                 });
             });
