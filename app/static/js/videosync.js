@@ -262,15 +262,14 @@ window.VideoSync = (function() {
 
     function clampToLap() {
         if (!video || !currentLap || clamping) return;
-        if (video.currentTime < lapStart) {
-            clamping = true;
-            if (!video.paused) video.pause();
-            video.currentTime = lapStart;
-            clamping = false;
-        } else if (video.currentTime >= lapEnd) {
+        if (video.currentTime >= lapEnd) {
             clamping = true;
             video.pause();
             video.currentTime = lapEnd;
+            clamping = false;
+        } else if (video.currentTime < lapStart && video.paused) {
+            clamping = true;
+            video.currentTime = lapStart;
             clamping = false;
         }
     }
