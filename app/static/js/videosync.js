@@ -361,7 +361,6 @@ window.VideoSync = (function() {
 
         // Video sync events — register BEFORE setting src
         video.addEventListener("play", function() {
-            clampToLap();
             isPlaying = true;
             setMapInteraction(false);
             if (rafId) cancelAnimationFrame(rafId);
