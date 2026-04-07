@@ -9,6 +9,7 @@ window.VideoSync = (function() {
     var rafId = null;
     var racelineLaps = null;
     var lapStart = 0, lapEnd = 0, clamping = false;
+    var fullTrackRegion = null, isPlaying = false;
 
     function api(path) {
         var url = apiBase + path;
@@ -61,7 +62,43 @@ window.VideoSync = (function() {
         ctx.stroke();
     }
 
+    function setMapInteraction(enabled) {
+        if (!vsMap) return;
+        vsMap.isScrollEnabled = enabled;
+        vsMap.isZoomEnabled = enabled;
+        vsMap.isRotationEnabled = enabled;
+    }
+
+    function panToDot() {
+        if (!vsMap || !currentLap || !video) return;
+        var tOffset = currentLap.t_offset || 0;
+        var t = video.currentTime - tOffset;
+        var pos = interpPos(currentLap, t);
+        if (!pos) return;
+        vsMap.setCenterAnimated(new mapkit.Coordinate(pos.lat, pos.lon), false);
+    }
+
+    function zoomToFollow() {
+        if (!vsMap) return;
+        // Zoom in to ~0.002 degree span for close tracking
+        var span = new mapkit.CoordinateSpan(0.002, 0.002);
+        var tOffset = currentLap.t_offset || 0;
+        var t = video.currentTime - tOffset;
+        var pos = interpPos(currentLap, t);
+        if (!pos) return;
+        var region = new mapkit.CoordinateRegion(
+            new mapkit.Coordinate(pos.lat, pos.lon), span
+        );
+        vsMap.setRegionAnimated(region, true);
+    }
+
+    function zoomToFullTrack() {
+        if (!vsMap || !fullTrackRegion) return;
+        vsMap.setRegionAnimated(fullTrackRegion, true);
+    }
+
     function animLoop() {
+        panToDot();
         drawPositionDot();
         if (video && !video.paused && !video.ended) {
             rafId = requestAnimationFrame(animLoop);
@@ -89,7 +126,16 @@ window.VideoSync = (function() {
         vsMap.addOverlay(overlay);
     }
 
+    function computeTrackRegion(lap) {
+        var latMin = Math.min.apply(null, lap.lat), latMax = Math.max.apply(null, lap.lat);
+        var lonMin = Math.min.apply(null, lap.lon), lonMax = Math.max.apply(null, lap.lon);
+        var pad = 0.15;
+        var latPad = (latMax - latMin) * pad, lonPad = (lonMax - lonMin) * pad;
+        return new mapkit.BoundingRegion(latMax + latPad, lonMax + lonPad, latMin - latPad, lonMin - lonPad).toCoordinateRegion();
+    }
+
     function initMap(lap) {
+        fullTrackRegion = computeTrackRegion(lap);
         if (!vsMap) {
             vsMap = MapHelpers.initSatMap("vsMap", lap.lat, lap.lon);
             vsMap.isScrollEnabled = true;
@@ -97,19 +143,14 @@ window.VideoSync = (function() {
             vsMap.isRotationEnabled = true;
             vsMap.showsZoomControl = true;
             vsMap.addEventListener("region-change-start", function() {
-                canvas.style.visibility = "hidden";
+                if (!isPlaying) canvas.style.visibility = "hidden";
             });
             vsMap.addEventListener("region-change-end", function() {
                 canvas.style.visibility = "visible";
                 drawPositionDot();
             });
         } else {
-            var latMin = Math.min.apply(null, lap.lat), latMax = Math.max.apply(null, lap.lat);
-            var lonMin = Math.min.apply(null, lap.lon), lonMax = Math.max.apply(null, lap.lon);
-            var pad = 0.15;
-            var latPad = (latMax - latMin) * pad, lonPad = (lonMax - lonMin) * pad;
-            var region = new mapkit.BoundingRegion(latMax + latPad, lonMax + lonPad, latMin - latPad, lonMin - lonPad);
-            vsMap.setRegionAnimated(region.toCoordinateRegion(), false);
+            vsMap.setRegionAnimated(fullTrackRegion, false);
         }
     }
 
@@ -300,11 +341,17 @@ window.VideoSync = (function() {
         // Video sync events
         video.addEventListener("play", function() {
             clampToLap();
+            isPlaying = true;
+            setMapInteraction(false);
+            zoomToFollow();
             if (rafId) cancelAnimationFrame(rafId);
             rafId = requestAnimationFrame(animLoop);
         });
         video.addEventListener("pause", function() {
+            isPlaying = false;
             if (rafId) { cancelAnimationFrame(rafId); rafId = null; }
+            setMapInteraction(true);
+            zoomToFullTrack();
             drawPositionDot();
         });
         video.addEventListener("seeked", function() {
@@ -315,7 +362,10 @@ window.VideoSync = (function() {
             clampToLap();
         });
         video.addEventListener("ended", function() {
+            isPlaying = false;
             if (rafId) { cancelAnimationFrame(rafId); rafId = null; }
+            setMapInteraction(true);
+            zoomToFullTrack();
         });
 
         // Auto-seek to lap start once metadata loads

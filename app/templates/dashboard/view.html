@@ -93,7 +93,7 @@
     </li>
     {% if session.data_source == 'gopro' and not shared %}
     <li class="nav-item" role="presentation">
-        <button class="nav-link" id="videosync-tab" data-bs-toggle="tab" data-bs-target="#tab-videosync" type="button" role="tab"><i class="bi bi-camera-video"></i> Video Sync</button>
+        <button class="nav-link" id="videosync-tab" data-bs-toggle="tab" data-bs-target="#tab-videosync" type="button" role="tab"><i class="bi bi-camera-video"></i> Video Sync <span class="badge bg-secondary" style="font-size:0.6rem; vertical-align:middle;">Dev Preview</span></button>
     </li>
     {% endif %}
 </ul>
@@ -247,7 +247,7 @@
             <div class="row">
                 <div class="col-md-6 mb-3">
                     <div class="card p-2">
-                        <video id="vsVideo" controls class="vs-video-player" style="width:100%; background:#000; border-radius:6px;">
+                        <video id="vsVideo" controls playsinline class="vs-video-player" style="width:100%; background:#000; border-radius:6px;">
                             Your browser does not support the video element.
                         </video>
                     </div>
