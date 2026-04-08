@@ -454,14 +454,14 @@ window.VideoSync = (function() {
             if (canplayFired) return;
             canplayFired = true;
             var lap = bestLap || racelineLaps[0];
-            if (lap) selectLap(lap, true);
+            if (lap) selectLap(lap);
         });
         setTimeout(function() {
             if (!canplayFired) {
                 console.warn("[VideoSync] canplay did not fire after 3s — proceeding with fallback");
                 canplayFired = true;
                 var lap = bestLap || racelineLaps[0];
-                if (lap) selectLap(lap, true);
+                if (lap) selectLap(lap);
             }
         }, 3000);
 

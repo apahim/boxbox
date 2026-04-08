@@ -79,7 +79,7 @@
 .chart-container-tall { width: 100%; height: 400px; }
 #racelineWrap { height: 600px; }
 #vsMapWrap { height: 450px; }
-.vs-video-player { max-height: 450px; object-fit: contain; }
+.vs-video-player { height: 450px; object-fit: contain; }
 
 .vs-drop-zone {
     display: flex;
@@ -112,7 +112,7 @@
     .mapkit-wrap { height: 280px; }
     #racelineWrap { height: 400px; }
     #vsMapWrap { height: 280px; }
-    .vs-video-player { max-height: 280px; }
+    .vs-video-player { height: 280px; }
     .chart-container, .chart-container-tall { height: 250px; }
     .rl-selector { max-height: none !important; overflow-y: visible !important; }
     .accordion-button { font-size: 0.8rem !important; padding: 0.4rem 0.5rem !important; }
