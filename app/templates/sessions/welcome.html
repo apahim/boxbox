@@ -65,10 +65,10 @@
     <h2>Welcome to BoxBox</h2>
     <p class="lead">Your kart telemetry dashboard is ready.</p>
 
-    <div class="demo-option" onclick="document.getElementById('load-demo').click()">
+    <div class="demo-option" onclick="var c=document.getElementById('load-demo');if(event.target!==c)c.checked=!c.checked">
         <div class="form-check">
             <input class="form-check-input" type="checkbox" id="load-demo" checked>
-            <label class="form-check-label" for="load-demo">
+            <label class="form-check-label">
                 Load a demo session
             </label>
             <div class="form-text">
