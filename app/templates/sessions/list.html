@@ -47,9 +47,53 @@
         border: 1px solid var(--bb-border) !important; font-weight: normal; }
     .session-label-source i { font-size: 0.6rem; }
     @media (max-width: 576px) {
-        #sessionsTable td, #sessionsTable th { padding: 0.4rem 0.3rem; font-size: 0.8rem; }
-        #sessionsTable .btn-sm { padding: 0.2rem 0.4rem; font-size: 0.75rem; }
         .filter-bar { gap: 8px; }
+        .table-responsive { overflow-x: visible; }
+        #sessionsTable thead { display: none; }
+        #sessionsTable, #sessionsTable tbody, #sessionsTable tr, #sessionsTable td { display: block; }
+        #sessionsTable tr {
+            position: relative;
+            background: var(--bb-surface);
+            border: 1px solid var(--bb-border);
+            border-radius: 8px;
+            margin-bottom: 10px;
+            padding: 10px 12px 8px;
+        }
+        #sessionsTable tr.row-busy { padding: 0 12px; }
+        #sessionsTable td { padding: 1px 0; border: none; font-size: 0.85rem; }
+        /* Date — card header */
+        #sessionsTable td[data-label="Date"] { font-weight: 600; font-size: 0.9rem; padding-right: 90px; }
+        /* Track */
+        #sessionsTable td[data-label="Track"] { color: var(--bb-text-muted); font-size: 0.8rem; margin-bottom: 4px; }
+        /* Best Lap — inline label */
+        #sessionsTable td[data-label="Best Lap"]::before,
+        #sessionsTable td[data-label="Clean Laps"]::before,
+        #sessionsTable td[data-label="Consistency"]::before,
+        #sessionsTable td[data-label="Source"]::before {
+            content: attr(data-label) "  ";
+            font-size: 0.7rem;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+            color: var(--bb-text-muted);
+            font-weight: 600;
+            margin-right: 4px;
+        }
+        /* Show columns that are hidden on desktop-mobile */
+        #sessionsTable td.d-none { display: block !important; }
+        /* Actions — top-right corner */
+        #sessionsTable td[data-label="Actions"] {
+            position: absolute;
+            top: 8px;
+            right: 10px;
+            padding: 0;
+        }
+        #sessionsTable td[data-label="Actions"] .btn-sm { padding: 0.15rem 0.35rem; font-size: 0.75rem; }
+        #sessionsTable td[data-label="Actions"] .d-none { display: none !important; }
+        /* Labels */
+        #sessionsTable td[data-label="Labels"] { padding-top: 4px; }
+        #sessionsTable td[data-label="Labels"] .session-label { font-size: 0.65rem; }
+        /* Hide dash placeholder in labels cell */
+        #sessionsTable td[data-label="Labels"]:not(:has(.session-label)) { display: none; }
     }
 </style>
 {% endblock %}
@@ -124,26 +168,26 @@
         <tbody>
             {% for s in sessions %}
             <tr data-labels="{{ (s.labels or [])|join(',') }}" data-track="{{ s.track.name if s.track else '' }}" data-source="{{ s.data_source or '' }}">
-                <td data-sort="{{ s.date }}T{{ s.session_start or '00:00' }}">{{ s.date.strftime('%-d %b %Y') }}{% if s.session_start %} · {{ s.session_start }}{% endif %}{% if s.needs_reingest %}<i class="bi bi-arrow-repeat reingest-icon" title="Needs reingestion — track corners were updated"></i>{% endif %}</td>
-                <td>{% if s.track %}{{ s.track.name }}{% else %}<span title="No track assigned — add a track for full analysis"><i class="bi bi-exclamation-triangle-fill" style="color: var(--bb-red, #e53e3e);"></i> —</span>{% endif %}</td>
-                <td class="d-none d-md-table-cell">
+                <td data-label="Date" data-sort="{{ s.date }}T{{ s.session_start or '00:00' }}">{{ s.date.strftime('%-d %b %Y') }}{% if s.session_start %} · {{ s.session_start }}{% endif %}{% if s.needs_reingest %}<i class="bi bi-arrow-repeat reingest-icon" title="Needs reingestion — track corners were updated"></i>{% endif %}</td>
+                <td data-label="Track">{% if s.track %}{{ s.track.name }}{% else %}<span title="No track assigned — add a track for full analysis"><i class="bi bi-exclamation-triangle-fill" style="color: var(--bb-red, #e53e3e);"></i> —</span>{% endif %}</td>
+                <td data-label="Source" class="d-none d-md-table-cell">
                     {% if s.data_source == 'gopro' %}
                     <i class="bi bi-camera-video" title="GoPro"></i> GoPro
                     {% elif s.data_source %}
                     <i class="bi bi-stopwatch" title="RaceChrono"></i> RaceChrono
                     {% else %}—{% endif %}
                 </td>
-                <td data-sort="{{ s.best_lap_time or 999999 }}">{% if s.best_lap_time %}{{ '%d:%06.3f'|format(s.best_lap_time // 60, s.best_lap_time % 60) }}{% else %}—{% endif %}</td>
-                <td class="d-none d-sm-table-cell" data-sort="{{ s.clean_laps or 0 }}">{{ s.clean_laps or '—' }} / {{ s.total_laps or '—' }}</td>
-                <td class="d-none d-md-table-cell" data-sort="{{ s.consistency_pct if s.consistency_pct == s.consistency_pct else 0 }}">{% if s.consistency_pct and s.consistency_pct == s.consistency_pct %}{{ "%.1f"|format(s.consistency_pct) }}%{% else %}—{% endif %}</td>
-                <td>
+                <td data-label="Best Lap" data-sort="{{ s.best_lap_time or 999999 }}">{% if s.best_lap_time %}{{ '%d:%06.3f'|format(s.best_lap_time // 60, s.best_lap_time % 60) }}{% else %}—{% endif %}</td>
+                <td data-label="Clean Laps" class="d-none d-sm-table-cell" data-sort="{{ s.clean_laps or 0 }}">{{ s.clean_laps or '—' }} / {{ s.total_laps or '—' }}</td>
+                <td data-label="Consistency" class="d-none d-md-table-cell" data-sort="{{ s.consistency_pct if s.consistency_pct == s.consistency_pct else 0 }}">{% if s.consistency_pct and s.consistency_pct == s.consistency_pct %}{{ "%.1f"|format(s.consistency_pct) }}%{% else %}—{% endif %}</td>
+                <td data-label="Labels">
                     {% if s.labels %}
                     {% for label in s.labels %}
                     <span class="badge session-label" data-label="{{ label }}">{{ label }}</span>
                     {% endfor %}
-                    {% else %}—{% endif %}
+                    {% endif %}
                 </td>
-                <td class="text-nowrap">
+                <td data-label="Actions" class="text-nowrap">
                     <a href="{{ url_for('dashboard.view', session_id=s.id) }}" class="btn btn-sm btn-outline-primary" title="Dashboard"><i class="bi bi-speedometer2"></i><span class="d-none d-sm-inline">Dashboard</span></a>
                     {% if s.user_id == current_user.id %}
                     <button class="btn btn-sm btn-outline-secondary{{ ' share-active' if s.share_token }}" title="Share"

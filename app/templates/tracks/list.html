@@ -19,6 +19,43 @@
     th.sortable:hover { color: var(--bb-blue); }
     th.sortable .sort-icon { font-size: 0.65rem; margin-left: 3px; opacity: 0.4; }
     th.sortable.sort-asc .sort-icon, th.sortable.sort-desc .sort-icon { opacity: 1; color: var(--bb-blue); }
+    @media (max-width: 576px) {
+        .table-responsive { overflow-x: visible; }
+        #tracksTable thead { display: none; }
+        #tracksTable, #tracksTable tbody, #tracksTable tr, #tracksTable td { display: block; }
+        #tracksTable tr {
+            position: relative;
+            background: var(--bb-surface);
+            border: 1px solid var(--bb-border);
+            border-radius: 8px;
+            margin-bottom: 10px;
+            padding: 10px 12px 8px;
+        }
+        #tracksTable tr.row-busy { padding: 0 12px; }
+        #tracksTable td { padding: 1px 0; border: none; font-size: 0.85rem; }
+        /* Track name — card header */
+        #tracksTable td[data-label="Track"] { font-weight: 600; font-size: 0.9rem; padding-right: 70px; }
+        /* Corners + Sessions — inline labels */
+        #tracksTable td[data-label="Corners"]::before,
+        #tracksTable td[data-label="Sessions"]::before,
+        #tracksTable td[data-label="Timezone"]::before {
+            content: attr(data-label) "  ";
+            font-size: 0.7rem;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+            color: var(--bb-text-muted);
+            font-weight: 600;
+            margin-right: 4px;
+        }
+        /* Actions — top-right corner */
+        #tracksTable td[data-label="Actions"] {
+            position: absolute;
+            top: 8px;
+            right: 10px;
+            padding: 0;
+        }
+        #tracksTable td[data-label="Actions"] .btn-sm { padding: 0.15rem 0.35rem; font-size: 0.75rem; }
+    }
 </style>
 {% endblock %}
 
@@ -43,11 +80,11 @@
         <tbody>
             {% for item in tracks %}
             <tr>
-                <td>{{ item.track.name }}</td>
-                <td data-sort="{{ item.corner_count }}">{{ item.corner_count }}</td>
-                <td data-sort="{{ item.session_count }}">{{ item.session_count }}</td>
-                <td>{{ item.track.timezone }}</td>
-                <td class="text-nowrap">
+                <td data-label="Track">{{ item.track.name }}</td>
+                <td data-label="Corners" data-sort="{{ item.corner_count }}">{{ item.corner_count }}</td>
+                <td data-label="Sessions" data-sort="{{ item.session_count }}">{{ item.session_count }}</td>
+                <td data-label="Timezone">{{ item.track.timezone }}</td>
+                <td data-label="Actions" class="text-nowrap">
                     <a href="{{ url_for('tracks.edit', slug=item.track.slug) }}" class="btn btn-sm btn-outline-primary" title="Edit Corners"><i class="bi bi-pencil"></i></a>
                     {% if item.session_count > 0 %}
                     <button class="btn btn-sm btn-outline-danger" disabled
