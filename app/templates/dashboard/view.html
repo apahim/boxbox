@@ -222,7 +222,7 @@
         </div>
 
         <!-- Player state: shown after video is selected -->
-        <div id="vsPlayer" style="display: none;">
+        <div id="vsPlayer" style="visibility: hidden; height: 0; overflow: hidden;">
             <div class="d-flex flex-wrap align-items-center gap-2 mb-3">
                 <div>
                     <label for="vsLapSelect" class="form-label fw-semibold mb-1" style="font-size: 0.85rem;">Lap</label>
@@ -248,7 +248,7 @@
             <div class="row">
                 <div class="col-md-6 mb-3">
                     <div class="card p-2">
-                        <video id="vsVideo" controls playsinline webkit-playsinline preload="auto" class="vs-video-player" style="width:100%; background:#000; border-radius:6px;">
+                        <video id="vsVideo" controls playsinline webkit-playsinline preload="auto" width="640" height="360" class="vs-video-player" style="width:100%; background:#000; border-radius:6px;">
                             Your browser does not support the video element.
                         </video>
                     </div>

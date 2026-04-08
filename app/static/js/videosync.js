@@ -11,6 +11,8 @@ window.VideoSync = (function() {
     var lapStart = 0, lapEnd = 0, clamping = false;
     var fullTrackRegion = null, isPlaying = false;
     var expectedHash = "";
+    var currentBlobUrl = null;
+    var _onPlay, _onPause, _onSeeked, _onTimeupdate, _onEnded, _onError;
 
     function api(path) {
         var url = apiBase + path;
@@ -262,6 +264,7 @@ window.VideoSync = (function() {
 
     function clampToLap() {
         if (!video || !currentLap || clamping) return;
+        if (lapEnd <= 0 || lapEnd <= lapStart) return;
         if (video.currentTime >= lapEnd) {
             clamping = true;
             video.pause();
@@ -301,27 +304,45 @@ window.VideoSync = (function() {
     }
 
     function loadVideo(file) {
-        if (!expectedHash) {
-            doLoadVideo(file);
-            return;
+        // Always load video synchronously to preserve iOS user-gesture context.
+        // Verify fingerprint async and tear down if it doesn't match.
+        doLoadVideo(file);
+
+        if (expectedHash) {
+            computeVideoFingerprint(file).then(function(hash) {
+                if (hash !== expectedHash) {
+                    if (video) {
+                        video.pause();
+                        video.removeAttribute("src");
+                        video.load();
+                    }
+                    var player = document.getElementById("vsPlayer");
+                    player.style.visibility = "hidden";
+                    player.style.height = "0";
+                    player.style.overflow = "hidden";
+                    showHashMismatch();
+                }
+            });
         }
-        computeVideoFingerprint(file).then(function(hash) {
-            if (hash === expectedHash) {
-                doLoadVideo(file);
-            } else {
-                showHashMismatch();
-            }
-        });
     }
 
     function doLoadVideo(file) {
-        var url = URL.createObjectURL(file);
+        // Revoke previous blob URL to prevent memory leaks
+        if (currentBlobUrl) {
+            URL.revokeObjectURL(currentBlobUrl);
+        }
+        currentBlobUrl = URL.createObjectURL(file);
+
         var prompt = document.getElementById("vsPrompt");
         var player = document.getElementById("vsPlayer");
 
-        // Transition to player state
+        // Transition to player state — use visibility instead of display
+        // so the video element stays in the layout tree (iOS WebKit requires
+        // the element to have computed dimensions when src is set)
         prompt.style.display = "none";
-        player.style.display = "";
+        player.style.visibility = "visible";
+        player.style.height = "";
+        player.style.overflow = "";
 
         // Set up references now that player is visible
         canvas = document.getElementById("vsPositionCanvas");
@@ -355,41 +376,105 @@ window.VideoSync = (function() {
             if (currentLap) applyMapMode(currentLap, this.value);
         });
 
+        // Remove previous listeners to prevent accumulation on re-selection
+        if (_onPlay) {
+            video.removeEventListener("play", _onPlay);
+            video.removeEventListener("pause", _onPause);
+            video.removeEventListener("seeked", _onSeeked);
+            video.removeEventListener("timeupdate", _onTimeupdate);
+            video.removeEventListener("ended", _onEnded);
+            if (_onError) video.removeEventListener("error", _onError);
+        }
+
         // Video sync events — register BEFORE setting src
-        video.addEventListener("play", function() {
+        _onPlay = function() {
             isPlaying = true;
             setMapInteraction(false);
             if (rafId) cancelAnimationFrame(rafId);
             rafId = requestAnimationFrame(animLoop);
-        });
-        video.addEventListener("pause", function() {
+        };
+        _onPause = function() {
             isPlaying = false;
             if (rafId) { cancelAnimationFrame(rafId); rafId = null; }
             setMapInteraction(true);
             drawPositionDot();
-        });
-        video.addEventListener("seeked", function() {
+        };
+        _onSeeked = function() {
             clampToLap();
             drawPositionDot();
-        });
-        video.addEventListener("timeupdate", function() {
+        };
+        _onTimeupdate = function() {
             clampToLap();
-        });
-        video.addEventListener("ended", function() {
+        };
+        _onEnded = function() {
             isPlaying = false;
             if (rafId) { cancelAnimationFrame(rafId); rafId = null; }
             setMapInteraction(true);
             zoomToFullTrack();
+        };
+        _onError = function() {
+            var err = video.error;
+            var msg = "Unknown error";
+            if (err) {
+                switch (err.code) {
+                    case MediaError.MEDIA_ERR_ABORTED: msg = "Playback aborted"; break;
+                    case MediaError.MEDIA_ERR_NETWORK: msg = "Network error"; break;
+                    case MediaError.MEDIA_ERR_DECODE: msg = "Decode error (codec may not be supported)"; break;
+                    case MediaError.MEDIA_ERR_SRC_NOT_SUPPORTED: msg = "Source not supported"; break;
+                }
+                if (err.message) msg += ": " + err.message;
+            }
+            console.error("[VideoSync] Video error:", msg, err);
+            var errorDiv = document.getElementById("vsVideoError");
+            if (!errorDiv) {
+                errorDiv = document.createElement("div");
+                errorDiv.id = "vsVideoError";
+                errorDiv.className = "text-center p-3";
+                errorDiv.style.cssText = "color: #ef4444; font-size: 0.85rem; background: rgba(239,68,68,0.1); border-radius: 6px; margin-top: 8px;";
+                video.parentNode.appendChild(errorDiv);
+            }
+            errorDiv.innerHTML = '<i class="bi bi-exclamation-triangle"></i> ' + msg +
+                '<br><small class="text-muted">Try a different video file or convert to H.264 MP4.</small>';
+        };
+
+        video.addEventListener("play", _onPlay);
+        video.addEventListener("pause", _onPause);
+        video.addEventListener("seeked", _onSeeked);
+        video.addEventListener("timeupdate", _onTimeupdate);
+        video.addEventListener("ended", _onEnded);
+        video.addEventListener("error", _onError);
+        video.addEventListener("stalled", function() {
+            console.warn("[VideoSync] Video stalled — iOS may be having trouble with this file");
         });
-        // Wait for canplay — skip initial seek to avoid iOS blob URL seeking issues
+
+        // canplay with timeout fallback — iOS may refuse to preload
+        var canplayFired = false;
         video.addEventListener("canplay", function onReady() {
             video.removeEventListener("canplay", onReady);
+            if (canplayFired) return;
+            canplayFired = true;
             var lap = bestLap || racelineLaps[0];
             if (lap) selectLap(lap, true);
         });
+        setTimeout(function() {
+            if (!canplayFired) {
+                console.warn("[VideoSync] canplay did not fire after 3s — proceeding with fallback");
+                canplayFired = true;
+                var lap = bestLap || racelineLaps[0];
+                if (lap) selectLap(lap, true);
+            }
+        }, 3000);
 
-        // Set source and explicitly load — required for iOS Safari
-        video.src = url;
+        // Clear any previous error message
+        var prevError = document.getElementById("vsVideoError");
+        if (prevError) prevError.remove();
+
+        // Force layout reflow — iOS WebKit needs the element fully laid out
+        // before it will accept a media source
+        void video.offsetHeight;
+
+        // Set source and load
+        video.src = currentBlobUrl;
         video.load();
     }
 
