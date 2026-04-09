@@ -13,10 +13,10 @@ def view(session_id):
     if not session:
         abort(404)
 
-    if session.user_id != current_user.id:
+    is_owner = session.user_id == current_user.id
+    if not is_owner:
         # Check event-scoped access: both users must be accepted participants
         # of the same event where the target session is linked
-        from sqlalchemy import and_
         has_access = db.session.query(EventParticipant).filter(
             EventParticipant.event_id.in_(
                 db.session.query(EventParticipant.event_id).filter(
@@ -38,7 +38,7 @@ def view(session_id):
 
     mapkit_token = current_app.config.get('MAPKIT_TOKEN', '')
     return render_template('dashboard/view.html', session=session, mapkit_token=mapkit_token,
-                           shared=False, has_corners=has_corners, has_gate=has_gate)
+                           shared=not is_owner, has_corners=has_corners, has_gate=has_gate)
 
 
 @bp.route('/share/<token>')
