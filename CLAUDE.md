@@ -31,7 +31,7 @@ venv/bin/podman-compose exec web python -m pytest tests/ -x -q # run tests in co
 - `app/api/routes.py` — JSON API endpoints for dashboard data
 - `app/templates/` — Jinja2 HTML templates
 - `app/static/` — CSS and JS (dashboard.js, mapkit-helpers.js, raceline.js)
-- `scripts/analysis/` — shared analysis modules (from kart repo)
+- `scripts/analysis/` — shared analysis modules
 - `scripts/load_data.py` — telemetry and metadata loading functions
 - `migrations/` — Flask-Migrate (Alembic) database migrations
 - `tests/app/` — app test suite

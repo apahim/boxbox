@@ -1,4 +1,4 @@
-"""Helpers for loading and parsing kart racing data."""
+"""Helpers for loading and parsing racing telemetry data."""
 
 import os
 import pandas as pd

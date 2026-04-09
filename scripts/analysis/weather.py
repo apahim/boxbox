@@ -74,7 +74,7 @@ def fetch_weather(date, session_start, lat, lon, timezone="UTC"):
             f"&timezone={timezone}"
         )
 
-        req = urllib.request.Request(url, headers={"User-Agent": "kart-dashboard/1.0"})
+        req = urllib.request.Request(url, headers={"User-Agent": "boxbox/1.0"})
         with urllib.request.urlopen(req, timeout=10) as resp:
             data = json.loads(resp.read().decode())
 

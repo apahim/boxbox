@@ -5,7 +5,7 @@
 <h1 align="center">BoxBox</h1>
 
 <p align="center">
-  Kart racing telemetry dashboard — turn your <a href="https://racechrono.com/">RaceChrono</a> CSV exports or <strong>GoPro MP4</strong> videos into interactive dashboards with lap analysis, corner breakdowns, racing line comparisons, and coaching insights.
+  Racing telemetry dashboard — turn your <a href="https://racechrono.com/">RaceChrono</a> CSV exports or <strong>GoPro MP4</strong> videos into interactive dashboards with lap analysis, corner breakdowns, racing line comparisons, and coaching insights.
 </p>
 
 <p align="center">
@@ -66,7 +66,7 @@ If the track has a start/finish gate configured, laps are detected automatically
 ## Setting Up Tracks
 
 1. Go to **Tracks > Add Track**.
-2. Search for your karting venue on the satellite map and position the crosshair on the track.
+2. Search for your track or circuit on the satellite map and position the crosshair on the track.
 3. Give it a name and save.
 4. On the **track edit page**, configure:
    - **Start/finish line** — draw a gate across the track for accurate lap detection.

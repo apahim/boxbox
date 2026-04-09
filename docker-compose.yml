@@ -2,13 +2,13 @@ services:
   db:
     image: postgres:16-alpine
     environment:
-      POSTGRES_DB: kart
-      POSTGRES_USER: kart
-      POSTGRES_PASSWORD: kart_dev
+      POSTGRES_DB: boxbox
+      POSTGRES_USER: boxbox
+      POSTGRES_PASSWORD: boxbox_dev
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U kart -d kart"]
+      test: ["CMD-SHELL", "pg_isready -U boxbox -d boxbox"]
       interval: 5s
       timeout: 3s
       retries: 5
@@ -18,7 +18,7 @@ services:
     ports:
       - "5050:5000"
     environment:
-      DATABASE_URL: postgresql://kart:kart_dev@db:5432/kart
+      DATABASE_URL: postgresql://boxbox:boxbox_dev@db:5432/boxbox
       SECRET_KEY: dev-secret-change-me
       FLASK_ENV: development
       MAPKIT_TOKEN: ${MAPKIT_TOKEN:-}

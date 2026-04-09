@@ -1,4 +1,4 @@
-"""Shared utilities for kart racing analysis."""
+"""Shared utilities for racing telemetry analysis."""
 
 import base64
 import json
@@ -200,7 +200,7 @@ def add_wind_arrow(fig, weather):
 def project_to_meters(lat, lon, center=None):
     """Project lat/lon to local XY meters using equirectangular projection.
 
-    Accurate enough for a ~400m kart track.
+    Accurate enough for a ~400m track.
 
     Args:
         lat: Latitude values.
