@@ -32,8 +32,14 @@
                     </div>
                     <div class="mb-3">
                         {{ form.track_id.label(class="form-label") }}
+                        {% if track_locked %}
+                        {{ form.track_id(class="form-select", disabled="disabled") }}
+                        <input type="hidden" name="track_id" value="{{ form.track_id.data }}">
+                        <div class="form-text text-warning"><i class="bi bi-lock-fill"></i> Track is locked — participants have linked sessions.</div>
+                        {% else %}
                         {{ form.track_id(class="form-select") }}
                         <div class="form-text">Changing the track will unlink sessions that don't match.</div>
+                        {% endif %}
                     </div>
                     <div class="mb-3">
                         {{ form.description.label(class="form-label") }}

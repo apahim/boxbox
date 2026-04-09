@@ -374,6 +374,12 @@ def edit(event_id):
     tracks = visible_tracks_for_user(current_user.id).all()
     form.track_id.choices = [(0, '— No track —')] + [(t.id, t.name) for t in tracks]
 
+    # Check if any participants have linked sessions — locks the track
+    has_linked_sessions = event.track_id and EventParticipant.query.filter(
+        EventParticipant.event_id == event.id,
+        EventParticipant.session_id.isnot(None),
+    ).first() is not None
+
     if request.method == 'GET':
         form.name.data = event.name
         form.date.data = event.date
@@ -389,11 +395,15 @@ def edit(event_id):
         event.name = form.name.data
         event.date = form.date.data
         event.time = form.time.data.strftime('%H:%M') if form.time.data else None
-        event.track_id = form.track_id.data
         event.description = form.description.data or None
 
-        # If track changed, unlink sessions that don't match
-        if event.track_id != old_track_id:
+        new_track_id = form.track_id.data
+        if new_track_id != old_track_id:
+            if has_linked_sessions:
+                flash('Cannot change track — participants have linked sessions.', 'danger')
+                return redirect(url_for('events.edit', event_id=event.id))
+            event.track_id = new_track_id
+            # Unlink sessions that don't match the new track
             for p in event.participants.all():
                 if p.session_id:
                     s = db.session.get(Session, p.session_id)
@@ -405,7 +415,8 @@ def edit(event_id):
         return redirect(url_for('events.view', event_id=event.id))
 
     form.submit.label.text = 'Save Changes'
-    return render_template('events/edit.html', form=form, event=event)
+    return render_template('events/edit.html', form=form, event=event,
+                           track_locked=has_linked_sessions)
 
 
 # ── Delete ──
