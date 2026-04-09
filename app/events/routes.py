@@ -10,7 +10,7 @@ from app.events import bp
 from app.events.forms import EventForm
 from app.models import (
     Event, EventParticipant, Track, TrackCorner, Session, User,
-    CornerSummary, SectorTime,
+    CornerSummary, SectorTime, visible_tracks_for_user,
 )
 
 logger = logging.getLogger(__name__)
@@ -102,7 +102,7 @@ def list_events():
 @login_required
 def create():
     form = EventForm()
-    tracks = Track.query.order_by(Track.name).all()
+    tracks = visible_tracks_for_user(current_user.id).all()
     form.track_id.choices = [(0, '— No track —')] + [(t.id, t.name) for t in tracks]
 
     if form.validate_on_submit():
@@ -371,7 +371,7 @@ def edit(event_id):
     _require_organizer(event)
 
     form = EventForm(obj=event)
-    tracks = Track.query.order_by(Track.name).all()
+    tracks = visible_tracks_for_user(current_user.id).all()
     form.track_id.choices = [(0, '— No track —')] + [(t.id, t.name) for t in tracks]
 
     if request.method == 'GET':

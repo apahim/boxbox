@@ -16,6 +16,7 @@ from app.models import (
     Session, Track, TrackCorner,
     Lap, Telemetry, CornerRecord, CornerSummary,
     SectorTime, ChartData, SessionUpload, EventParticipant,
+    visible_tracks_for_user,
 )
 
 
@@ -50,7 +51,7 @@ def create():
     form = SessionCreateForm()
 
     # Populate track choices and coordinates for GPS auto-matching
-    tracks = Track.query.order_by(Track.name).all()
+    tracks = visible_tracks_for_user(current_user.id).all()
     form.track_id.choices = [(t.id, t.name) for t in tracks]
     track_coords_js = {t.id: {'name': t.name, 'lat': t.lat, 'lon': t.lon} for t in tracks}
 
@@ -175,7 +176,7 @@ def edit(session_id):
     form = SessionEditForm(obj=session)
 
     # Populate choices
-    tracks = Track.query.order_by(Track.name).all()
+    tracks = visible_tracks_for_user(current_user.id).all()
     form.track_id.choices = [(0, '— No track —')] + [(t.id, t.name) for t in tracks]
 
     if request.method == 'GET':

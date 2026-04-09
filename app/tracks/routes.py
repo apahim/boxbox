@@ -8,7 +8,7 @@ from sqlalchemy import func
 from app import db
 from app.tracks import bp
 from app.tracks.forms import TrackForm
-from app.models import Track, TrackCorner, Session, Telemetry, User, Event, EventParticipant
+from app.models import Track, TrackCorner, Session, Telemetry, User, Event, EventParticipant, visible_tracks_for_user
 
 
 def _slugify(name):
@@ -20,7 +20,7 @@ def _slugify(name):
 @bp.route('/')
 @login_required
 def list_tracks():
-    tracks = Track.query.order_by(Track.name).all()
+    tracks = visible_tracks_for_user(current_user.id).all()
 
     # Build map of track_id → event names for events the user participates in
     event_track_map = {}

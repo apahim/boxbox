@@ -5,7 +5,7 @@ from flask_login import current_user
 
 from app import db
 from app.api import bp
-from app.models import Session, ChartData, Track, Telemetry, Lap, EventParticipant
+from app.models import Session, ChartData, Track, Telemetry, Lap, EventParticipant, visible_tracks_for_user
 
 
 def api_login_required(f):
@@ -227,7 +227,7 @@ def detect_track(session_id):
     if not first or not first.latitude or not first.longitude:
         return jsonify(track_id=None)
 
-    tracks = Track.query.all()
+    tracks = visible_tracks_for_user(current_user.id).all()
     best = None
     best_dist = float('inf')
     for t in tracks:

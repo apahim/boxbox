@@ -302,3 +302,25 @@ class EventParticipant(db.Model):
         db.Index('ix_event_participant_email', 'email'),
         db.Index('ix_event_participant_user', 'user_id'),
     )
+
+
+def visible_tracks_for_user(user_id):
+    """Return tracks visible to a user: own tracks + event tracks.
+
+    Returns a query of Track objects ordered by name.
+    """
+    own_ids = db.session.query(Track.id).filter(
+        db.or_(Track.created_by == user_id, Track.created_by.is_(None))
+    )
+
+    event_track_ids = db.session.query(Event.track_id).join(
+        EventParticipant, EventParticipant.event_id == Event.id
+    ).filter(
+        EventParticipant.user_id == user_id,
+        EventParticipant.status.in_(['accepted', 'organizer']),
+        Event.track_id.isnot(None),
+    )
+
+    return Track.query.filter(
+        db.or_(Track.id.in_(own_ids), Track.id.in_(event_track_ids))
+    ).order_by(Track.name)
