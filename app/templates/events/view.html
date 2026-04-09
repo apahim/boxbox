@@ -326,7 +326,7 @@
             <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#corner-{{ corner.index }}" style="font-size: 0.9rem;">
                 {{ corner.name }}
                 {% if corner.fastest %}
-                <span class="corner-fastest">— Fastest: {{ corner.fastest.name }} ({{ '%.1f'|format(corner.fastest.min_speed * 3.6) }} km/h)</span>
+                <span class="corner-fastest">— Fastest: {{ corner.fastest.name }} ({{ '%.1f'|format(corner.fastest.min_speed) }} km/h)</span>
                 {% endif %}
             </button>
         </h2>
@@ -339,9 +339,9 @@
                         <tr>
                             <td>{{ e.position }}</td>
                             <td>{{ e.name }}</td>
-                            <td>{% if e.min_speed %}{{ '%.1f'|format(e.min_speed * 3.6) }} km/h{% else %}—{% endif %}</td>
-                            <td>{% if e.entry_speed %}{{ '%.1f'|format(e.entry_speed * 3.6) }}{% else %}—{% endif %}</td>
-                            <td>{% if e.exit_speed %}{{ '%.1f'|format(e.exit_speed * 3.6) }}{% else %}—{% endif %}</td>
+                            <td>{% if e.min_speed %}{{ '%.1f'|format(e.min_speed) }} km/h{% else %}—{% endif %}</td>
+                            <td>{% if e.entry_speed %}{{ '%.1f'|format(e.entry_speed) }}{% else %}—{% endif %}</td>
+                            <td>{% if e.exit_speed %}{{ '%.1f'|format(e.exit_speed) }}{% else %}—{% endif %}</td>
                         </tr>
                         {% endfor %}
                     </tbody>
