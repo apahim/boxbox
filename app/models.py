@@ -310,7 +310,7 @@ def visible_tracks_for_user(user_id):
     Returns a query of Track objects ordered by name.
     """
     own_ids = db.session.query(Track.id).filter(
-        db.or_(Track.created_by == user_id, Track.created_by.is_(None))
+        Track.created_by == user_id
     )
 
     event_track_ids = db.session.query(Event.track_id).join(
