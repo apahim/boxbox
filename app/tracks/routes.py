@@ -102,7 +102,12 @@ def edit(track_id):
         abort(404)
 
     is_fetch = request.headers.get('X-Requested-With') == 'fetch'
-    readonly = (track.created_by != current_user.id)
+    is_owner = (track.created_by == current_user.id)
+
+    # Lock track if it's used by any event
+    linked_events = Event.query.filter_by(track_id=track.id).all()
+    locked_by_event = len(linked_events) > 0
+    readonly = not is_owner or locked_by_event
 
     if request.method == 'POST':
         if readonly:
@@ -206,10 +211,12 @@ def edit(track_id):
     ).order_by(Session.date.desc()).all()
 
     creator_name = None
-    if readonly and track.created_by:
+    if readonly and track.created_by and not is_owner:
         creator = db.session.get(User, track.created_by)
         if creator:
             creator_name = creator.display_name
+
+    event_names = [e.name for e in linked_events] if locked_by_event else []
 
     return render_template('tracks/edit.html',
                            track=track,
@@ -220,6 +227,9 @@ def edit(track_id):
                            mapkit_token=mapkit_token,
                            matching_sessions=matching_sessions,
                            readonly=readonly,
+                           is_owner=is_owner,
+                           locked_by_event=locked_by_event,
+                           event_names=event_names,
                            creator_name=creator_name)
 
 
