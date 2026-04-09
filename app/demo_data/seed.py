@@ -28,9 +28,17 @@ def _ensure_demo_track(user_id):
     slug = list(tracks_data.keys())[0]
     data = tracks_data[slug]
 
-    track = Track.query.filter_by(slug=slug).first()
+    # Check if this user already has this track
+    track = Track.query.filter_by(slug=slug, created_by=user_id).first()
     if track:
         return track
+
+    # Ensure unique slug if another user owns a track with the same slug
+    base_slug = slug
+    counter = 2
+    while Track.query.filter_by(slug=slug).first():
+        slug = f'{base_slug}_{counter}'
+        counter += 1
 
     track = Track(
         slug=slug,
