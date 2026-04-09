@@ -91,15 +91,15 @@
                 <td data-label="Timezone">{{ item.track.timezone }}</td>
                 <td data-label="Actions" class="text-nowrap">
                     {% if item.track.created_by == current_user.id or item.track.created_by is none %}
-                    <a href="{{ url_for('tracks.edit', slug=item.track.slug) }}" class="btn btn-sm btn-outline-primary" title="Edit Corners"><i class="bi bi-pencil"></i></a>
+                    <a href="{{ url_for('tracks.edit', track_id=item.track.id) }}" class="btn btn-sm btn-outline-primary" title="Edit Corners"><i class="bi bi-pencil"></i></a>
                     {% else %}
-                    <a href="{{ url_for('tracks.edit', slug=item.track.slug) }}" class="btn btn-sm btn-outline-secondary" title="View Track"><i class="bi bi-eye"></i></a>
+                    <a href="{{ url_for('tracks.edit', track_id=item.track.id) }}" class="btn btn-sm btn-outline-secondary" title="View Track"><i class="bi bi-eye"></i></a>
                     {% endif %}
                     {% if item.session_count > 0 %}
                     <button class="btn btn-sm btn-outline-danger" disabled
                             title="Used by {{ item.session_count }} session{{ 's' if item.session_count != 1 }}"><i class="bi bi-trash"></i></button>
                     {% else %}
-                    <form method="POST" action="{{ url_for('tracks.delete', slug=item.track.slug) }}" class="d-inline"
+                    <form method="POST" action="{{ url_for('tracks.delete', track_id=item.track.id) }}" class="d-inline"
                           onsubmit="return handleTrackDelete(this)">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                         <button type="submit" class="btn btn-sm btn-outline-danger" title="Delete track"><i class="bi bi-trash"></i></button>

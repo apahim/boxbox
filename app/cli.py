@@ -41,9 +41,16 @@ def seed_tracks(tracks_file, user_email):
         return
 
     for slug, data in tracks_data.items():
-        if Track.query.filter_by(slug=slug).first():
-            click.echo(f'  Skipping "{data["name"]}" (slug "{slug}" already exists)')
+        if Track.query.filter_by(slug=slug, created_by=owner_id).first():
+            click.echo(f'  Skipping "{data["name"]}" (slug "{slug}" already exists for this user)')
             continue
+
+        # Ensure unique slug across all users
+        base_slug = slug
+        counter = 2
+        while Track.query.filter_by(slug=slug).first():
+            slug = f'{base_slug}_{counter}'
+            counter += 1
 
         track = Track(
             slug=slug,

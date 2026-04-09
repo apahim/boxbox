@@ -191,7 +191,7 @@ window.assignSession = function(sessionId, btn) {
     btn.disabled = true;
     btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
 
-    fetch('{{ url_for("tracks.assign_sessions", slug=track.slug) }}', {
+    fetch('{{ url_for("tracks.assign_sessions", track_id=track.id) }}', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'fetch', 'X-CSRFToken': _csrf },
         body: JSON.stringify({ session_ids: [sessionId] }),

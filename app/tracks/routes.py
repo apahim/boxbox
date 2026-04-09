@@ -1,7 +1,7 @@
 import json
 import re
 
-from flask import render_template, redirect, url_for, flash, request, current_app, jsonify
+from flask import render_template, redirect, url_for, flash, request, current_app, jsonify, abort
 from flask_login import login_required, current_user
 from sqlalchemy import func
 
@@ -54,11 +54,18 @@ def create():
     form = TrackForm()
     if form.validate_on_submit():
         slug = _slugify(form.name.data)
-        if Track.query.filter_by(slug=slug).first():
-            flash('A track with that name already exists.', 'danger')
+        if Track.query.filter_by(slug=slug, created_by=current_user.id).first():
+            flash('You already have a track with that name.', 'danger')
             mapkit_token = current_app.config.get('MAPKIT_TOKEN', '')
             return render_template('tracks/create.html', form=form,
                                    mapkit_token=mapkit_token)
+
+        # Ensure unique slug across all users
+        base_slug = slug
+        counter = 2
+        while Track.query.filter_by(slug=slug).first():
+            slug = f'{base_slug}_{counter}'
+            counter += 1
 
         lat = float(form.lat.data)
         lon = float(form.lon.data)
@@ -80,17 +87,19 @@ def create():
         db.session.commit()
 
         flash(f'Track "{track.name}" created. Add corners below.', 'success')
-        return redirect(url_for('tracks.edit', slug=slug))
+        return redirect(url_for('tracks.edit', track_id=track.id))
 
     mapkit_token = current_app.config.get('MAPKIT_TOKEN', '')
     return render_template('tracks/create.html', form=form,
                            mapkit_token=mapkit_token)
 
 
-@bp.route('/<slug>/edit', methods=['GET', 'POST'])
+@bp.route('/<int:track_id>/edit', methods=['GET', 'POST'])
 @login_required
-def edit(slug):
-    track = Track.query.filter_by(slug=slug).first_or_404()
+def edit(track_id):
+    track = db.session.get(Track, track_id)
+    if not track:
+        abort(404)
 
     is_fetch = request.headers.get('X-Requested-With') == 'fetch'
     readonly = (track.created_by != current_user.id)
@@ -108,7 +117,7 @@ def edit(slug):
             if is_fetch:
                 return jsonify(error='Invalid corner data.'), 400
             flash('Invalid corner data.', 'danger')
-            return redirect(url_for('tracks.edit', slug=slug))
+            return redirect(url_for('tracks.edit', track_id=track.id))
 
         # Save start/finish gate if provided
         sf_json = request.form.get('sf_gate_json', '')
@@ -157,7 +166,7 @@ def edit(slug):
         if is_fetch:
             return jsonify(ok=True)
         flash('Corners saved.', 'success')
-        return redirect(url_for('tracks.edit', slug=slug))
+        return redirect(url_for('tracks.edit', track_id=track.id))
 
     session_count = track.sessions.count()
     corners = TrackCorner.query.filter_by(track_id=track.id).order_by(TrackCorner.sort_order).all()
@@ -214,10 +223,12 @@ def edit(slug):
                            creator_name=creator_name)
 
 
-@bp.route('/<slug>/delete', methods=['POST'])
+@bp.route('/<int:track_id>/delete', methods=['POST'])
 @login_required
-def delete(slug):
-    track = Track.query.filter_by(slug=slug).first_or_404()
+def delete(track_id):
+    track = db.session.get(Track, track_id)
+    if not track:
+        abort(404)
     is_fetch = request.headers.get('X-Requested-With') == 'fetch'
 
     if track.created_by != current_user.id:
@@ -244,10 +255,12 @@ def delete(slug):
     return redirect(url_for('tracks.list_tracks'))
 
 
-@bp.route('/<slug>/assign-sessions', methods=['POST'])
+@bp.route('/<int:track_id>/assign-sessions', methods=['POST'])
 @login_required
-def assign_sessions(slug):
-    track = Track.query.filter_by(slug=slug).first_or_404()
+def assign_sessions(track_id):
+    track = db.session.get(Track, track_id)
+    if not track:
+        abort(404)
     data = request.get_json()
     session_ids = data.get('session_ids', [])
 

@@ -56,7 +56,7 @@
         <p class="text-muted mb-0" style="font-size: 0.8rem;">
             {{ track_corner_names|length }} corner{{ 's' if track_corner_names|length != 1 else '' }}{% if track_corner_names %} ({{ track_corner_names|join(', ') }}){% endif %}
             · S/F gate {% if track_has_sf_gate %}configured{% else %}<span style="color:var(--bb-amber);">not set</span>{% endif %}
-            · <a href="{{ url_for('tracks.edit', slug=event.track.slug) }}">View Track</a>
+            · <a href="{{ url_for('tracks.edit', track_id=event.track.id) }}">View Track</a>
         </p>
         {% endif %}
         <p class="text-muted mb-0" style="font-size: 0.85rem;">Organized by {{ event.creator.display_name }}</p>
@@ -302,7 +302,7 @@
                 </ol>
                 <div class="mt-1" style="font-size: 0.78rem; color: var(--bb-text-muted);">
                     All participants must use the same track definition for fair comparison.
-                    <a href="{{ url_for('tracks.edit', slug=event.track.slug) }}">View the event track setup</a>.
+                    <a href="{{ url_for('tracks.edit', track_id=event.track.id) }}">View the event track setup</a>.
                 </div>
             </div>
         </div>
