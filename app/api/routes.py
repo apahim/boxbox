@@ -1,10 +1,7 @@
-from datetime import datetime, timedelta, timezone
 from functools import wraps
 
 from flask import jsonify, request
 from flask_login import current_user
-
-SHARE_TOKEN_MAX_AGE = timedelta(days=30)
 
 from app import db
 from app.api import bp
@@ -29,14 +26,8 @@ def api_login_required(f):
                     id=session_id, share_token=share_token
                 ).first()
                 if session:
-                    # Check token expiry
-                    if session.share_token_created_at:
-                        created = session.share_token_created_at
-                        if created.tzinfo is None:
-                            created = created.replace(tzinfo=timezone.utc)
-                        age = datetime.now(timezone.utc) - created
-                        if age > SHARE_TOKEN_MAX_AGE:
-                            return jsonify(error='Share link has expired'), 401
+                    if session.is_share_token_expired():
+                        return jsonify(error='Share link has expired'), 401
                     kwargs['session'] = session
                     return f(*args, **kwargs)
 

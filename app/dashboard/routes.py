@@ -31,6 +31,9 @@ def view(session_id):
 def shared_view(token):
     session = Session.query.filter_by(share_token=token).first_or_404()
 
+    if session.is_share_token_expired():
+        return render_template('errors/share_expired.html'), 410
+
     has_corners = False
     has_gate = False
     if session.track:

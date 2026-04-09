@@ -1,8 +1,10 @@
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from flask_login import UserMixin
 
 from app import db
+
+SHARE_TOKEN_MAX_AGE = timedelta(days=30)
 
 
 class User(UserMixin, db.Model):
@@ -96,6 +98,15 @@ class Session(db.Model):
     video_hash = db.Column(db.String(255), nullable=True)
 
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+
+    def is_share_token_expired(self):
+        """Return True if the share token has expired or has no timestamp."""
+        if not self.share_token_created_at:
+            return True
+        created = self.share_token_created_at
+        if created.tzinfo is None:
+            created = created.replace(tzinfo=timezone.utc)
+        return datetime.now(timezone.utc) - created > SHARE_TOKEN_MAX_AGE
 
     laps = db.relationship('Lap', backref='session', lazy='dynamic',
                            cascade='all, delete-orphan')

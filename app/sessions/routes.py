@@ -292,6 +292,7 @@ def unshare(session_id):
         return jsonify(error='You can only unshare your own sessions.'), 403
 
     session.share_token = None
+    session.share_token_created_at = None
     db.session.commit()
     return jsonify(ok=True)
 

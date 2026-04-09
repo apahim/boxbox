@@ -275,3 +275,189 @@ class TestTrackSessionsAPI:
         _, _, _, s1, s2, _ = seed_sessions
         resp = client.get(f'/api/sessions/raceline?session_ids={s1.id},{s2.id}')
         assert resp.status_code == 401
+
+
+class TestShareToken:
+    """Regression tests for share token access to API endpoints.
+
+    Share tokens must grant read-only access to session data without login.
+    Previously broke due to naive/aware datetime comparison (a4becc5).
+    """
+
+    @pytest.fixture
+    def shared_session(self, app):
+        """Create a user, track, session with share token and chart data."""
+        from datetime import datetime, timezone
+
+        with app.app_context():
+            user = User(email='share@test.com', display_name='Share Test',
+                        google_id='g_share',
+                        terms_accepted_at=datetime.now(timezone.utc))
+            db.session.add(user)
+            db.session.flush()
+
+            track = Track(slug='share_track', name='Share Track', lat=52.0, lon=-7.0)
+            db.session.add(track)
+            db.session.flush()
+
+            session = Session(
+                user_id=user.id, track_id=track.id, date=date(2026, 4, 1),
+                total_laps=10, clean_laps=9, best_lap_time=65.0,
+                average_time=66.5, median_time=66.0, std_dev=1.0,
+                consistency_pct=98.5,
+                share_token='test_share_token_abc',
+                share_token_created_at=datetime.now(timezone.utc),
+            )
+            db.session.add(session)
+            db.session.flush()
+
+            # Add chart data for each type the dashboard loads
+            for chart_type, chart_key in [
+                ('laptime_bar', 'overview'),
+                ('delta_to_best', 'overview'),
+                ('sector_table', 'overview'),
+                ('lap_list', 'overview'),
+                ('raceline', 'overview'),
+            ]:
+                db.session.add(ChartData(
+                    session_id=session.id, chart_type=chart_type,
+                    chart_key=chart_key, data={'test': True}
+                ))
+
+            db.session.commit()
+            yield session
+
+    def test_summary_with_share_token(self, client, shared_session):
+        resp = client.get(
+            f'/api/sessions/{shared_session.id}/summary'
+            f'?share_token={shared_session.share_token}'
+        )
+        assert resp.status_code == 200
+        data = resp.get_json()
+        assert data['best_lap_time'] == 65.0
+
+    def test_charts_with_share_token(self, client, shared_session):
+        for chart_type in ['laptime_bar', 'delta_to_best']:
+            resp = client.get(
+                f'/api/sessions/{shared_session.id}/charts/{chart_type}'
+                f'?share_token={shared_session.share_token}'
+            )
+            assert resp.status_code == 200, f'{chart_type} failed'
+
+    def test_laps_with_share_token(self, client, shared_session):
+        resp = client.get(
+            f'/api/sessions/{shared_session.id}/laps'
+            f'?share_token={shared_session.share_token}'
+        )
+        assert resp.status_code == 200
+
+    def test_sectors_with_share_token(self, client, shared_session):
+        resp = client.get(
+            f'/api/sessions/{shared_session.id}/sectors'
+            f'?share_token={shared_session.share_token}'
+        )
+        assert resp.status_code == 200
+
+    def test_raceline_with_share_token(self, client, shared_session):
+        resp = client.get(
+            f'/api/sessions/{shared_session.id}/raceline'
+            f'?share_token={shared_session.share_token}'
+        )
+        assert resp.status_code == 200
+
+    def test_invalid_share_token(self, client, shared_session):
+        resp = client.get(
+            f'/api/sessions/{shared_session.id}/summary'
+            f'?share_token=invalid_token'
+        )
+        assert resp.status_code == 401
+
+    def test_expired_share_token(self, client, app, shared_session):
+        from datetime import datetime, timezone, timedelta
+        session = db.session.get(Session, shared_session.id)
+        session.share_token_created_at = datetime.now(timezone.utc) - timedelta(days=31)
+        db.session.commit()
+
+        resp = client.get(
+            f'/api/sessions/{shared_session.id}/summary'
+            f'?share_token={shared_session.share_token}'
+        )
+        assert resp.status_code == 401
+
+    def test_share_token_wrong_session(self, client, shared_session):
+        """Share token for session A must not grant access to session B."""
+        other = Session(
+            user_id=shared_session.user_id, date=date(2026, 4, 2),
+            total_laps=5,
+        )
+        db.session.add(other)
+        db.session.commit()
+
+        resp = client.get(
+            f'/api/sessions/{other.id}/summary'
+            f'?share_token={shared_session.share_token}'
+        )
+        assert resp.status_code == 401
+
+    def test_share_token_naive_datetime(self, client, shared_session):
+        """Regression: naive datetime in share_token_created_at must not crash.
+
+        The DB may return a naive datetime even if stored as tz-aware.
+        The decorator must handle both without TypeError.
+        """
+        from datetime import datetime
+        session = db.session.get(Session, shared_session.id)
+        # Simulate DB returning a naive datetime (no tzinfo)
+        session.share_token_created_at = datetime(2026, 4, 1, 12, 0, 0)
+        db.session.commit()
+
+        resp = client.get(
+            f'/api/sessions/{shared_session.id}/summary'
+            f'?share_token={shared_session.share_token}'
+        )
+        assert resp.status_code == 200
+
+    def test_null_timestamp_rejected(self, client, shared_session):
+        """Token with no created_at timestamp should be treated as expired."""
+        session = db.session.get(Session, shared_session.id)
+        session.share_token_created_at = None
+        db.session.commit()
+
+        resp = client.get(
+            f'/api/sessions/{shared_session.id}/summary'
+            f'?share_token={shared_session.share_token}'
+        )
+        assert resp.status_code == 401
+
+    def test_shared_view_valid_token(self, client, shared_session):
+        """Shared view renders the dashboard for valid, non-expired tokens."""
+        resp = client.get(f'/dashboard/share/{shared_session.share_token}')
+        assert resp.status_code == 200
+        assert b'dashboardTabs' in resp.data
+        assert b'data-share-token' in resp.data
+
+    def test_shared_view_expired_token(self, client, shared_session):
+        """Shared view shows expiry error instead of empty dashboard."""
+        from datetime import datetime, timezone, timedelta
+        session = db.session.get(Session, shared_session.id)
+        session.share_token_created_at = datetime.now(timezone.utc) - timedelta(days=31)
+        db.session.commit()
+
+        resp = client.get(f'/dashboard/share/{shared_session.share_token}')
+        assert resp.status_code == 410
+        assert b'expired' in resp.data.lower()
+        assert b'dashboardTabs' not in resp.data
+
+    def test_shared_view_invalid_token(self, client):
+        """Shared view returns 404 for non-existent tokens."""
+        resp = client.get('/dashboard/share/nonexistent_token')
+        assert resp.status_code == 404
+
+    def test_shared_view_null_timestamp(self, client, shared_session):
+        """Shared view treats null timestamp as expired."""
+        session = db.session.get(Session, shared_session.id)
+        session.share_token_created_at = None
+        db.session.commit()
+
+        resp = client.get(f'/dashboard/share/{shared_session.share_token}')
+        assert resp.status_code == 410

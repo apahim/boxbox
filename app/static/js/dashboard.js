@@ -6,12 +6,27 @@
     var mapkitToken = meta.dataset.mapkitToken;
     var shareToken = meta.dataset.shareToken || "";
 
+    var sharedErrorShown = false;
+
     function api(path) {
         var url = apiBase + path;
         if (shareToken) url += (url.indexOf("?") !== -1 ? "&" : "?") + "share_token=" + shareToken;
         return fetch(url, { credentials: "same-origin" })
             .then(function(r) {
-                if (!r.ok) return null;
+                if (!r.ok) {
+                    if (shareToken && !sharedErrorShown) {
+                        sharedErrorShown = true;
+                        var msg = r.status === 401
+                            ? "This shared link is no longer valid. It may have expired or been removed by the owner."
+                            : "Unable to load session data. Please try refreshing the page.";
+                        var el = document.createElement("div");
+                        el.className = "alert alert-warning";
+                        el.textContent = msg;
+                        var anchor = document.getElementById("statCards") || document.getElementById("dashboardTabContent");
+                        if (anchor) anchor.parentNode.insertBefore(el, anchor);
+                    }
+                    return null;
+                }
                 return r.json();
             })
             .catch(function() { return null; });
