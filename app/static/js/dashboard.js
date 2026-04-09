@@ -251,7 +251,7 @@
         // Fetch current session raceline + sibling sessions at the same track
         Promise.all([
             api("/raceline"),
-            trackId && !shareToken ? fetch("/api/evolution?track_id=" + trackId, { credentials: "same-origin" })
+            trackId && !shareToken ? fetch("/api/tracks/" + trackId + "/sessions", { credentials: "same-origin" })
                 .then(function(r) { return r.ok ? r.json() : []; }).catch(function() { return []; }) : Promise.resolve([])
         ]).then(function(results) {
             var currentData = results[0];
@@ -276,7 +276,7 @@
             }
 
             // Fetch raceline data for sibling sessions
-            fetch("/api/evolution/raceline?session_ids=" + otherIds.join(","), { credentials: "same-origin" })
+            fetch("/api/sessions/raceline?session_ids=" + otherIds.join(","), { credentials: "same-origin" })
                 .then(function(r) { return r.ok ? r.json() : null; })
                 .then(function(evoData) {
                     // Build combined sessions array: current first, then others

@@ -238,6 +238,59 @@ def detect_track(session_id):
     return jsonify(track_id=None)
 
 
+@bp.route('/tracks/<int:track_id>/sessions')
+def track_sessions(track_id):
+    """Return the current user's sessions at a given track."""
+    if not current_user.is_authenticated:
+        return jsonify(error='Authentication required'), 401
+
+    sessions = Session.query.filter_by(
+        user_id=current_user.id, track_id=track_id
+    ).order_by(Session.date.desc()).all()
+
+    return jsonify([
+        {'id': s.id, 'date': str(s.date), 'labels': s.labels or []}
+        for s in sessions
+    ])
+
+
+@bp.route('/sessions/raceline')
+def sessions_raceline():
+    """Batch-fetch raceline chart data for multiple sessions."""
+    if not current_user.is_authenticated:
+        return jsonify(error='Authentication required'), 401
+
+    ids_str = request.args.get('session_ids', '')
+    if not ids_str:
+        return jsonify(sessions=[])
+
+    try:
+        session_ids = [int(x) for x in ids_str.split(',')]
+    except ValueError:
+        return jsonify(error='Invalid session_ids'), 400
+
+    sessions = Session.query.filter(
+        Session.id.in_(session_ids),
+        Session.user_id == current_user.id
+    ).all()
+
+    result = []
+    for s in sessions:
+        cd = ChartData.query.filter_by(
+            session_id=s.id, chart_type='raceline', chart_key='overview'
+        ).first()
+        if not cd or not cd.data:
+            continue
+        result.append({
+            'session_id': s.id,
+            'date': str(s.date),
+            'labels': s.labels or [],
+            'laps': cd.data.get('laps', []),
+        })
+
+    return jsonify(sessions=result)
+
+
 @bp.route('/tracks/<int:track_id>/gate')
 def track_gate(track_id):
     """Return start/finish gate coordinates for a track."""

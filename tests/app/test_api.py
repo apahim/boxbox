@@ -1,6 +1,7 @@
 """Tests for the API blueprint and dashboard route."""
 
 import os
+from datetime import date
 
 import pytest
 
@@ -161,3 +162,116 @@ class TestDashboardRoute:
         _login(client, email='other2@test.com')
         resp = client.get(f'/dashboard/{session.id}')
         assert resp.status_code == 403
+
+
+class TestTrackSessionsAPI:
+    """Regression tests for cross-session raceline comparison endpoints.
+
+    These endpoints were removed with the Evolution page and need to exist
+    for the Racing Line A/B comparison to work across sessions.
+    """
+
+    @pytest.fixture
+    def seed_sessions(self, app, client):
+        """Create user, two tracks, and sessions with raceline chart data."""
+        from datetime import datetime, timezone
+
+        with app.app_context():
+            user = User(email='evo@test.com', display_name='Evo Test',
+                        google_id='g_evo',
+                        terms_accepted_at=datetime.now(timezone.utc))
+            db.session.add(user)
+            db.session.flush()
+
+            track_a = Track(slug='track_a', name='Track A', lat=52.0, lon=-7.0)
+            track_b = Track(slug='track_b', name='Track B', lat=53.0, lon=-6.0)
+            db.session.add_all([track_a, track_b])
+            db.session.flush()
+
+            s1 = Session(user_id=user.id, track_id=track_a.id, date=date(2026, 4, 1))
+            s2 = Session(user_id=user.id, track_id=track_a.id, date=date(2026, 4, 5))
+            s3 = Session(user_id=user.id, track_id=track_b.id, date=date(2026, 4, 3))
+            db.session.add_all([s1, s2, s3])
+            db.session.flush()
+
+            # Add raceline chart data for s1 and s2
+            fake_laps = [{'lap': 1, 'time_fmt': '1:02.000', 'seconds': 62.0,
+                          'is_best': True, 'is_outlier': False,
+                          'lat': [52.0, 52.001], 'lon': [-7.0, -7.001], 't': [0, 1]}]
+            for s in [s1, s2]:
+                db.session.add(ChartData(
+                    session_id=s.id, chart_type='raceline', chart_key='overview',
+                    data={'laps': fake_laps}
+                ))
+
+            db.session.commit()
+            yield user, track_a, track_b, s1, s2, s3
+
+    def _auth(self, client, user_id):
+        with client.session_transaction() as sess:
+            sess['_user_id'] = str(user_id)
+
+    def test_track_sessions_returns_matching_sessions(self, client, seed_sessions):
+        user, track_a, track_b, s1, s2, s3 = seed_sessions
+        self._auth(client, user.id)
+
+        resp = client.get(f'/api/tracks/{track_a.id}/sessions')
+        assert resp.status_code == 200
+        data = resp.get_json()
+        ids = [s['id'] for s in data]
+        assert s1.id in ids
+        assert s2.id in ids
+        assert s3.id not in ids  # different track
+        assert all('date' in s and 'labels' in s for s in data)
+
+    def test_track_sessions_unauthenticated(self, client, seed_sessions):
+        _, track_a, *_ = seed_sessions
+        resp = client.get(f'/api/tracks/{track_a.id}/sessions')
+        assert resp.status_code == 401
+
+    def test_track_sessions_filters_by_user(self, client, app, seed_sessions):
+        from datetime import datetime, timezone
+        _, track_a, _, s1, s2, _ = seed_sessions
+        with app.app_context():
+            other = User(email='other_evo@test.com', display_name='Other',
+                         google_id='g_other_evo',
+                         terms_accepted_at=datetime.now(timezone.utc))
+            db.session.add(other)
+            db.session.commit()
+            self._auth(client, other.id)
+        resp = client.get(f'/api/tracks/{track_a.id}/sessions')
+        assert resp.status_code == 200
+        assert resp.get_json() == []
+
+    def test_sessions_raceline_returns_lap_data(self, client, seed_sessions):
+        user, _, _, s1, s2, _ = seed_sessions
+        self._auth(client, user.id)
+
+        resp = client.get(f'/api/sessions/raceline?session_ids={s1.id},{s2.id}')
+        assert resp.status_code == 200
+        data = resp.get_json()
+        sessions = data['sessions']
+        assert len(sessions) == 2
+        for s in sessions:
+            assert 'laps' in s
+            assert 'date' in s
+            assert len(s['laps']) > 0
+
+    def test_sessions_raceline_filters_by_user(self, client, app, seed_sessions):
+        from datetime import datetime, timezone
+        _, _, _, s1, s2, _ = seed_sessions
+        with app.app_context():
+            other = User(email='other_evo2@test.com', display_name='Other2',
+                         google_id='g_other_evo2',
+                         terms_accepted_at=datetime.now(timezone.utc))
+            db.session.add(other)
+            db.session.commit()
+            self._auth(client, other.id)
+        resp = client.get(f'/api/sessions/raceline?session_ids={s1.id},{s2.id}')
+        assert resp.status_code == 200
+        assert resp.get_json()['sessions'] == []
+
+    def test_sessions_raceline_unauthenticated(self, client, seed_sessions):
+        _, _, _, s1, s2, _ = seed_sessions
+        resp = client.get(f'/api/sessions/raceline?session_ids={s1.id},{s2.id}')
+        assert resp.status_code == 401
