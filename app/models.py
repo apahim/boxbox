@@ -93,7 +93,7 @@ class Session(db.Model):
     share_token = db.Column(db.String(32), unique=True, nullable=True, index=True)
     share_token_created_at = db.Column(db.DateTime, nullable=True)
     video_filename = db.Column(db.String(255), nullable=True)
-    video_hash = db.Column(db.String(64), nullable=True)
+    video_hash = db.Column(db.String(255), nullable=True)
 
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
 

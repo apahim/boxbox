@@ -68,8 +68,8 @@
                         <!-- GoPro file input + extraction -->
                         <div id="gopro-input" style="display:none;">
                             <label class="form-label">GoPro Video</label>
-                            <input type="file" class="form-control" id="gopro-file" accept=".mp4,.MP4">
-                            <div class="form-text">GoPro Hero with GPS enabled. Only telemetry is extracted — the video stays on your device.</div>
+                            <input type="file" class="form-control" id="gopro-file" accept=".mp4,.MP4" multiple>
+                            <div class="form-text">GoPro Hero with GPS enabled. Select all chapter files from the same session (e.g., GX010001.MP4, GX020001.MP4). Only telemetry is extracted — the video stays on your device.</div>
 
                             <div id="gopro-progress" class="mt-3" style="display:none;">
                                 <div class="progress mb-2" style="height: 6px;">
@@ -206,7 +206,7 @@
 {% block extra_scripts %}
 <script src="{{ url_for('static', filename='js/video-fingerprint.js') }}"></script>
 <script type="module">
-import { extractGoPro, detectLaps, telemetrySummary, telemetryToCSV } from "{{ url_for('static', filename='js/gopro-extract.js') }}";
+import { extractGoPro, concatenateGoPro, detectLaps, telemetrySummary, telemetryToCSV } from "{{ url_for('static', filename='js/gopro-extract.js') }}";
 
 // ---- Track coordinates for GPS auto-matching ----
 var trackCoords = {{ track_coords_js | tojson }};
@@ -390,12 +390,13 @@ function prefillDateFromCSV(file) {
     reader.readAsText(file.slice(0, 8192));
 }
 
-// GoPro extraction
+// GoPro extraction (supports single or multiple chapter files)
 goProFile.addEventListener('change', async function() {
-    var file = this.files[0];
-    if (!file) return;
+    var files = Array.from(this.files);
+    if (files.length === 0) return;
 
     goProData = null;
+    goProVideoHash = null;
     var errDiv = document.getElementById('gopro-error');
     var prevDiv = document.getElementById('gopro-preview');
     var progDiv = document.getElementById('gopro-progress');
@@ -407,16 +408,55 @@ goProFile.addEventListener('change', async function() {
     progDiv.style.display = '';
     progBar.style.width = '0%';
     progBar.classList.add('progress-bar-animated');
-    progText.textContent = 'Reading video metadata\u2026';
     checkStep1Ready();
 
+    var fileCount = files.length;
+    var isMulti = fileCount > 1;
+
     try {
-        goProData = await extractGoPro(file, function(pct) {
-            progBar.style.width = pct + '%';
-            if (pct < 50) progText.textContent = 'Reading video metadata\u2026';
-            else if (pct < 90) progText.textContent = 'Extracting telemetry\u2026';
-            else progText.textContent = 'Finalizing\u2026';
-        });
+        // Extract each file sequentially (avoids memory pressure on large files)
+        var results = [];
+        for (var fi = 0; fi < fileCount; fi++) {
+            var file = files[fi];
+            var fileLabel = isMulti
+                ? 'Extracting file ' + (fi + 1) + ' of ' + fileCount + ' (' + file.name + ')\u2026'
+                : 'Reading video metadata\u2026';
+            progText.textContent = fileLabel;
+
+            // Scale progress per file: 0-90% split across files
+            var fileBase = (fi / fileCount) * 90;
+            var fileScale = 90 / fileCount;
+            var result = await extractGoPro(file, function(pct) {
+                var overall = fileBase + (pct / 100) * fileScale;
+                progBar.style.width = Math.round(overall) + '%';
+                if (isMulti) {
+                    // Keep showing per-file label
+                } else {
+                    if (pct < 50) progText.textContent = 'Reading video metadata\u2026';
+                    else if (pct < 90) progText.textContent = 'Extracting telemetry\u2026';
+                    else progText.textContent = 'Finalizing\u2026';
+                }
+            });
+            results.push(result);
+        }
+
+        // Concatenate if multiple files
+        if (isMulti) {
+            progText.textContent = 'Concatenating telemetry from ' + fileCount + ' files\u2026';
+            goProData = concatenateGoPro(results);
+
+            // Show warnings (e.g. large gaps between files)
+            if (goProData.warnings && goProData.warnings.length > 0) {
+                errDiv.innerHTML = goProData.warnings.map(function(w) {
+                    return '<i class="bi bi-exclamation-triangle"></i> ' + w;
+                }).join('<br>');
+                errDiv.className = 'alert alert-warning mt-3';
+                errDiv.style.display = '';
+            }
+        } else {
+            goProData = results[0];
+            goProData.fileCount = 1;
+        }
 
         // Auto-select track from GoPro GPS before lap detection
         if (goProData.rows && goProData.rows.length > 0) {
@@ -426,8 +466,11 @@ goProFile.addEventListener('change', async function() {
 
         await tryLapDetection();
 
-        // Compute video fingerprint for later verification
-        goProVideoHash = await computeVideoFingerprint(file);
+        // Compute video fingerprints (all files in parallel)
+        progText.textContent = 'Computing fingerprints\u2026';
+        var hashPromises = files.map(function(f) { return computeVideoFingerprint(f); });
+        var hashes = await Promise.all(hashPromises);
+        goProVideoHash = hashes.join(',');
 
         progBar.style.width = '100%';
         progBar.classList.remove('progress-bar-animated');
@@ -437,6 +480,7 @@ goProFile.addEventListener('change', async function() {
         checkStep1Ready();
     } catch (err) {
         progDiv.style.display = 'none';
+        errDiv.className = 'alert alert-danger mt-3';
         errDiv.textContent = 'Error: ' + err.message;
         errDiv.style.display = '';
         checkStep1Ready();
@@ -464,8 +508,10 @@ function showGoProSummary() {
     if (!goProData) return;
     var s = telemetrySummary(goProData);
     if (!s) return;
-    var html = '<strong>' + s.sampleCount.toLocaleString() + '</strong> GPS samples, ' +
-        '<strong>' + s.durationFormatted + '</strong>, max <strong>' + s.maxSpeedKmh + ' km/h</strong>';
+    var fc = goProData.fileCount || 1;
+    var html = '<strong>' + s.sampleCount.toLocaleString() + '</strong> GPS samples';
+    if (fc > 1) html += ' from <strong>' + fc + ' files</strong>';
+    html += ', <strong>' + s.durationFormatted + '</strong>, max <strong>' + s.maxSpeedKmh + ' km/h</strong>';
     if (s.lapCount > 0) {
         html += '<br>Detected <strong>' + s.lapCount + ' laps</strong>';
         if (s.bestLapFormatted) html += ', best: <strong>' + s.bestLapFormatted + '</strong>';
@@ -646,7 +692,13 @@ function buildReview() {
     if (selectedSource === 'racechrono' && csvFile.files.length > 0) {
         addRow('File', csvFile.files[0].name);
     } else if (selectedSource === 'gopro' && goProFile.files.length > 0) {
-        addRow('File', goProFile.files[0].name);
+        var gpFiles = Array.from(goProFile.files);
+        if (gpFiles.length === 1) {
+            addRow('File', gpFiles[0].name);
+        } else {
+            addRow('Files', gpFiles.map(function(f) { return f.name; }).join(', ') +
+                ' (' + gpFiles.length + ' files)');
+        }
     }
     addRow('Date', document.getElementById('date').value);
     var trackOpt = trackSelect.options[trackSelect.selectedIndex];

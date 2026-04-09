@@ -523,37 +523,7 @@ export async function extractGoPro(file, onProgress) {
         });
     }
 
-    // Compute GPS-derived lateral and longitudinal acceleration.
-    // This matches RaceChrono Pro's "calc" approach: derive acceleration from
-    // GPS speed and bearing changes rather than using noisy raw IMU data.
-    var speeds = rows.map(function(r) { return r.speed_gps; });
-    var bearings = rows.map(function(r) { return r.bearing * Math.PI / 180; });
-    var times = rows.map(function(r) { return r.elapsed_time; });
-
-    var speedSmooth = movingAverage(speeds, 7);
-    var bearingUnwrapped = unwrapRadians(bearings);
-    var bearingSmooth = movingAverage(bearingUnwrapped, 7);
-
-    // Differentiate to get acceleration
-    var longAcc = new Array(rows.length);
-    var latAcc = new Array(rows.length);
-    longAcc[0] = 0;
-    latAcc[0] = 0;
-    for (var k = 1; k < rows.length; k++) {
-        var dt = times[k] - times[k - 1];
-        if (dt <= 0) dt = 0.1;
-        longAcc[k] = (speedSmooth[k] - speedSmooth[k - 1]) / dt / G;
-        latAcc[k] = -speedSmooth[k] * (bearingSmooth[k] - bearingSmooth[k - 1]) / dt / G;
-    }
-
-    // Smooth the resulting acceleration
-    longAcc = movingAverage(longAcc, 5);
-    latAcc = movingAverage(latAcc, 5);
-
-    for (var m = 0; m < rows.length; m++) {
-        rows[m].longitudinal_acc = longAcc[m];
-        rows[m].lateral_acc = latAcc[m];
-    }
+    computeGpsAcceleration(rows);
 
     progressCb(90);
 
@@ -752,6 +722,124 @@ export function telemetryToCSV(telemetry) {
     return new Blob([lines.join("\n")], { type: "text/csv" });
 }
 
+
+// ---- GPS acceleration ----
+
+/**
+ * Compute GPS-derived lateral and longitudinal acceleration for a rows array.
+ * Matches RaceChrono Pro's "calc" approach: derive acceleration from GPS speed
+ * and bearing changes rather than using noisy raw IMU data.
+ */
+function computeGpsAcceleration(rows) {
+    var G = 9.80665;
+    var speeds = rows.map(function(r) { return r.speed_gps; });
+    var bearings = rows.map(function(r) { return r.bearing * Math.PI / 180; });
+    var times = rows.map(function(r) { return r.elapsed_time; });
+
+    var speedSmooth = movingAverage(speeds, 7);
+    var bearingUnwrapped = unwrapRadians(bearings);
+    var bearingSmooth = movingAverage(bearingUnwrapped, 7);
+
+    var longAcc = new Array(rows.length);
+    var latAcc = new Array(rows.length);
+    longAcc[0] = 0;
+    latAcc[0] = 0;
+    for (var k = 1; k < rows.length; k++) {
+        var dt = times[k] - times[k - 1];
+        if (dt <= 0) dt = 0.1;
+        longAcc[k] = (speedSmooth[k] - speedSmooth[k - 1]) / dt / G;
+        latAcc[k] = -speedSmooth[k] * (bearingSmooth[k] - bearingSmooth[k - 1]) / dt / G;
+    }
+
+    longAcc = movingAverage(longAcc, 5);
+    latAcc = movingAverage(latAcc, 5);
+
+    for (var m = 0; m < rows.length; m++) {
+        rows[m].longitudinal_acc = longAcc[m];
+        rows[m].lateral_acc = latAcc[m];
+    }
+}
+
+// ---- Multi-file concatenation ----
+
+/**
+ * Concatenate multiple extractGoPro() results into a single telemetry object.
+ * Adjusts elapsed_time and distance_traveled for continuity across files.
+ * @param {Array} results - Array of { rows, fileName } from extractGoPro()
+ * @returns {object} Merged telemetry: { rows, fileName, fileCount }
+ */
+export function concatenateGoPro(results) {
+    if (!results || results.length === 0) {
+        throw new Error("No telemetry data to concatenate.");
+    }
+    if (results.length === 1) {
+        results[0].fileCount = 1;
+        return results[0];
+    }
+
+    // Sort by first GPS timestamp
+    results.sort(function(a, b) {
+        return a.rows[0].timestamp - b.rows[0].timestamp;
+    });
+
+    // Validate: check for duplicate files (same first timestamp within 1 second)
+    for (var d = 1; d < results.length; d++) {
+        if (Math.abs(results[d].rows[0].timestamp - results[d - 1].rows[0].timestamp) < 1) {
+            throw new Error("Duplicate file detected: " + results[d].fileName +
+                " has the same start time as " + results[d - 1].fileName + ".");
+        }
+    }
+
+    // Validate: warn if gap between consecutive files > 60 seconds
+    var warnings = [];
+    for (var w = 1; w < results.length; w++) {
+        var prevLast = results[w - 1].rows[results[w - 1].rows.length - 1];
+        var curFirst = results[w].rows[0];
+        var gap = curFirst.timestamp - prevLast.timestamp;
+        if (gap > 60) {
+            warnings.push("Large gap (" + Math.round(gap) + "s) between " +
+                results[w - 1].fileName + " and " + results[w].fileName +
+                ". These may be from different sessions.");
+        }
+    }
+
+    // Concatenate with offset adjustments
+    var mergedRows = results[0].rows.slice();
+    for (var i = 1; i < results.length; i++) {
+        var prevRows = results[i - 1].rows;
+        var prevLastRow = prevRows[prevRows.length - 1];
+        var curRows = results[i].rows;
+        var curFirstRow = curRows[0];
+
+        // Elapsed time offset: previous file's last elapsed_time + inter-file gap
+        var timeGap = curFirstRow.timestamp - prevLastRow.timestamp;
+        if (timeGap < 0) timeGap = 0;
+        var elapsedOffset = prevLastRow.elapsed_time + timeGap;
+
+        // Distance offset: previous file's last distance + gap distance
+        var gapDist = haversine(
+            prevLastRow.latitude, prevLastRow.longitude,
+            curFirstRow.latitude, curFirstRow.longitude
+        );
+        var distanceOffset = prevLastRow.distance_traveled + gapDist;
+
+        for (var j = 0; j < curRows.length; j++) {
+            var row = {};
+            for (var key in curRows[j]) row[key] = curRows[j][key];
+            row.elapsed_time += elapsedOffset;
+            row.distance_traveled += distanceOffset;
+            mergedRows.push(row);
+        }
+    }
+
+    // Recompute GPS-derived acceleration across the full merged dataset
+    // to avoid smoothing discontinuities at file boundaries
+    computeGpsAcceleration(mergedRows);
+
+    var result = { rows: mergedRows, fileName: results[0].fileName, fileCount: results.length };
+    if (warnings.length > 0) result.warnings = warnings;
+    return result;
+}
 
 // ---- Signal processing helpers ----
 

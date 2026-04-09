@@ -310,7 +310,8 @@ window.VideoSync = (function() {
 
         if (expectedHash) {
             computeVideoFingerprint(file).then(function(hash) {
-                if (hash !== expectedHash) {
+                var validHashes = expectedHash.split(',');
+                if (validHashes.indexOf(hash) === -1) {
                     if (video) {
                         video.pause();
                         video.removeAttribute("src");
