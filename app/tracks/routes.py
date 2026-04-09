@@ -93,7 +93,7 @@ def edit(slug):
     track = Track.query.filter_by(slug=slug).first_or_404()
 
     is_fetch = request.headers.get('X-Requested-With') == 'fetch'
-    readonly = (track.created_by is not None and track.created_by != current_user.id)
+    readonly = (track.created_by != current_user.id)
 
     if request.method == 'POST':
         if readonly:
@@ -219,6 +219,12 @@ def edit(slug):
 def delete(slug):
     track = Track.query.filter_by(slug=slug).first_or_404()
     is_fetch = request.headers.get('X-Requested-With') == 'fetch'
+
+    if track.created_by != current_user.id:
+        if is_fetch:
+            return jsonify(error='You do not have permission to delete this track.'), 403
+        abort(403)
+
     session_count = track.sessions.count()
 
     if session_count > 0:
