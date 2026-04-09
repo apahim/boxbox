@@ -80,12 +80,21 @@
         <tbody>
             {% for item in tracks %}
             <tr>
-                <td data-label="Track">{{ item.track.name }}</td>
+                <td data-label="Track">
+                    {{ item.track.name }}
+                    {% for ename in event_track_map.get(item.track.id, []) %}
+                    <span class="badge bg-info" style="font-size:0.65rem; font-weight:500; margin-left:4px;">{{ ename }}</span>
+                    {% endfor %}
+                </td>
                 <td data-label="Corners" data-sort="{{ item.corner_count }}">{{ item.corner_count }}</td>
                 <td data-label="Sessions" data-sort="{{ item.session_count }}">{{ item.session_count }}</td>
                 <td data-label="Timezone">{{ item.track.timezone }}</td>
                 <td data-label="Actions" class="text-nowrap">
+                    {% if item.track.created_by == current_user.id or item.track.created_by is none %}
                     <a href="{{ url_for('tracks.edit', slug=item.track.slug) }}" class="btn btn-sm btn-outline-primary" title="Edit Corners"><i class="bi bi-pencil"></i></a>
+                    {% else %}
+                    <a href="{{ url_for('tracks.edit', slug=item.track.slug) }}" class="btn btn-sm btn-outline-secondary" title="View Track"><i class="bi bi-eye"></i></a>
+                    {% endif %}
                     {% if item.session_count > 0 %}
                     <button class="btn btn-sm btn-outline-danger" disabled
                             title="Used by {{ item.session_count }} session{{ 's' if item.session_count != 1 }}"><i class="bi bi-trash"></i></button>

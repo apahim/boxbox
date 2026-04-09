@@ -8,7 +8,7 @@ from sqlalchemy import func
 from app import db
 from app.tracks import bp
 from app.tracks.forms import TrackForm
-from app.models import Track, TrackCorner, Session, Telemetry
+from app.models import Track, TrackCorner, Session, Telemetry, User, Event, EventParticipant
 
 
 def _slugify(name):
@@ -21,6 +21,22 @@ def _slugify(name):
 @login_required
 def list_tracks():
     tracks = Track.query.order_by(Track.name).all()
+
+    # Build map of track_id → event names for events the user participates in
+    event_track_map = {}
+    participations = EventParticipant.query.filter(
+        EventParticipant.user_id == current_user.id,
+        EventParticipant.status.in_(['accepted', 'organizer']),
+    ).all()
+    event_ids = [p.event_id for p in participations]
+    if event_ids:
+        events = Event.query.filter(
+            Event.id.in_(event_ids),
+            Event.track_id.isnot(None),
+        ).all()
+        for e in events:
+            event_track_map.setdefault(e.track_id, []).append(e.name)
+
     track_data = []
     for t in tracks:
         track_data.append({
@@ -28,7 +44,8 @@ def list_tracks():
             'corner_count': t.corners.count(),
             'session_count': t.sessions.count(),
         })
-    return render_template('tracks/list.html', tracks=track_data)
+    return render_template('tracks/list.html', tracks=track_data,
+                           event_track_map=event_track_map)
 
 
 @bp.route('/create', methods=['GET', 'POST'])
@@ -76,8 +93,14 @@ def edit(slug):
     track = Track.query.filter_by(slug=slug).first_or_404()
 
     is_fetch = request.headers.get('X-Requested-With') == 'fetch'
+    readonly = (track.created_by is not None and track.created_by != current_user.id)
 
     if request.method == 'POST':
+        if readonly:
+            if is_fetch:
+                return jsonify(error='You do not have permission to edit this track.'), 403
+            abort(403)
+
         corners_json = request.form.get('corners_json', '[]')
         try:
             corners_data = json.loads(corners_json)
@@ -173,6 +196,12 @@ def edit(slug):
          + (Telemetry.longitude - track.lon) * (Telemetry.longitude - track.lon)) <= 0.002,
     ).order_by(Session.date.desc()).all()
 
+    creator_name = None
+    if readonly and track.created_by:
+        creator = db.session.get(User, track.created_by)
+        if creator:
+            creator_name = creator.display_name
+
     return render_template('tracks/edit.html',
                            track=track,
                            corners=corners_list,
@@ -180,7 +209,9 @@ def edit(slug):
                            sf_gate_json=json.dumps(sf_gate),
                            session_count=session_count,
                            mapkit_token=mapkit_token,
-                           matching_sessions=matching_sessions)
+                           matching_sessions=matching_sessions,
+                           readonly=readonly,
+                           creator_name=creator_name)
 
 
 @bp.route('/<slug>/delete', methods=['POST'])

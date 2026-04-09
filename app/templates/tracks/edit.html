@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}Edit {{ track.name }} - BoxBox{% endblock %}
+{% block title %}{% if readonly %}{{ track.name }}{% else %}Edit {{ track.name }}{% endif %} - BoxBox{% endblock %}
 
 {% block extra_head %}
 {% if mapkit_token %}
@@ -85,7 +85,14 @@
     <a href="{{ url_for('tracks.list_tracks') }}" class="btn btn-sm btn-outline-secondary"><i class="bi bi-arrow-left"></i> Tracks</a>
 </div>
 
-{% if matching_sessions %}
+{% if readonly %}
+<div class="alert mb-3" style="background:rgba(245,158,11,0.08); border:1px solid rgba(245,158,11,0.25); border-radius:8px; color:var(--bb-text); font-size:0.85rem;">
+    <i class="bi bi-lock-fill" style="color:var(--bb-amber);"></i>
+    This track is managed by <strong>{{ creator_name or 'another user' }}</strong>. You can view its setup but cannot edit it.
+</div>
+{% endif %}
+
+{% if not readonly and matching_sessions %}
 <div class="alert mb-3" id="matchAlert" style="background:rgba(59,130,246,0.08); border:1px solid rgba(59,130,246,0.25); border-radius:8px; color:var(--bb-text);">
     <div class="d-flex justify-content-between align-items-start">
         <div><i class="bi bi-link-45deg"></i> <strong>{{ matching_sessions|length }} session{{ 's' if matching_sessions|length != 1 else '' }} match{{ '' if matching_sessions|length != 1 else 'es' }} this track's location</strong></div>
@@ -123,7 +130,7 @@
 
     <div class="corner-panel">
         <div class="corner-panel-header">
-            <h6>Track Setup</h6>
+            <h6>{% if readonly %}Track Info{% else %}Track Setup{% endif %}</h6>
         </div>
         <div class="corner-panel-body">
             <!-- S/F Section -->
@@ -138,16 +145,19 @@
             <div class="panel-section">
                 <div class="panel-section-header">
                     <span class="section-title"><i class="bi bi-signpost-split" style="color:var(--bb-blue)"></i> Corners</span>
+                    {% if not readonly %}
                     <div class="panel-actions">
                         <button type="button" class="btn btn-outline-secondary" onclick="addCornerManual()"
                                 title="Add corner">+ Add</button>
                         <button type="button" class="btn btn-outline-danger" id="clear-all-btn" onclick="clearAllCorners()"
                                 title="Remove all corners" style="display:none">&times; Clear</button>
                     </div>
+                    {% endif %}
                 </div>
                 <div id="corners-list-content"></div>
             </div>
         </div>
+        {% if not readonly %}
         <div class="corner-panel-footer">
             <form method="POST" id="save-form">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -162,6 +172,11 @@
             </div>
             {% endif %}
         </div>
+        {% else %}
+        {# Hidden elements for JS rendering in read-only mode #}
+        <input type="hidden" id="corners-json" value="">
+        <input type="hidden" id="sf-gate-json" value="{{ sf_gate_json }}">
+        {% endif %}
     </div>
 </div>
 {% endblock %}
@@ -227,6 +242,7 @@ window.reingestSession = function(sessionId, btn) {
     var trackLat = {{ track.lat }};
     var trackLon = {{ track.lon }};
     var mapkitToken = "{{ mapkit_token }}";
+    var readOnly = {{ 'true' if readonly else 'false' }};
     var map = null;
     var overlays = [];
     var selectedIdx = -1;
@@ -238,12 +254,14 @@ window.reingestSession = function(sessionId, btn) {
 
     // ── Dirty state ──
     function markDirty() {
-        if (dirty) return;
+        if (readOnly || dirty) return;
         dirty = true;
         var btn = document.getElementById('save-btn');
-        btn.disabled = false;
-        btn.innerHTML = 'Save<span class="dirty-dot"></span>';
-        btn.classList.remove('saved', 'error');
+        if (btn) {
+            btn.disabled = false;
+            btn.innerHTML = 'Save<span class="dirty-dot"></span>';
+            btn.classList.remove('saved', 'error');
+        }
         var warn = document.getElementById('reingest-warn');
         if (warn) warn.style.display = '';
         window.onbeforeunload = function() { return 'You have unsaved changes.'; };
@@ -252,54 +270,59 @@ window.reingestSession = function(sessionId, btn) {
     function markClean() {
         dirty = false;
         var btn = document.getElementById('save-btn');
-        btn.disabled = true;
-        btn.innerHTML = '<i class="bi bi-check-lg"></i> Saved';
-        btn.classList.remove('error');
-        btn.classList.add('saved');
+        if (btn) {
+            btn.disabled = true;
+            btn.innerHTML = '<i class="bi bi-check-lg"></i> Saved';
+            btn.classList.remove('error');
+            btn.classList.add('saved');
+            setTimeout(function() { btn.classList.remove('saved'); }, 1500);
+        }
         var warn = document.getElementById('reingest-warn');
         if (warn) warn.style.display = 'none';
         window.onbeforeunload = null;
-        setTimeout(function() { btn.classList.remove('saved'); }, 1500);
     }
 
     // ── Async save ──
-    document.getElementById('save-form').addEventListener('submit', function(e) {
-        e.preventDefault();
-        if (!dirty) return;
-        var btn = document.getElementById('save-btn');
-        btn.disabled = true;
-        btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Saving…';
+    var saveForm = document.getElementById('save-form');
+    if (saveForm) {
+        saveForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+            if (!dirty) return;
+            var btn = document.getElementById('save-btn');
+            btn.disabled = true;
+            btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Saving…';
 
-        var csrf = this.querySelector('[name=csrf_token]').value;
-        var body = 'csrf_token=' + encodeURIComponent(csrf)
-            + '&corners_json=' + encodeURIComponent(document.getElementById('corners-json').value)
-            + '&sf_gate_json=' + encodeURIComponent(document.getElementById('sf-gate-json').value);
+            var csrf = this.querySelector('[name=csrf_token]').value;
+            var body = 'csrf_token=' + encodeURIComponent(csrf)
+                + '&corners_json=' + encodeURIComponent(document.getElementById('corners-json').value)
+                + '&sf_gate_json=' + encodeURIComponent(document.getElementById('sf-gate-json').value);
 
-        fetch(window.location.href, {
-            method: 'POST',
-            headers: { 'X-Requested-With': 'fetch', 'Content-Type': 'application/x-www-form-urlencoded' },
-            body: body,
-            credentials: 'same-origin',
-        }).then(function(resp) {
-            if (resp.ok) {
-                markClean();
-            } else {
-                resp.json().then(function(data) {
-                    btn.innerHTML = '<i class="bi bi-x-lg"></i> ' + (data.error || 'Error');
-                    btn.classList.add('error');
-                    btn.disabled = false;
-                }).catch(function() {
-                    btn.innerHTML = '<i class="bi bi-x-lg"></i> Error';
-                    btn.classList.add('error');
-                    btn.disabled = false;
-                });
-            }
-        }).catch(function() {
-            btn.innerHTML = '<i class="bi bi-x-lg"></i> Network error';
-            btn.classList.add('error');
-            btn.disabled = false;
+            fetch(window.location.href, {
+                method: 'POST',
+                headers: { 'X-Requested-With': 'fetch', 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: body,
+                credentials: 'same-origin',
+            }).then(function(resp) {
+                if (resp.ok) {
+                    markClean();
+                } else {
+                    resp.json().then(function(data) {
+                        btn.innerHTML = '<i class="bi bi-x-lg"></i> ' + (data.error || 'Error');
+                        btn.classList.add('error');
+                        btn.disabled = false;
+                    }).catch(function() {
+                        btn.innerHTML = '<i class="bi bi-x-lg"></i> Error';
+                        btn.classList.add('error');
+                        btn.disabled = false;
+                    });
+                }
+            }).catch(function() {
+                btn.innerHTML = '<i class="bi bi-x-lg"></i> Network error';
+                btn.classList.add('error');
+                btn.disabled = false;
+            });
         });
-    });
+    }
 
     // ── Empty state ──
     function updateEmptyState() {
@@ -341,15 +364,16 @@ window.reingestSession = function(sessionId, btn) {
                         '<div class="sf-coords">' + sfGate.lat1.toFixed(5) + ', ' + sfGate.lon1.toFixed(5) +
                             ' &rarr; ' + sfGate.lat2.toFixed(5) + ', ' + sfGate.lon2.toFixed(5) + '</div>' +
                     '</div>' +
-                    '<button type="button" class="btn btn-sm btn-outline-danger" onclick="removeSfGate()" title="Remove">&times;</button>' +
+                    (readOnly ? '' : '<button type="button" class="btn btn-sm btn-outline-danger" onclick="removeSfGate()" title="Remove">&times;</button>') +
                 '</div>';
         } else {
             container.innerHTML =
                 '<div class="sf-placeholder">' +
                     '<div>No start/finish line</div>' +
+                    (readOnly ? '' :
                     '<button type="button" class="btn btn-sm btn-outline-success" onclick="addSfGate()">' +
-                        '<i class="bi bi-plus-lg"></i> Draw Start/Finish Line</button>' +
-                    '<div class="sf-hint">Required for accurate lap detection</div>' +
+                        '<i class="bi bi-plus-lg"></i> Draw Start/Finish Line</button>') +
+                    '<div class="sf-hint">' + (readOnly ? 'Not configured by track owner' : 'Required for accurate lap detection') + '</div>' +
                 '</div>';
         }
     }
@@ -367,13 +391,14 @@ window.reingestSession = function(sessionId, btn) {
     }
 
     function makeDot(coord, color, onDragEnd) {
+        var draggable = !readOnly;
         var ann = new mapkit.Annotation(coord, function() {
             var el = document.createElement('div');
             el.style.cssText = 'width:10px;height:10px;border-radius:50%;background:' + color +
-                ';border:2px solid #fff;box-shadow:0 0 4px rgba(0,0,0,0.5);cursor:grab;';
+                ';border:2px solid #fff;box-shadow:0 0 4px rgba(0,0,0,0.5);' + (draggable ? 'cursor:grab;' : '');
             return el;
-        }, { draggable: true, displayPriority: mapkit.Annotation.DisplayPriority.Required });
-        if (onDragEnd) ann.addEventListener('drag-end', onDragEnd);
+        }, { draggable: draggable, displayPriority: mapkit.Annotation.DisplayPriority.Required });
+        if (draggable && onDragEnd) ann.addEventListener('drag-end', onDragEnd);
         return ann;
     }
 
@@ -432,64 +457,67 @@ window.reingestSession = function(sessionId, btn) {
             var mid = midpoint(c);
             var row = document.createElement('div');
             row.className = 'corner-row' + (i === selectedIdx ? ' selected' : '');
-            row.draggable = true;
+            row.draggable = !readOnly;
             row.dataset.idx = i;
             row.innerHTML =
-                '<i class="bi bi-grip-vertical drag-handle"></i>' +
+                (readOnly ? '' : '<i class="bi bi-grip-vertical drag-handle"></i>') +
                 '<span class="badge bg-primary rounded-circle">' + (i + 1) + '</span>' +
-                '<input type="text" class="form-control form-control-sm" value="' + (c.name || 'T' + (i+1)).replace(/"/g, '&quot;') + '">' +
+                '<input type="text" class="form-control form-control-sm" value="' + (c.name || 'T' + (i+1)).replace(/"/g, '&quot;') + '"' + (readOnly ? ' readonly' : '') + '>' +
                 '<span class="corner-coords">' + mid.lat.toFixed(5) + ', ' + mid.lon.toFixed(5) + '</span>' +
-                '<button type="button" class="btn btn-sm btn-outline-danger">&times;</button>';
+                (readOnly ? '' : '<button type="button" class="btn btn-sm btn-outline-danger">&times;</button>');
 
-            // Click to select
+            // Click to select (view centering — works in both modes)
             row.addEventListener('click', function(e) {
                 if (e.target.tagName === 'INPUT' || e.target.tagName === 'BUTTON' || e.target.closest('button')) return;
                 selectCorner(i);
             });
 
-            // Name change
-            row.querySelector('input').addEventListener('change', function() {
-                corners[i].name = this.value;
-                document.getElementById('corners-json').value = JSON.stringify(corners);
-                markDirty();
-                if (map) updateMapOverlays();
-            });
+            if (!readOnly) {
+                // Name change
+                row.querySelector('input').addEventListener('change', function() {
+                    corners[i].name = this.value;
+                    document.getElementById('corners-json').value = JSON.stringify(corners);
+                    markDirty();
+                    if (map) updateMapOverlays();
+                });
 
-            // Delete
-            row.querySelector('button').addEventListener('click', function() {
-                corners.splice(i, 1);
-                if (selectedIdx === i) selectedIdx = -1;
-                else if (selectedIdx > i) selectedIdx--;
-                markDirty();
-                renderAll();
-                if (map) updateMapOverlays();
-            });
+                // Delete
+                var delBtn = row.querySelector('button');
+                if (delBtn) delBtn.addEventListener('click', function() {
+                    corners.splice(i, 1);
+                    if (selectedIdx === i) selectedIdx = -1;
+                    else if (selectedIdx > i) selectedIdx--;
+                    markDirty();
+                    renderAll();
+                    if (map) updateMapOverlays();
+                });
 
-            // Drag reorder
-            row.addEventListener('dragstart', function(e) {
-                dragSrcIdx = i;
-                row.classList.add('dragging');
-                e.dataTransfer.effectAllowed = 'move';
-            });
-            row.addEventListener('dragend', function() { row.classList.remove('dragging'); });
-            row.addEventListener('dragover', function(e) {
-                e.preventDefault();
-                e.dataTransfer.dropEffect = 'move';
-                row.classList.add('drag-over');
-            });
-            row.addEventListener('dragleave', function() { row.classList.remove('drag-over'); });
-            row.addEventListener('drop', function(e) {
-                e.preventDefault();
-                row.classList.remove('drag-over');
-                if (dragSrcIdx === null || dragSrcIdx === i) return;
-                var moved = corners.splice(dragSrcIdx, 1)[0];
-                corners.splice(i, 0, moved);
-                if (selectedIdx === dragSrcIdx) selectedIdx = i;
-                dragSrcIdx = null;
-                markDirty();
-                renderAll();
-                if (map) updateMapOverlays();
-            });
+                // Drag reorder
+                row.addEventListener('dragstart', function(e) {
+                    dragSrcIdx = i;
+                    row.classList.add('dragging');
+                    e.dataTransfer.effectAllowed = 'move';
+                });
+                row.addEventListener('dragend', function() { row.classList.remove('dragging'); });
+                row.addEventListener('dragover', function(e) {
+                    e.preventDefault();
+                    e.dataTransfer.dropEffect = 'move';
+                    row.classList.add('drag-over');
+                });
+                row.addEventListener('dragleave', function() { row.classList.remove('drag-over'); });
+                row.addEventListener('drop', function(e) {
+                    e.preventDefault();
+                    row.classList.remove('drag-over');
+                    if (dragSrcIdx === null || dragSrcIdx === i) return;
+                    var moved = corners.splice(dragSrcIdx, 1)[0];
+                    corners.splice(i, 0, moved);
+                    if (selectedIdx === dragSrcIdx) selectedIdx = i;
+                    dragSrcIdx = null;
+                    markDirty();
+                    renderAll();
+                    if (map) updateMapOverlays();
+                });
+            }
 
             list.appendChild(row);
         });
@@ -691,20 +719,22 @@ window.reingestSession = function(sessionId, btn) {
             map.region = new mapkit.CoordinateRegion(center, new mapkit.CoordinateSpan(0.005, 0.005));
         }
 
-        map.addEventListener('single-tap', function(e) {
-            var point = new DOMPoint(e.pointOnPage.x, e.pointOnPage.y);
-            var coord = map.convertPointOnPageToCoordinate(point);
-            var offset = 0.00005;
-            corners.push({
-                name: 'T' + (corners.length + 1),
-                trap_lat1: coord.latitude + offset, trap_lon1: coord.longitude - offset,
-                trap_lat2: coord.latitude - offset, trap_lon2: coord.longitude + offset,
+        if (!readOnly) {
+            map.addEventListener('single-tap', function(e) {
+                var point = new DOMPoint(e.pointOnPage.x, e.pointOnPage.y);
+                var coord = map.convertPointOnPageToCoordinate(point);
+                var offset = 0.00005;
+                corners.push({
+                    name: 'T' + (corners.length + 1),
+                    trap_lat1: coord.latitude + offset, trap_lon1: coord.longitude - offset,
+                    trap_lat2: coord.latitude - offset, trap_lon2: coord.longitude + offset,
+                });
+                markDirty();
+                renderAll();
+                updateMapOverlays();
+                setTimeout(function() { flashCornerRow(corners.length - 1); }, 50);
             });
-            markDirty();
-            renderAll();
-            updateMapOverlays();
-            setTimeout(function() { flashCornerRow(corners.length - 1); }, 50);
-        });
+        }
 
         updateMapOverlays();
         updateSfOverlay();

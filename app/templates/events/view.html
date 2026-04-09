@@ -52,6 +52,13 @@
         <p class="text-muted mb-1">
             {{ event.date.strftime('%-d %b %Y') }}{% if event.time %} · {{ event.time }}{% endif %}{% if event.track %} · {{ event.track.name }}{% endif %}
         </p>
+        {% if event.track %}
+        <p class="text-muted mb-0" style="font-size: 0.8rem;">
+            {{ track_corner_names|length }} corner{{ 's' if track_corner_names|length != 1 else '' }}{% if track_corner_names %} ({{ track_corner_names|join(', ') }}){% endif %}
+            · S/F gate {% if track_has_sf_gate %}configured{% else %}<span style="color:var(--bb-amber);">not set</span>{% endif %}
+            · <a href="{{ url_for('tracks.edit', slug=event.track.slug) }}">View Track</a>
+        </p>
+        {% endif %}
         <p class="text-muted mb-0" style="font-size: 0.85rem;">Organized by {{ event.creator.display_name }}</p>
         {% if event.description %}
         <p class="text-muted mb-0" style="font-size: 0.85rem; font-style: italic; margin-top: 4px;">"{{ event.description }}"</p>
@@ -283,6 +290,22 @@
             </select>
             <button class="btn btn-sm btn-primary" id="linkBtn" onclick="linkSession()" disabled>Link Session</button>
         </div>
+        <div id="noSessionsHint" style="display:none; margin-top: 12px;">
+            <div class="alert mb-0" style="background:rgba(245,158,11,0.08); border:1px solid rgba(245,158,11,0.25); border-radius:8px; color:var(--bb-text); font-size:0.85rem; padding: 12px 16px;">
+                <i class="bi bi-info-circle" style="color:var(--bb-amber);"></i>
+                No sessions processed with <strong>{{ event.track.name }}</strong>. To join the ranking:
+                <ol class="mb-0 mt-1" style="padding-left: 1.2rem; font-size: 0.83rem;">
+                    <li>Go to your <a href="{{ url_for('sessions.list_sessions') }}">sessions</a> and edit the session you want to link</li>
+                    <li>Change its track to <strong>{{ event.track.name }}</strong></li>
+                    <li>Reingest the session to apply the event track's markers</li>
+                    <li>Return here to link it</li>
+                </ol>
+                <div class="mt-1" style="font-size: 0.78rem; color: var(--bb-text-muted);">
+                    All participants must use the same track definition for fair comparison.
+                    <a href="{{ url_for('tracks.edit', slug=event.track.slug) }}">View the event track setup</a>.
+                </div>
+            </div>
+        </div>
         {% else %}
         <p class="mb-0 text-muted" style="font-size: 0.9rem;">
             <i class="bi bi-info-circle"></i> This event has no track assigned. The organizer needs to set a track before sessions can be linked.
@@ -460,6 +483,8 @@ function removeParticipant(eventId, participantId, btn) {
         });
         if (sessions.length === 0) {
             picker.innerHTML = '<option value="">No sessions at this track</option>';
+            var hint = document.getElementById('noSessionsHint');
+            if (hint) hint.style.display = '';
         }
         picker.addEventListener('change', function() {
             linkBtn.disabled = !picker.value;

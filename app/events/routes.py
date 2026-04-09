@@ -9,7 +9,7 @@ from app import db
 from app.events import bp
 from app.events.forms import EventForm
 from app.models import (
-    Event, EventParticipant, Track, Session, User,
+    Event, EventParticipant, Track, TrackCorner, Session, User,
     CornerSummary, SectorTime,
 )
 
@@ -208,6 +208,16 @@ def view(event_id):
         corner_leaders = _build_corner_leaderboard(event, ranked)
         sector_leaders = _build_sector_leaderboard(event, ranked)
 
+    # Track info for display
+    track_corner_names = []
+    track_has_sf_gate = False
+    if event.track:
+        corners = TrackCorner.query.filter_by(
+            track_id=event.track_id
+        ).order_by(TrackCorner.sort_order).all()
+        track_corner_names = [c.name for c in corners]
+        track_has_sf_gate = event.track.sf_lat1 is not None
+
     return render_template('events/view.html',
                            event=event,
                            participant=participant,
@@ -217,7 +227,9 @@ def view(event_id):
                            unranked=unranked,
                            recap=recap,
                            corner_leaders=corner_leaders,
-                           sector_leaders=sector_leaders)
+                           sector_leaders=sector_leaders,
+                           track_corner_names=track_corner_names,
+                           track_has_sf_gate=track_has_sf_gate)
 
 
 def _build_recap(ranked):
