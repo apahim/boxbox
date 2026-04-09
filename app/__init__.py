@@ -155,6 +155,9 @@ def create_app(config_name=None):
     from app.dashboard import bp as dashboard_bp
     app.register_blueprint(dashboard_bp, url_prefix='/dashboard')
 
+    from app.events import bp as events_bp
+    app.register_blueprint(events_bp, url_prefix='/events')
+
     from app.legal import bp as legal_bp
     app.register_blueprint(legal_bp)
 
@@ -189,6 +192,16 @@ def create_app(config_name=None):
     @app.context_processor
     def inject_asset_version():
         return {'asset_v': app.config['ASSET_VERSION']}
+
+    @app.context_processor
+    def inject_pending_invite_count():
+        if current_user.is_authenticated:
+            from app.models import EventParticipant
+            count = EventParticipant.query.filter_by(
+                user_id=current_user.id, status='pending'
+            ).count()
+            return {'pending_invite_count': count}
+        return {'pending_invite_count': 0}
 
     @app.route('/health')
     @limiter.exempt

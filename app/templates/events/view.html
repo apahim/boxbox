@@ -1,0 +1,547 @@
+{% extends "base.html" %}
+
+{% block title %}{{ event.name }} - BoxBox{% endblock %}
+
+{% block extra_head %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/dashboard.css') }}">
+<style>
+    .participant-status { font-size: 0.78rem; }
+    .participant-status .bi { font-size: 0.7rem; vertical-align: middle; margin-right: 2px; }
+    .leaderboard-pos { font-weight: 700; font-size: 1.1rem; width: 40px; text-align: center; }
+    .leaderboard-medal { font-size: 1.2rem; }
+    .gap-value { color: var(--bb-text-muted); font-size: 0.85rem; }
+    .invite-input-wrap { display: flex; gap: 8px; margin-top: 12px; }
+    .invite-input-wrap input { flex: 1; }
+    .invite-error { color: var(--bb-red); font-size: 0.8rem; margin-top: 4px; }
+    .invite-success { color: var(--bb-green); font-size: 0.8rem; margin-top: 4px; }
+    .session-link-card { background: var(--bb-surface-alt); border: 1px solid var(--bb-border); border-radius: 8px; padding: 16px 20px; }
+    .session-linked { color: var(--bb-green); }
+    .recap-card {
+        background: linear-gradient(135deg, rgba(245,158,11,0.06), rgba(229,62,62,0.04));
+        border: 1px solid var(--bb-border);
+        border-radius: 8px;
+        padding: 20px;
+        margin-bottom: 1.5rem;
+    }
+    .podium-card { text-align: center; padding: 12px 8px; }
+    .podium-card .podium-time { font-size: 1.3rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+    .podium-card .podium-label { font-size: 0.75rem; text-transform: uppercase; color: var(--bb-text-muted); letter-spacing: 0.04em; }
+    .podium-card .podium-name { font-size: 0.9rem; font-weight: 500; margin-top: 2px; }
+    .podium-1 .podium-time { color: var(--bb-amber); }
+    .podium-2 .podium-time { color: #c0c0c0; }
+    .podium-3 .podium-time { color: #cd7f32; }
+    .recap-battle { color: var(--bb-text-muted); font-size: 0.85rem; margin-top: 12px; }
+    .compare-wrap { background: var(--bb-surface-alt); border: 1px solid var(--bb-border); border-radius: 8px; padding: 16px 20px; margin-top: 12px; }
+    #compareChart { width: 100%; height: 350px; }
+    .corner-fastest { font-size: 0.8rem; color: var(--bb-text-muted); margin-left: 8px; }
+    @media (max-width: 991px) {
+        .leaderboard-hide { display: none; }
+    }
+    @media (max-width: 576px) {
+        .podium-card .podium-time { font-size: 1rem; }
+        .recap-card { padding: 12px; }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- Header -->
+<div class="d-flex align-items-start justify-content-between gap-3 mb-2">
+    <div>
+        <h1>{{ event.name }}</h1>
+        <p class="text-muted mb-1">
+            {{ event.date.strftime('%-d %b %Y') }}{% if event.time %} · {{ event.time }}{% endif %}{% if event.track %} · {{ event.track.name }}{% endif %}
+        </p>
+        <p class="text-muted mb-0" style="font-size: 0.85rem;">Organized by {{ event.creator.display_name }}</p>
+        {% if event.description %}
+        <p class="text-muted mb-0" style="font-size: 0.85rem; font-style: italic; margin-top: 4px;">"{{ event.description }}"</p>
+        {% endif %}
+    </div>
+    <div class="d-flex align-items-center gap-2 flex-shrink-0">
+        {% if event.status == 'upcoming' %}
+        <span class="badge bg-info">Upcoming</span>
+        {% elif event.status == 'today' %}
+        <span class="badge bg-warning">Today</span>
+        {% else %}
+        <span class="badge bg-secondary">Completed</span>
+        {% endif %}
+        {% if is_organizer %}
+        <a href="{{ url_for('events.edit', event_id=event.id) }}" class="btn btn-sm btn-outline-secondary"><i class="bi bi-pencil"></i><span class="d-none d-sm-inline"> Edit</span></a>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Recap (completed events with 2+ ranked participants) -->
+{% if recap %}
+<div class="recap-card">
+    <div class="row">
+        {% for entry in recap.podium %}
+        <div class="col-md-3 col-sm-6 col-4 mb-2">
+            <div class="podium-card podium-{{ entry.position }}">
+                <div class="podium-time">{{ entry.best_lap_fmt }}</div>
+                <div class="podium-label">{% if entry.position == 1 %}Winner{% elif entry.position == 2 %}2nd{% else %}3rd{% endif %}</div>
+                <div class="podium-name">{{ entry.name }}</div>
+            </div>
+        </div>
+        {% endfor %}
+        {% if recap.most_consistent %}
+        <div class="col-md-3 col-sm-6 col-4 mb-2">
+            <div class="podium-card">
+                <div class="podium-time" style="color: var(--bb-green);">{{ "%.1f"|format(recap.most_consistent.value) }}%</div>
+                <div class="podium-label">Most Consistent</div>
+                <div class="podium-name">{{ recap.most_consistent.name }}</div>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+    {% if recap.closest_battle %}
+    <div class="recap-battle text-center">
+        Closest battle: {{ recap.closest_battle.driver_a }} vs {{ recap.closest_battle.driver_b }} ({{ '%+.3f'|format(recap.closest_battle.gap) }}s)
+    </div>
+    {% endif %}
+</div>
+{% endif %}
+
+<!-- Leaderboard -->
+{% if ranked %}
+<h3 class="section-title">Leaderboard</h3>
+<div class="table-responsive mb-3">
+    <table class="table" id="leaderboardTable">
+        <thead>
+            <tr>
+                <th style="width:40px">#</th>
+                <th>Driver</th>
+                <th>Best Lap</th>
+                <th>Gap</th>
+                <th class="leaderboard-hide">Clean Laps</th>
+                <th class="leaderboard-hide">Consistency</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for entry in ranked %}
+            <tr>
+                <td class="leaderboard-pos">
+                    {% if entry.position == 1 %}<span class="leaderboard-medal" title="1st">&#129351;</span>
+                    {% elif entry.position == 2 %}<span class="leaderboard-medal" title="2nd">&#129352;</span>
+                    {% elif entry.position == 3 %}<span class="leaderboard-medal" title="3rd">&#129353;</span>
+                    {% else %}{{ entry.position }}{% endif %}
+                </td>
+                <td>{{ entry.name }}</td>
+                <td style="font-variant-numeric: tabular-nums;">{{ entry.best_lap_fmt }}</td>
+                <td class="gap-value">{% if entry.gap %}+{{ '%.3f'|format(entry.gap) }}{% else %}—{% endif %}</td>
+                <td class="leaderboard-hide">{{ entry.clean_laps or '—' }} / {{ entry.total_laps or '—' }}</td>
+                <td class="leaderboard-hide">{% if entry.consistency and entry.consistency == entry.consistency %}{{ "%.1f"|format(entry.consistency) }}%{% else %}—{% endif %}</td>
+                <td>
+                    <a href="{{ url_for('dashboard.view', session_id=entry.session.id) }}" class="btn btn-sm btn-outline-primary" title="View Dashboard"><i class="bi bi-speedometer2"></i></a>
+                </td>
+            </tr>
+            {% endfor %}
+            {% for entry in unranked %}
+            <tr class="text-muted">
+                <td class="leaderboard-pos">—</td>
+                <td>{{ entry.name }}</td>
+                <td>—</td>
+                <td>—</td>
+                <td class="leaderboard-hide">—</td>
+                <td class="leaderboard-hide">—</td>
+                <td></td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<!-- Compare Two Drivers -->
+{% if ranked|length >= 2 %}
+<div class="mb-3">
+    <button class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="collapse" data-bs-target="#compareSection">
+        <i class="bi bi-arrows-expand"></i> Compare Two Drivers
+    </button>
+    <div class="collapse" id="compareSection">
+        <div class="compare-wrap">
+            <div class="row mb-3">
+                <div class="col-md-5">
+                    <label class="form-label fw-semibold" style="color: var(--bb-green);">Driver A</label>
+                    <select id="compareA" class="form-select form-select-sm" style="border-left: 3px solid var(--bb-green);">
+                        <option value="">— Select —</option>
+                        {% for e in ranked %}
+                        <option value="{{ e.session.id }}" data-name="{{ e.name }}">{{ e.name }} ({{ e.best_lap_fmt }})</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-5 mt-2 mt-md-0">
+                    <label class="form-label fw-semibold" style="color: var(--bb-blue);">Driver B</label>
+                    <select id="compareB" class="form-select form-select-sm" style="border-left: 3px solid var(--bb-blue);">
+                        <option value="">— Select —</option>
+                        {% for e in ranked %}
+                        <option value="{{ e.session.id }}" data-name="{{ e.name }}">{{ e.name }} ({{ e.best_lap_fmt }})</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-2 mt-2 mt-md-0 d-flex align-items-end">
+                    <button class="btn btn-sm btn-outline-primary w-100" onclick="runCompare()">Compare</button>
+                </div>
+            </div>
+            <div id="compareResult"></div>
+        </div>
+    </div>
+</div>
+{% endif %}
+{% elif not unranked %}
+<div class="bb-empty" style="padding: 2rem;">
+    <i class="bi bi-trophy"></i>
+    <p>No sessions linked yet. Invite participants and link sessions to see the leaderboard.</p>
+</div>
+{% else %}
+<!-- Only unranked participants -->
+<h3 class="section-title">Leaderboard</h3>
+<p class="text-muted" style="font-size: 0.9rem;">No sessions linked yet. The leaderboard will appear once participants link their sessions.</p>
+{% endif %}
+
+<!-- Participants -->
+<h3 class="section-title">Participants</h3>
+<div class="table-responsive mb-3">
+    <table class="table">
+        <thead>
+            <tr>
+                <th>Name</th>
+                <th class="d-none d-lg-table-cell">Email</th>
+                <th>Status</th>
+                <th>Session</th>
+                {% if is_organizer %}<th></th>{% endif %}
+            </tr>
+        </thead>
+        <tbody id="participantsBody">
+            {% for p in participants %}
+            <tr id="participant-{{ p.id }}">
+                <td>
+                    {% if p.role == 'organizer' %}<i class="bi bi-star-fill" style="color: var(--bb-amber); font-size: 0.7rem;" title="Organizer"></i> {% endif %}
+                    {{ p.user.display_name if p.user else p.email }}
+                </td>
+                <td class="d-none d-lg-table-cell" style="color: var(--bb-text-muted); font-size: 0.85rem;">{{ p.email }}</td>
+                <td>
+                    <span class="participant-status">
+                    {% if p.role == 'organizer' %}
+                        <span class="badge bg-primary">Organizer</span>
+                    {% elif p.status == 'accepted' %}
+                        <span class="badge bg-success">Accepted</span>
+                    {% elif p.status == 'pending' %}
+                        <span class="badge bg-warning">Pending</span>
+                    {% else %}
+                        <span class="badge bg-secondary">Declined</span>
+                    {% endif %}
+                    </span>
+                </td>
+                <td>
+                    {% if p.session_id %}
+                    <span class="session-linked"><i class="bi bi-check-circle-fill"></i> Linked</span>
+                    {% else %}—{% endif %}
+                </td>
+                {% if is_organizer %}
+                <td>
+                    {% if p.user_id != current_user.id %}
+                    <button class="btn btn-sm btn-outline-danger" title="Remove"
+                            onclick="removeParticipant({{ event.id }}, {{ p.id }}, this)"><i class="bi bi-x-lg"></i></button>
+                    {% endif %}
+                </td>
+                {% endif %}
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+{% if is_organizer %}
+<div class="invite-input-wrap mb-4">
+    <input type="text" class="form-control" id="inviteEmails" placeholder="email@example.com, another@example.com">
+    <button class="btn btn-primary" id="inviteBtn" onclick="sendInvites()"><i class="bi bi-send"></i> Invite</button>
+</div>
+<div id="inviteFeedback"></div>
+{% endif %}
+
+<!-- Your Session (for accepted participants) -->
+{% if participant.status in ['accepted', 'organizer'] %}
+<h3 class="section-title">Your Session</h3>
+<div class="session-link-card mb-4" id="sessionLinkCard">
+    {% if participant.session_id %}
+    <div id="linkedState">
+        <span class="session-linked"><i class="bi bi-check-circle-fill"></i></span>
+        Linked: {{ participant.session.date.strftime('%-d %b %Y') }} · Best: {{ '%d:%06.3f'|format(participant.session.best_lap_time // 60, participant.session.best_lap_time % 60) if participant.session.best_lap_time else '—' }} · {{ participant.session.total_laps or 0 }} laps
+        <div class="mt-2">
+            <a href="{{ url_for('dashboard.view', session_id=participant.session_id) }}" class="btn btn-sm btn-outline-primary"><i class="bi bi-speedometer2"></i> View Dashboard</a>
+            <button class="btn btn-sm btn-outline-secondary" onclick="unlinkSession()"><i class="bi bi-x-lg"></i> Unlink</button>
+        </div>
+    </div>
+    {% else %}
+    <div id="unlinkState">
+        {% if event.track_id %}
+        <p class="mb-2" style="font-size: 0.9rem;">Link one of your sessions at <strong>{{ event.track.name }}</strong> to join the ranking.</p>
+        <div class="d-flex gap-2 align-items-end flex-wrap">
+            <select id="sessionPicker" class="form-select form-select-sm" style="max-width: 400px;">
+                <option value="">Loading sessions...</option>
+            </select>
+            <button class="btn btn-sm btn-primary" id="linkBtn" onclick="linkSession()" disabled>Link Session</button>
+        </div>
+        {% else %}
+        <p class="mb-0 text-muted" style="font-size: 0.9rem;">
+            <i class="bi bi-info-circle"></i> This event has no track assigned. The organizer needs to set a track before sessions can be linked.
+        </p>
+        {% endif %}
+    </div>
+    {% endif %}
+</div>
+{% endif %}
+
+<!-- Corner Leaderboard -->
+{% if corner_leaders %}
+<h3 class="section-title">Corner Leaderboard</h3>
+<div class="accordion mb-3" id="cornerAccordion">
+    {% for corner in corner_leaders %}
+    <div class="accordion-item">
+        <h2 class="accordion-header">
+            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#corner-{{ corner.index }}" style="font-size: 0.9rem;">
+                {{ corner.name }}
+                {% if corner.fastest %}
+                <span class="corner-fastest">— Fastest: {{ corner.fastest.name }} ({{ '%.1f'|format(corner.fastest.min_speed * 3.6) }} km/h)</span>
+                {% endif %}
+            </button>
+        </h2>
+        <div id="corner-{{ corner.index }}" class="accordion-collapse collapse" data-bs-parent="#cornerAccordion">
+            <div class="accordion-body p-0">
+                <table class="table table-sm mb-0">
+                    <thead><tr><th>#</th><th>Driver</th><th>Min Speed</th><th>Entry</th><th>Exit</th></tr></thead>
+                    <tbody>
+                        {% for e in corner.entries %}
+                        <tr>
+                            <td>{{ e.position }}</td>
+                            <td>{{ e.name }}</td>
+                            <td>{% if e.min_speed %}{{ '%.1f'|format(e.min_speed * 3.6) }} km/h{% else %}—{% endif %}</td>
+                            <td>{% if e.entry_speed %}{{ '%.1f'|format(e.entry_speed * 3.6) }}{% else %}—{% endif %}</td>
+                            <td>{% if e.exit_speed %}{{ '%.1f'|format(e.exit_speed * 3.6) }}{% else %}—{% endif %}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% endif %}
+
+<!-- Sector Leaderboard -->
+{% if sector_leaders %}
+<h3 class="section-title">Sector Leaderboard</h3>
+<div class="accordion mb-3" id="sectorAccordion">
+    {% for sector in sector_leaders %}
+    <div class="accordion-item">
+        <h2 class="accordion-header">
+            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#sector-{{ sector.index }}" style="font-size: 0.9rem;">
+                {{ sector.name }}
+                {% if sector.fastest %}
+                <span class="corner-fastest">— Fastest: {{ sector.fastest.name }} ({{ sector.fastest.time_fmt }})</span>
+                {% endif %}
+            </button>
+        </h2>
+        <div id="sector-{{ sector.index }}" class="accordion-collapse collapse" data-bs-parent="#sectorAccordion">
+            <div class="accordion-body p-0">
+                <table class="table table-sm mb-0">
+                    <thead><tr><th>#</th><th>Driver</th><th>Time</th><th>Delta</th></tr></thead>
+                    <tbody>
+                        {% for e in sector.entries %}
+                        <tr>
+                            <td>{{ e.position }}</td>
+                            <td>{{ e.name }}</td>
+                            <td style="font-variant-numeric: tabular-nums;">{{ e.time_fmt }}</td>
+                            <td class="gap-value">{% if e.delta %}+{{ '%.3f'|format(e.delta) }}{% else %}—{% endif %}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% endif %}
+
+<!-- Danger Zone (organizer only) -->
+{% if is_organizer %}
+<div class="card mt-4" style="border-color: var(--bb-red);">
+    <div class="card-body">
+        <h5 style="color: var(--bb-red);">Danger Zone</h5>
+        <p class="text-muted" style="font-size: 0.85rem;">Deleting this event removes all participant data and cannot be undone.</p>
+        <button class="btn btn-outline-danger" onclick="handleDeleteEvent()"><i class="bi bi-trash"></i> Delete Event</button>
+    </div>
+</div>
+{% endif %}
+
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+var csrf = '{{ csrf_token() }}';
+var eventId = {{ event.id }};
+
+function fetchEvent(path, opts) {
+    opts = opts || {};
+    opts.headers = Object.assign({ 'X-Requested-With': 'fetch', 'X-CSRFToken': csrf }, opts.headers || {});
+    opts.credentials = 'same-origin';
+    return fetch('/events/' + eventId + path, opts);
+}
+
+// ── Invite ──
+function sendInvites() {
+    var input = document.getElementById('inviteEmails');
+    var feedback = document.getElementById('inviteFeedback');
+    var emails = input.value.trim();
+    if (!emails) return;
+
+    document.getElementById('inviteBtn').disabled = true;
+    fetch('/events/' + eventId + '/invite', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'fetch', 'X-CSRFToken': csrf },
+        body: JSON.stringify({ emails: emails }),
+        credentials: 'same-origin',
+    }).then(function(r) { return r.json(); })
+    .then(function(data) {
+        document.getElementById('inviteBtn').disabled = false;
+        var html = '';
+        if (data.added && data.added.length) {
+            html += '<div class="invite-success"><i class="bi bi-check-circle"></i> Invited: ' + data.added.join(', ') + '</div>';
+            input.value = '';
+        }
+        if (data.errors && data.errors.length) {
+            html += '<div class="invite-error"><i class="bi bi-exclamation-circle"></i> ' + data.errors.join('; ') + '</div>';
+        }
+        feedback.innerHTML = html;
+        if (data.added && data.added.length) {
+            setTimeout(function() { location.reload(); }, 1000);
+        }
+    }).catch(function() {
+        document.getElementById('inviteBtn').disabled = false;
+        feedback.innerHTML = '<div class="invite-error">Network error</div>';
+    });
+}
+
+// ── Remove participant ──
+function removeParticipant(eventId, participantId, btn) {
+    if (!confirm('Remove this participant?')) return;
+    btn.disabled = true;
+    fetch('/events/' + eventId + '/remove/' + participantId, {
+        method: 'POST',
+        headers: { 'X-Requested-With': 'fetch', 'X-CSRFToken': csrf },
+        credentials: 'same-origin',
+    }).then(function(r) {
+        if (r.ok) {
+            var row = document.getElementById('participant-' + participantId);
+            if (row) row.remove();
+        } else { btn.disabled = false; alert('Failed to remove'); }
+    }).catch(function() { btn.disabled = false; alert('Network error'); });
+}
+
+// ── Session linking ──
+{% if participant.status in ['accepted', 'organizer'] and not participant.session_id and event.track_id %}
+(function() {
+    var picker = document.getElementById('sessionPicker');
+    var linkBtn = document.getElementById('linkBtn');
+    fetch('/events/' + eventId + '/my-sessions', {
+        headers: { 'X-Requested-With': 'fetch' },
+        credentials: 'same-origin',
+    }).then(function(r) { return r.json(); })
+    .then(function(sessions) {
+        picker.innerHTML = '<option value="">— Select a session —</option>';
+        sessions.forEach(function(s) {
+            var opt = document.createElement('option');
+            opt.value = s.id;
+            opt.textContent = s.date_fmt + ' · ' + s.best_lap_fmt + ' · ' + s.total_laps + ' laps';
+            picker.appendChild(opt);
+        });
+        if (sessions.length === 0) {
+            picker.innerHTML = '<option value="">No sessions at this track</option>';
+        }
+        picker.addEventListener('change', function() {
+            linkBtn.disabled = !picker.value;
+        });
+    });
+})();
+{% endif %}
+
+function linkSession() {
+    var picker = document.getElementById('sessionPicker');
+    if (!picker.value) return;
+    document.getElementById('linkBtn').disabled = true;
+    fetch('/events/' + eventId + '/link-session', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'fetch', 'X-CSRFToken': csrf },
+        body: JSON.stringify({ session_id: parseInt(picker.value) }),
+        credentials: 'same-origin',
+    }).then(function(r) {
+        if (r.ok) location.reload();
+        else r.json().then(function(d) { alert(d.error || 'Failed'); document.getElementById('linkBtn').disabled = false; });
+    }).catch(function() { alert('Network error'); document.getElementById('linkBtn').disabled = false; });
+}
+
+function unlinkSession() {
+    if (!confirm('Unlink your session from this event?')) return;
+    fetchEvent('/unlink-session', { method: 'POST' })
+    .then(function(r) { if (r.ok) location.reload(); else alert('Failed'); });
+}
+
+// ── Delete event ──
+function handleDeleteEvent() {
+    if (!confirm('Delete this event? This cannot be undone.')) return;
+    fetchEvent('/delete', { method: 'POST' })
+    .then(function(r) {
+        if (r.ok) window.location.href = '{{ url_for("events.list_events") }}';
+        else alert('Failed to delete event');
+    });
+}
+
+// ── Compare drivers ──
+function runCompare() {
+    var aId = document.getElementById('compareA').value;
+    var bId = document.getElementById('compareB').value;
+    var aName = document.getElementById('compareA').selectedOptions[0].dataset.name;
+    var bName = document.getElementById('compareB').selectedOptions[0].dataset.name;
+    if (!aId || !bId || aId === bId) { alert('Select two different drivers'); return; }
+
+    var result = document.getElementById('compareResult');
+    result.innerHTML = '<p class="text-muted">Loading...</p>';
+
+    Promise.all([
+        fetch('/api/sessions/' + aId + '/charts/laptime_bar', { headers: { 'X-Requested-With': 'fetch' }, credentials: 'same-origin' }).then(function(r) { return r.ok ? r.json() : null; }),
+        fetch('/api/sessions/' + bId + '/charts/laptime_bar', { headers: { 'X-Requested-With': 'fetch' }, credentials: 'same-origin' }).then(function(r) { return r.ok ? r.json() : null; }),
+    ]).then(function(data) {
+        if (!data[0] || !data[1] || !data[0].data || !data[1].data) {
+            result.innerHTML = '<p class="text-muted">Chart data not available for one or both drivers.</p>';
+            return;
+        }
+
+        // Merge lap time bar charts
+        var tracesA = data[0].data.map(function(t) { t.name = aName + (t.name ? ' ' + t.name : ''); t.marker = { color: 'rgba(34,197,94,0.7)' }; return t; });
+        var tracesB = data[1].data.map(function(t) { t.name = bName + (t.name ? ' ' + t.name : ''); t.marker = { color: 'rgba(59,130,246,0.7)' }; return t; });
+
+        result.innerHTML = '<div id="compareChart"></div>';
+        var layout = Object.assign({}, data[0].layout || {}, {
+            barmode: 'group',
+            paper_bgcolor: 'rgba(0,0,0,0)',
+            plot_bgcolor: 'rgba(0,0,0,0)',
+            font: { color: '#e6edf3' },
+            margin: { t: 30, r: 20, b: 40, l: 50 },
+        });
+        if (typeof Plotly !== 'undefined') {
+            Plotly.react('compareChart', tracesA.concat(tracesB), layout, { responsive: true });
+        } else {
+            result.innerHTML = '<p class="text-muted">Plotly is not loaded on this page. Visit a session dashboard first to load it.</p>';
+        }
+    }).catch(function() {
+        result.innerHTML = '<p class="text-muted">Failed to load comparison data.</p>';
+    });
+}
+</script>
+{% if ranked|length >= 2 %}
+<script src="https://cdn.plot.ly/plotly-3.4.0.min.js" integrity="sha384-pFOQ7loGBChmUyS4Tszy+he8OWeYkwTFjc2xii4aJUWWiGwf2u2OEc04T5iDRpMp" crossorigin="anonymous"></script>
+{% endif %}
+{% endblock %}

@@ -35,6 +35,9 @@
                         <a class="nav-link" href="{{ url_for('index') }}"><i class="bi bi-speedometer2"></i>Sessions</a>
                     </li>
                     <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('events.list_events') }}"><i class="bi bi-calendar-event"></i>Events{% if pending_invite_count %} <span class="badge bg-warning text-dark" style="font-size:0.6rem;">{{ pending_invite_count }}</span>{% endif %}</a>
+                    </li>
+                    <li class="nav-item">
                         <a class="nav-link" href="{{ url_for('tracks.list_tracks') }}"><i class="bi bi-geo-alt"></i>Tracks</a>
                     </li>
                 </ul>

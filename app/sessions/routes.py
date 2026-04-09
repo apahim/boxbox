@@ -15,7 +15,7 @@ from app.sessions.forms import SessionCreateForm, SessionEditForm
 from app.models import (
     Session, Track, TrackCorner,
     Lap, Telemetry, CornerRecord, CornerSummary,
-    SectorTime, ChartData, SessionUpload,
+    SectorTime, ChartData, SessionUpload, EventParticipant,
 )
 
 
@@ -222,6 +222,8 @@ def delete(session_id):
 
     # Bulk SQL deletes — much faster than ORM cascade
     try:
+        # Unlink from any events before deleting
+        EventParticipant.query.filter_by(session_id=session.id).update({'session_id': None})
         Telemetry.query.filter_by(session_id=session.id).delete()
         Lap.query.filter_by(session_id=session.id).delete()
         CornerRecord.query.filter_by(session_id=session.id).delete()

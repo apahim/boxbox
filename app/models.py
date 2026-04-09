@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta, timezone
+from datetime import date as date_type, datetime, timedelta, timezone
 
 from flask_login import UserMixin
 
@@ -20,6 +20,9 @@ class User(UserMixin, db.Model):
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
 
     sessions = db.relationship('Session', backref='user', lazy='dynamic')
+    event_participations = db.relationship('EventParticipant', backref='user',
+                                           lazy='dynamic',
+                                           foreign_keys='EventParticipant.user_id')
 
 
 class Track(db.Model):
@@ -246,3 +249,56 @@ class SessionUpload(db.Model):
     original_filename = db.Column(db.String(255))
     csv_compressed = db.Column(db.LargeBinary)
     uploaded_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+
+
+class Event(db.Model):
+    __tablename__ = 'events'
+
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(200), nullable=False)
+    date = db.Column(db.Date, nullable=False)
+    time = db.Column(db.String(10), nullable=True)
+    track_id = db.Column(db.Integer, db.ForeignKey('tracks.id'), nullable=True)
+    created_by = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    description = db.Column(db.Text, nullable=True)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+
+    track = db.relationship('Track', backref='events')
+    creator = db.relationship('User', backref='created_events',
+                              foreign_keys=[created_by])
+    participants = db.relationship('EventParticipant', backref='event',
+                                   lazy='dynamic', cascade='all, delete-orphan')
+
+    @property
+    def status(self):
+        today = date_type.today()
+        if self.date > today:
+            return 'upcoming'
+        elif self.date == today:
+            return 'today'
+        else:
+            return 'completed'
+
+
+class EventParticipant(db.Model):
+    __tablename__ = 'event_participants'
+
+    id = db.Column(db.Integer, primary_key=True)
+    event_id = db.Column(db.Integer, db.ForeignKey('events.id'), nullable=False)
+    email = db.Column(db.String(255), nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+    session_id = db.Column(db.Integer, db.ForeignKey('sessions.id'), nullable=True)
+    role = db.Column(db.String(20), nullable=False, default='participant')
+    status = db.Column(db.String(20), nullable=False, default='pending')
+    invited_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+    responded_at = db.Column(db.DateTime, nullable=True)
+
+    session = db.relationship('Session', backref='event_links')
+
+    __table_args__ = (
+        db.UniqueConstraint('event_id', 'email', name='uq_event_participant_email'),
+        db.UniqueConstraint('event_id', 'session_id',
+                            name='uq_event_participant_session'),
+        db.Index('ix_event_participant_email', 'email'),
+        db.Index('ix_event_participant_user', 'user_id'),
+    )

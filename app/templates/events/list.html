@@ -1,0 +1,207 @@
+{% extends "base.html" %}
+
+{% block title %}Events - BoxBox{% endblock %}
+
+{% block extra_head %}
+<style>
+    .invite-card {
+        background: var(--bb-surface);
+        border: 1px solid var(--bb-border);
+        border-left: 3px solid var(--bb-amber);
+        border-radius: 8px;
+        padding: 16px 20px;
+        margin-bottom: 12px;
+        transition: opacity 0.4s, transform 0.4s;
+    }
+    .invite-card.removing {
+        opacity: 0;
+        transform: translateX(40px);
+        pointer-events: none;
+    }
+    .invite-card h5 { margin: 0 0 4px; font-size: 1rem; }
+    .invite-card .invite-meta { color: var(--bb-text-muted); font-size: 0.85rem; }
+    .invite-card .invite-desc { color: var(--bb-text-muted); font-style: italic; font-size: 0.85rem; margin-top: 4px; }
+    .invite-actions { margin-top: 10px; display: flex; gap: 8px; }
+    .status-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 4px; vertical-align: middle; }
+    .status-dot.upcoming { background: var(--bb-blue); }
+    .status-dot.today { background: var(--bb-amber); }
+    .status-dot.completed { background: var(--bb-text-dim); }
+    .event-role { font-size: 0.7rem; color: var(--bb-amber); margin-left: 4px; }
+    th.sortable { cursor: pointer; user-select: none; white-space: nowrap; }
+    th.sortable:hover { color: var(--bb-blue); }
+    th.sortable .sort-icon { font-size: 0.65rem; margin-left: 3px; opacity: 0.4; }
+    th.sortable.sort-asc .sort-icon, th.sortable.sort-desc .sort-icon { opacity: 1; color: var(--bb-blue); }
+    @media (max-width: 991px) {
+        .table-responsive { overflow-x: visible; }
+        #eventsTable thead { display: none; }
+        #eventsTable, #eventsTable tbody, #eventsTable tr, #eventsTable td { display: block; }
+        #eventsTable tr {
+            position: relative;
+            background: var(--bb-surface);
+            border: 1px solid var(--bb-border);
+            border-radius: 8px;
+            margin-bottom: 10px;
+            padding: 10px 12px 8px;
+        }
+        #eventsTable td { padding: 1px 0; border: none; font-size: 0.85rem; }
+        #eventsTable td[data-label="Date"] { font-weight: 600; font-size: 0.9rem; padding-right: 90px; }
+        #eventsTable td[data-label="Track"]  { color: var(--bb-text-muted); font-size: 0.8rem; }
+        #eventsTable td[data-label="Participants"]::before,
+        #eventsTable td[data-label="Status"]::before {
+            content: attr(data-label) "  ";
+            font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.04em;
+            color: var(--bb-text-muted); font-weight: 600; margin-right: 4px;
+        }
+        #eventsTable td.d-none { display: block !important; }
+        #eventsTable td[data-label="Actions"] {
+            position: absolute; top: 8px; right: 10px; padding: 0;
+        }
+        #eventsTable td[data-label="Actions"] .btn-sm { padding: 0.15rem 0.35rem; font-size: 0.75rem; }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h2>Events</h2>
+    <a href="{{ url_for('events.create') }}" class="btn btn-primary"><i class="bi bi-plus-lg"></i>Create Event</a>
+</div>
+
+{% if pending_events %}
+<h3 class="section-title">Pending Invitations</h3>
+{% for item in pending_events %}
+<div class="invite-card" id="invite-{{ item.event.id }}">
+    <h5>{{ item.event.name }}</h5>
+    <div class="invite-meta">
+        {{ item.event.date.strftime('%-d %b %Y') }}{% if item.event.time %} · {{ item.event.time }}{% endif %}{% if item.event.track %} · {{ item.event.track.name }}{% endif %}
+    </div>
+    <div class="invite-meta">Organized by {{ item.organizer.display_name }}</div>
+    {% if item.event.description %}
+    <div class="invite-desc">"{{ item.event.description }}"</div>
+    {% endif %}
+    <div class="invite-actions">
+        <button class="btn btn-sm btn-outline-success" onclick="respondInvite({{ item.event.id }}, 'accept', this)"><i class="bi bi-check-lg"></i> Accept</button>
+        <button class="btn btn-sm btn-outline-secondary" onclick="respondInvite({{ item.event.id }}, 'decline', this)"><i class="bi bi-x-lg"></i> Decline</button>
+    </div>
+</div>
+{% endfor %}
+{% endif %}
+
+{% if events %}
+<div class="table-responsive">
+    <table class="table table-hover" id="eventsTable">
+        <thead>
+            <tr>
+                <th class="sortable sort-desc" data-col="0" data-type="string">Date <i class="bi bi-arrow-down sort-icon"></i></th>
+                <th>Name</th>
+                <th class="sortable" data-col="2" data-type="string">Track <i class="bi bi-arrow-down-up sort-icon"></i></th>
+                <th class="sortable d-none d-lg-table-cell" data-col="3" data-type="number">Participants <i class="bi bi-arrow-down-up sort-icon"></i></th>
+                <th>Status</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for e in events %}
+            <tr>
+                <td data-label="Date" data-sort="{{ e.date }}">{{ e.date.strftime('%-d %b %Y') }}{% if e.time %} · {{ e.time }}{% endif %}</td>
+                <td data-label="Name"><a href="{{ url_for('events.view', event_id=e.id) }}" style="text-decoration:none; color:var(--bb-text); font-weight:500;">{{ e.name }}</a>{% if e.created_by == current_user.id %}<i class="bi bi-star-fill event-role" title="Organizer"></i>{% endif %}</td>
+                <td data-label="Track">{% if e.track %}{{ e.track.name }}{% else %}—{% endif %}</td>
+                <td data-label="Participants" class="d-none d-lg-table-cell" data-sort="{{ accepted_counts.get(e.id, 0) }}">{{ accepted_counts.get(e.id, 0) }}</td>
+                <td data-label="Status">
+                    {% if e.status == 'upcoming' %}
+                    <span class="badge bg-info">Upcoming</span>
+                    {% elif e.status == 'today' %}
+                    <span class="badge bg-warning">Today</span>
+                    {% else %}
+                    <span class="badge bg-secondary">Completed</span>
+                    {% endif %}
+                </td>
+                <td data-label="Actions" class="text-nowrap">
+                    <a href="{{ url_for('events.view', event_id=e.id) }}" class="btn btn-sm btn-outline-primary" title="View"><i class="bi bi-eye"></i></a>
+                    {% if e.created_by == current_user.id %}
+                    <a href="{{ url_for('events.edit', event_id=e.id) }}" class="btn btn-sm btn-outline-secondary" title="Edit"><i class="bi bi-pencil"></i></a>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% elif not pending_events %}
+<div class="bb-empty">
+    <i class="bi bi-calendar-event"></i>
+    <p>No events yet. Create one to get started.</p>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+function respondInvite(eventId, action, btn) {
+    btn.disabled = true;
+    var card = document.getElementById('invite-' + eventId);
+    var csrf = '{{ csrf_token() }}';
+    fetch('/events/' + eventId + '/' + action, {
+        method: 'POST',
+        headers: { 'X-Requested-With': 'fetch', 'X-CSRFToken': csrf },
+        credentials: 'same-origin',
+    }).then(function(r) {
+        if (r.ok) {
+            card.classList.add('removing');
+            setTimeout(function() { card.remove(); }, 400);
+            // Update badge
+            var badge = document.querySelector('.nav-link .badge.bg-warning');
+            if (badge) {
+                var count = parseInt(badge.textContent) - 1;
+                if (count > 0) { badge.textContent = count; }
+                else { badge.remove(); }
+            }
+            if (action === 'accept') {
+                location.reload();
+            }
+        } else {
+            btn.disabled = false;
+            r.json().then(function(d) { alert(d.error || 'Failed'); }).catch(function() { alert('Failed'); });
+        }
+    }).catch(function() { btn.disabled = false; alert('Network error'); });
+}
+
+// Column sorting
+var thead = document.querySelector('#eventsTable thead');
+var tbody = document.querySelector('#eventsTable tbody');
+if (thead && tbody) {
+    thead.querySelectorAll('th.sortable').forEach(function(th) {
+        th.addEventListener('click', function() {
+            var col = parseInt(th.dataset.col);
+            var type = th.dataset.type;
+            var asc;
+            if (th.classList.contains('sort-asc')) {
+                th.classList.remove('sort-asc'); th.classList.add('sort-desc'); asc = false;
+            } else if (th.classList.contains('sort-desc')) {
+                th.classList.remove('sort-desc'); th.classList.add('sort-asc'); asc = true;
+            } else {
+                asc = true; th.classList.add('sort-asc');
+            }
+            thead.querySelectorAll('th.sortable').forEach(function(o) {
+                if (o !== th) {
+                    o.classList.remove('sort-asc', 'sort-desc');
+                    o.querySelector('.sort-icon').className = 'bi bi-arrow-down-up sort-icon';
+                }
+            });
+            th.querySelector('.sort-icon').className = 'bi ' + (asc ? 'bi-arrow-up' : 'bi-arrow-down') + ' sort-icon';
+            var rows = Array.prototype.slice.call(tbody.querySelectorAll('tr'));
+            rows.sort(function(a, b) {
+                var aV = a.cells[col].dataset.sort !== undefined ? a.cells[col].dataset.sort : a.cells[col].textContent.trim();
+                var bV = b.cells[col].dataset.sort !== undefined ? b.cells[col].dataset.sort : b.cells[col].textContent.trim();
+                if (type === 'number') { aV = parseFloat(aV) || 0; bV = parseFloat(bV) || 0; return asc ? aV - bV : bV - aV; }
+                return asc ? aV.localeCompare(bV) : bV.localeCompare(aV);
+            });
+            rows.forEach(function(r) { tbody.appendChild(r); });
+        });
+    });
+    // Initial sort: date desc
+    var dateTh = thead.querySelector('th.sort-desc[data-col="0"]');
+    if (dateTh) dateTh.click();
+}
+</script>
+{% endblock %}

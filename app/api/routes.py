@@ -5,7 +5,7 @@ from flask_login import current_user
 
 from app import db
 from app.api import bp
-from app.models import Session, ChartData, Track, Telemetry, Lap
+from app.models import Session, ChartData, Track, Telemetry, Lap, EventParticipant
 
 
 def api_login_required(f):
@@ -40,7 +40,19 @@ def api_login_required(f):
                 return jsonify(error='Session not found'), 404
 
             if session.user_id != current_user.id:
-                return jsonify(error='Access denied'), 403
+                # Check event-scoped access
+                has_access = db.session.query(EventParticipant).filter(
+                    EventParticipant.event_id.in_(
+                        db.session.query(EventParticipant.event_id).filter(
+                            EventParticipant.session_id == session.id,
+                            EventParticipant.status.in_(['accepted', 'organizer']),
+                        )
+                    ),
+                    EventParticipant.user_id == current_user.id,
+                    EventParticipant.status.in_(['accepted', 'organizer']),
+                ).first()
+                if not has_access:
+                    return jsonify(error='Access denied'), 403
 
             kwargs['session'] = session
 
