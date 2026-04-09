@@ -15,12 +15,23 @@ from app.models import (
 @click.command('seed-tracks')
 @click.option('--file', 'tracks_file', required=True,
               help='Path to tracks YAML file')
+@click.option('--user', 'user_email', default=None,
+              help='Email of the user who will own the tracks')
 @with_appcontext
-def seed_tracks(tracks_file):
+def seed_tracks(tracks_file, user_email):
     """Import tracks from a YAML file into the database."""
     if not os.path.exists(tracks_file):
         click.echo(f'Error: {tracks_file} not found.')
         raise SystemExit(1)
+
+    owner_id = None
+    if user_email:
+        from app.models import User
+        user = User.query.filter_by(email=user_email).first()
+        if not user:
+            click.echo(f'Error: user "{user_email}" not found.')
+            raise SystemExit(1)
+        owner_id = user.id
 
     with open(tracks_file) as f:
         tracks_data = yaml.safe_load(f)
@@ -40,6 +51,7 @@ def seed_tracks(tracks_file):
             lat=data['lat'],
             lon=data['lon'],
             timezone=data.get('timezone', 'UTC'),
+            created_by=owner_id,
         )
         db.session.add(track)
         db.session.flush()

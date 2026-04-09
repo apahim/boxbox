@@ -20,7 +20,7 @@ DEMO_SESSION_FILE = os.path.join(DEMO_DIR, 'session.yaml')
 DEMO_CSV_FILE = os.path.join(DEMO_DIR, 'session.csv.gz')
 
 
-def _ensure_demo_track():
+def _ensure_demo_track(user_id):
     """Create the demo track if it doesn't exist. Returns the Track."""
     with open(DEMO_TRACK_FILE) as f:
         tracks_data = yaml.safe_load(f)
@@ -38,6 +38,7 @@ def _ensure_demo_track():
         lat=data['lat'],
         lon=data['lon'],
         timezone=data.get('timezone', 'UTC'),
+        created_by=user_id,
     )
 
     # Start/finish gate
@@ -77,7 +78,7 @@ def seed_demo_data(user):
     if user.demo_seeded:
         return
 
-    track = _ensure_demo_track()
+    track = _ensure_demo_track(user.id)
 
     # Load session metadata
     with open(DEMO_SESSION_FILE) as f:
