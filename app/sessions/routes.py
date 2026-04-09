@@ -13,11 +13,43 @@ from app import db, limiter
 from app.sessions import bp
 from app.sessions.forms import SessionCreateForm, SessionEditForm
 from app.models import (
-    Session, Track, TrackCorner,
+    Session, Track, TrackCorner, Event,
     Lap, Telemetry, CornerRecord, CornerSummary,
     SectorTime, ChartData, SessionUpload, EventParticipant,
     visible_tracks_for_user,
 )
+
+
+def _event_track_map_for_user(user_id):
+    """Return dict of track_id → event name for the user's events."""
+    participations = EventParticipant.query.filter(
+        EventParticipant.user_id == user_id,
+        EventParticipant.status.in_(['accepted', 'organizer']),
+    ).all()
+    event_ids = [p.event_id for p in participations]
+    if not event_ids:
+        return {}
+    events = Event.query.filter(
+        Event.id.in_(event_ids), Event.track_id.isnot(None),
+    ).all()
+    result = {}
+    for e in events:
+        result.setdefault(e.track_id, []).append(e.name)
+    return result
+
+
+def _track_choices(tracks, event_track_map, include_none=False):
+    """Build track dropdown choices with event labels."""
+    choices = []
+    if include_none:
+        choices.append((0, '— No track —'))
+    for t in tracks:
+        label = t.name
+        event_names = event_track_map.get(t.id)
+        if event_names:
+            label += ' (Event: ' + ', '.join(event_names) + ')'
+        choices.append((t.id, label))
+    return choices
 
 
 @bp.route('/')
@@ -52,7 +84,8 @@ def create():
 
     # Populate track choices and coordinates for GPS auto-matching
     tracks = visible_tracks_for_user(current_user.id).all()
-    form.track_id.choices = [(t.id, t.name) for t in tracks]
+    etm = _event_track_map_for_user(current_user.id)
+    form.track_id.choices = _track_choices(tracks, etm)
     track_coords_js = {t.id: {'name': t.name, 'lat': t.lat, 'lon': t.lon} for t in tracks}
 
     if form.validate_on_submit():
@@ -177,7 +210,8 @@ def edit(session_id):
 
     # Populate choices
     tracks = visible_tracks_for_user(current_user.id).all()
-    form.track_id.choices = [(0, '— No track —')] + [(t.id, t.name) for t in tracks]
+    etm = _event_track_map_for_user(current_user.id)
+    form.track_id.choices = _track_choices(tracks, etm, include_none=True)
 
     if request.method == 'GET':
         form.date.data = session.date

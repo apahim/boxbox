@@ -625,7 +625,8 @@ def my_sessions(event_id):
         return jsonify([])
 
     sessions = Session.query.filter_by(
-        user_id=current_user.id, track_id=event.track_id
+        user_id=current_user.id, track_id=event.track_id,
+        needs_reingest=False,
     ).order_by(Session.date.desc()).all()
 
     return jsonify([
