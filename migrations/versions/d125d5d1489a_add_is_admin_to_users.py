@@ -1,6 +1,6 @@
 """Add is_admin to users
 
-Revision ID: a1b2c3d4e5f6
+Revision ID: d125d5d1489a
 Revises: dbf58c8a5e36
 Create Date: 2026-04-18 12:00:00.000000
 
@@ -10,7 +10,7 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision = 'a1b2c3d4e5f6'
+revision = 'd125d5d1489a'
 down_revision = 'dbf58c8a5e36'
 branch_labels = None
 depends_on = None
