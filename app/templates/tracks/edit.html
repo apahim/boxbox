@@ -88,10 +88,14 @@
 {% if readonly %}
 <div class="alert mb-3" style="background:rgba(245,158,11,0.08); border:1px solid rgba(245,158,11,0.25); border-radius:8px; color:var(--bb-text); font-size:0.85rem;">
     <i class="bi bi-lock-fill" style="color:var(--bb-amber);"></i>
-    {% if locked_by_event and is_owner %}
+    {% if locked_by_event and can_edit %}
     This track is locked because it is used by <strong>{{ event_names|join(', ') }}</strong>. Remove it from the event to edit.
+    {% elif locked_by_event and is_official %}
+    This is an official track, locked by event <strong>{{ event_names|join(', ') }}</strong>.
     {% elif locked_by_event %}
     This track is managed by <strong>{{ creator_name or 'another user' }}</strong> and locked by event <strong>{{ event_names|join(', ') }}</strong>.
+    {% elif is_official %}
+    This is an official track. You can view its setup but cannot edit it.
     {% else %}
     This track is managed by <strong>{{ creator_name or 'another user' }}</strong>. You can view its setup but cannot edit it.
     {% endif %}

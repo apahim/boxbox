@@ -103,7 +103,10 @@ def list_events():
 def create():
     form = EventForm()
     tracks = visible_tracks_for_user(current_user.id).all()
-    form.track_id.choices = [(0, '— No track —')] + [(t.id, t.name) for t in tracks]
+    form.track_id.choices = [(0, '— No track —')] + [
+        (t.id, t.name + (' (Official)' if t.created_by is None else ''))
+        for t in tracks
+    ]
 
     if form.validate_on_submit():
         event = Event(
@@ -372,7 +375,10 @@ def edit(event_id):
 
     form = EventForm(obj=event)
     tracks = visible_tracks_for_user(current_user.id).all()
-    form.track_id.choices = [(0, '— No track —')] + [(t.id, t.name) for t in tracks]
+    form.track_id.choices = [(0, '— No track —')] + [
+        (t.id, t.name + (' (Official)' if t.created_by is None else ''))
+        for t in tracks
+    ]
 
     # Check if any participants have linked sessions — locks the track
     has_linked_sessions = event.track_id and EventParticipant.query.filter(

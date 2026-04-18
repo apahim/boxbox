@@ -19,11 +19,13 @@
     th.sortable:hover { color: var(--bb-blue); }
     th.sortable .sort-icon { font-size: 0.65rem; margin-left: 3px; opacity: 0.4; }
     th.sortable.sort-asc .sort-icon, th.sortable.sort-desc .sort-icon { opacity: 1; color: var(--bb-blue); }
+    .track-section { margin-bottom: 2rem; }
+    .track-section h5 { font-size: 0.95rem; font-weight: 600; margin-bottom: 0.75rem; display: flex; align-items: center; gap: 6px; }
     @media (max-width: 991px) {
         .table-responsive { overflow-x: visible; }
-        #tracksTable thead { display: none; }
-        #tracksTable, #tracksTable tbody, #tracksTable tr, #tracksTable td { display: block; }
-        #tracksTable tr {
+        .track-table thead { display: none; }
+        .track-table, .track-table tbody, .track-table tr, .track-table td { display: block; }
+        .track-table tr {
             position: relative;
             background: var(--bb-surface);
             border: 1px solid var(--bb-border);
@@ -31,14 +33,12 @@
             margin-bottom: 10px;
             padding: 10px 12px 8px;
         }
-        #tracksTable tr.row-busy { padding: 0 12px; }
-        #tracksTable td { padding: 1px 0; border: none; font-size: 0.85rem; }
-        /* Track name — card header */
-        #tracksTable td[data-label="Track"] { font-weight: 600; font-size: 0.9rem; padding-right: 70px; }
-        /* Corners + Sessions — inline labels */
-        #tracksTable td[data-label="Corners"]::before,
-        #tracksTable td[data-label="Sessions"]::before,
-        #tracksTable td[data-label="Timezone"]::before {
+        .track-table tr.row-busy { padding: 0 12px; }
+        .track-table td { padding: 1px 0; border: none; font-size: 0.85rem; }
+        .track-table td[data-label="Track"] { font-weight: 600; font-size: 0.9rem; padding-right: 70px; }
+        .track-table td[data-label="Corners"]::before,
+        .track-table td[data-label="Sessions"]::before,
+        .track-table td[data-label="Timezone"]::before {
             content: attr(data-label) "  ";
             font-size: 0.7rem;
             text-transform: uppercase;
@@ -47,14 +47,13 @@
             font-weight: 600;
             margin-right: 4px;
         }
-        /* Actions — top-right corner */
-        #tracksTable td[data-label="Actions"] {
+        .track-table td[data-label="Actions"] {
             position: absolute;
             top: 8px;
             right: 10px;
             padding: 0;
         }
-        #tracksTable td[data-label="Actions"] .btn-sm { padding: 0.15rem 0.35rem; font-size: 0.75rem; }
+        .track-table td[data-label="Actions"] .btn-sm { padding: 0.15rem 0.35rem; font-size: 0.75rem; }
     }
 </style>
 {% endblock %}
@@ -65,9 +64,9 @@
     <a href="{{ url_for('tracks.create') }}" class="btn btn-primary"><i class="bi bi-plus-lg"></i>Add Track</a>
 </div>
 
-{% if tracks %}
+{% macro track_table(items, section, table_id) %}
 <div class="table-responsive">
-    <table class="table table-hover" id="tracksTable">
+    <table class="table table-hover track-table" id="{{ table_id }}">
         <thead>
             <tr>
                 <th class="sortable sort-asc" data-col="0" data-type="string">Track Name <i class="bi bi-arrow-up sort-icon"></i></th>
@@ -78,23 +77,24 @@
             </tr>
         </thead>
         <tbody>
-            {% for item in tracks %}
+            {% for item in items %}
             <tr>
                 <td data-label="Track">
                     {{ item.track.name }}
+                    {% if section == 'official' %}
+                    <span class="badge bg-success" style="font-size:0.65rem; font-weight:500; margin-left:4px;">Official</span>
+                    {% elif section == 'event' %}
                     {% for ename in event_track_map.get(item.track.id, []) %}
                     <span class="badge bg-info" style="font-size:0.65rem; font-weight:500; margin-left:4px;">{{ ename }}</span>
                     {% endfor %}
+                    {% endif %}
                 </td>
                 <td data-label="Corners" data-sort="{{ item.corner_count }}">{{ item.corner_count }}</td>
                 <td data-label="Sessions" data-sort="{{ item.session_count }}">{{ item.session_count }}</td>
                 <td data-label="Timezone">{{ item.track.timezone }}</td>
                 <td data-label="Actions" class="text-nowrap">
-                    {% if item.track.created_by == current_user.id or item.track.created_by is none %}
+                    {% if section == 'user' %}
                     <a href="{{ url_for('tracks.edit', track_id=item.track.id) }}" class="btn btn-sm btn-outline-primary" title="Edit Corners"><i class="bi bi-pencil"></i></a>
-                    {% else %}
-                    <a href="{{ url_for('tracks.edit', track_id=item.track.id) }}" class="btn btn-sm btn-outline-secondary" title="View Track"><i class="bi bi-eye"></i></a>
-                    {% endif %}
                     {% if item.session_count > 0 %}
                     <button class="btn btn-sm btn-outline-danger" disabled
                             title="Used by {{ item.session_count }} session{{ 's' if item.session_count != 1 }}"><i class="bi bi-trash"></i></button>
@@ -105,17 +105,57 @@
                         <button type="submit" class="btn btn-sm btn-outline-danger" title="Delete track"><i class="bi bi-trash"></i></button>
                     </form>
                     {% endif %}
+                    {% elif section == 'official' and current_user.is_admin %}
+                    <a href="{{ url_for('tracks.edit', track_id=item.track.id) }}" class="btn btn-sm btn-outline-primary" title="Edit Corners"><i class="bi bi-pencil"></i></a>
+                    {% if item.session_count > 0 %}
+                    <button class="btn btn-sm btn-outline-danger" disabled
+                            title="Used by {{ item.session_count }} session{{ 's' if item.session_count != 1 }}"><i class="bi bi-trash"></i></button>
+                    {% else %}
+                    <form method="POST" action="{{ url_for('tracks.delete', track_id=item.track.id) }}" class="d-inline"
+                          onsubmit="return handleTrackDelete(this)">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <button type="submit" class="btn btn-sm btn-outline-danger" title="Delete track"><i class="bi bi-trash"></i></button>
+                    </form>
+                    {% endif %}
+                    {% else %}
+                    <a href="{{ url_for('tracks.edit', track_id=item.track.id) }}" class="btn btn-sm btn-outline-secondary" title="View Track"><i class="bi bi-eye"></i></a>
+                    {% endif %}
                 </td>
             </tr>
             {% endfor %}
         </tbody>
     </table>
 </div>
-{% else %}
+{% endmacro %}
+
+{% if not official_tracks and not user_tracks and not event_tracks %}
 <div class="bb-empty">
     <i class="bi bi-geo-alt"></i>
     <p>No tracks yet. Add one to get started.</p>
 </div>
+{% else %}
+
+{% if official_tracks %}
+<div class="track-section">
+    <h5><i class="bi bi-patch-check-fill" style="color:var(--bb-green)"></i> Official Tracks</h5>
+    {{ track_table(official_tracks, 'official', 'officialTable') }}
+</div>
+{% endif %}
+
+{% if user_tracks %}
+<div class="track-section">
+    <h5><i class="bi bi-person-fill" style="color:var(--bb-blue)"></i> Your Tracks</h5>
+    {{ track_table(user_tracks, 'user', 'userTable') }}
+</div>
+{% endif %}
+
+{% if event_tracks %}
+<div class="track-section">
+    <h5><i class="bi bi-calendar-event-fill" style="color:var(--bb-cyan)"></i> Event Tracks</h5>
+    {{ track_table(event_tracks, 'event', 'eventTable') }}
+</div>
+{% endif %}
+
 {% endif %}
 {% endblock %}
 
@@ -166,10 +206,11 @@ function handleTrackDelete(form) {
 }
 
 // ── Column sorting ──
-var thead = document.querySelector('#tracksTable thead');
-var tbody = document.querySelector('#tracksTable tbody');
+document.querySelectorAll('.track-table').forEach(function(table) {
+    var thead = table.querySelector('thead');
+    var tbody = table.querySelector('tbody');
+    if (!thead || !tbody) return;
 
-if (thead && tbody) {
     thead.querySelectorAll('th.sortable').forEach(function(th) {
         th.addEventListener('click', function() {
             var col = parseInt(th.dataset.col);
@@ -214,6 +255,6 @@ if (thead && tbody) {
             rows.forEach(function(row) { tbody.appendChild(row); });
         });
     });
-}
+});
 </script>
 {% endblock %}

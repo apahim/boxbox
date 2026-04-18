@@ -17,6 +17,8 @@ class User(UserMixin, db.Model):
     terms_accepted_at = db.Column(db.DateTime, nullable=True)
     demo_seeded = db.Column(db.Boolean, default=False, nullable=False,
                             server_default='false')
+    is_admin = db.Column(db.Boolean, default=False, nullable=False,
+                         server_default='false')
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
 
     sessions = db.relationship('Session', backref='user', lazy='dynamic')
@@ -322,5 +324,9 @@ def visible_tracks_for_user(user_id):
     )
 
     return Track.query.filter(
-        db.or_(Track.id.in_(own_ids), Track.id.in_(event_track_ids))
+        db.or_(
+            Track.id.in_(own_ids),
+            Track.id.in_(event_track_ids),
+            Track.created_by.is_(None),
+        )
     ).order_by(Track.name)

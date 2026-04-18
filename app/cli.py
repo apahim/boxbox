@@ -192,6 +192,22 @@ def seed_demo(user_email, seed_all):
         raise SystemExit(1)
 
 
+@click.command('set-admin')
+@click.argument('user_email')
+@click.option('--revoke', is_flag=True, help='Remove admin privileges')
+@with_appcontext
+def set_admin(user_email, revoke):
+    """Grant or revoke admin privileges for a user."""
+    user = User.query.filter_by(email=user_email.lower()).first()
+    if not user:
+        click.echo(f'Error: no user with email {user_email}')
+        raise SystemExit(1)
+    user.is_admin = not revoke
+    db.session.commit()
+    action = 'Revoked admin from' if revoke else 'Granted admin to'
+    click.echo(f'{action} {user.email}')
+
+
 @click.command('reingest-session')
 @click.argument('session_id', type=int)
 @with_appcontext

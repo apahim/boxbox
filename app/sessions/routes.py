@@ -45,6 +45,8 @@ def _track_choices(tracks, event_track_map, include_none=False):
         choices.append((0, '— No track —'))
     for t in tracks:
         label = t.name
+        if t.created_by is None:
+            label += ' (Official)'
         event_names = event_track_map.get(t.id)
         if event_names:
             label += ' (Event: ' + ', '.join(event_names) + ')'

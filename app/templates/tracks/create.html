@@ -108,6 +108,13 @@
                         </div>
                         <div id="coord-display">Latitude: —, Longitude: —</div>
                     </div>
+                    {% if current_user.is_admin %}
+                    <div class="form-check mb-3">
+                        {{ form.is_official(class="form-check-input") }}
+                        {{ form.is_official.label(class="form-check-label") }}
+                        <div class="form-text">Official tracks are visible to all users but only editable by admins.</div>
+                    </div>
+                    {% endif %}
                     {{ form.submit(class="btn btn-primary") }}
                 </form>
             </div>

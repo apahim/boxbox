@@ -37,14 +37,30 @@ def list_tracks():
         for e in events:
             event_track_map.setdefault(e.track_id, []).append(e.name)
 
-    track_data = []
+    official_tracks = []
+    user_tracks = []
+    event_tracks = []
+    official_ids = set()
+
     for t in tracks:
-        track_data.append({
+        item = {
             'track': t,
             'corner_count': t.corners.count(),
             'session_count': t.sessions.count(),
-        })
-    return render_template('tracks/list.html', tracks=track_data,
+        }
+        if t.created_by is None:
+            official_tracks.append(item)
+            official_ids.add(t.id)
+        elif t.created_by == current_user.id:
+            user_tracks.append(item)
+        else:
+            if t.id not in official_ids:
+                event_tracks.append(item)
+
+    return render_template('tracks/list.html',
+                           official_tracks=official_tracks,
+                           user_tracks=user_tracks,
+                           event_tracks=event_tracks,
                            event_track_map=event_track_map)
 
 
@@ -53,8 +69,11 @@ def list_tracks():
 def create():
     form = TrackForm()
     if form.validate_on_submit():
+        is_official = current_user.is_admin and form.is_official.data
+        owner_id = None if is_official else current_user.id
+
         slug = _slugify(form.name.data)
-        if Track.query.filter_by(slug=slug, created_by=current_user.id).first():
+        if Track.query.filter_by(slug=slug, created_by=owner_id).first():
             flash('You already have a track with that name.', 'danger')
             mapkit_token = current_app.config.get('MAPKIT_TOKEN', '')
             return render_template('tracks/create.html', form=form,
@@ -81,7 +100,7 @@ def create():
             lat=lat,
             lon=lon,
             timezone=tz,
-            created_by=current_user.id,
+            created_by=owner_id,
         )
         db.session.add(track)
         db.session.commit()
@@ -102,12 +121,14 @@ def edit(track_id):
         abort(404)
 
     is_fetch = request.headers.get('X-Requested-With') == 'fetch'
-    is_owner = (track.created_by == current_user.id)
+    is_official = (track.created_by is None)
+    is_owner = (track.created_by == current_user.id) and not is_official
+    can_edit = is_owner or (is_official and current_user.is_admin)
 
     # Lock track if it's used by any event
     linked_events = Event.query.filter_by(track_id=track.id).all()
     locked_by_event = len(linked_events) > 0
-    readonly = not is_owner or locked_by_event
+    readonly = not can_edit or locked_by_event
 
     if request.method == 'POST':
         if readonly:
@@ -211,10 +232,11 @@ def edit(track_id):
     ).order_by(Session.date.desc()).all()
 
     creator_name = None
-    if readonly and track.created_by and not is_owner:
-        creator = db.session.get(User, track.created_by)
-        if creator:
-            creator_name = creator.display_name
+    if readonly and not can_edit and not is_official:
+        if track.created_by:
+            creator = db.session.get(User, track.created_by)
+            if creator:
+                creator_name = creator.display_name
 
     event_names = [e.name for e in linked_events] if locked_by_event else []
 
@@ -228,6 +250,8 @@ def edit(track_id):
                            matching_sessions=matching_sessions,
                            readonly=readonly,
                            is_owner=is_owner,
+                           is_official=is_official,
+                           can_edit=can_edit,
                            locked_by_event=locked_by_event,
                            event_names=event_names,
                            creator_name=creator_name)
@@ -241,7 +265,10 @@ def delete(track_id):
         abort(404)
     is_fetch = request.headers.get('X-Requested-With') == 'fetch'
 
-    if track.created_by != current_user.id:
+    is_official = (track.created_by is None)
+    can_delete = (track.created_by == current_user.id and not is_official) or \
+                 (is_official and current_user.is_admin)
+    if not can_delete:
         if is_fetch:
             return jsonify(error='You do not have permission to delete this track.'), 403
         abort(403)
