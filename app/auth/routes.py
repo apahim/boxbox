@@ -52,7 +52,7 @@ def callback():
     ).update({'user_id': user.id})
     db.session.commit()
 
-    login_user(user)
+    login_user(user, remember=True)
     return redirect(url_for('index'))
 
 

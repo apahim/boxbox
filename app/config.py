@@ -1,4 +1,5 @@
 import os
+from datetime import timedelta
 
 
 class Config:
@@ -18,6 +19,11 @@ class Config:
     SESSION_COOKIE_HTTPONLY = True
     SESSION_COOKIE_SAMESITE = 'Lax'
 
+    REMEMBER_COOKIE_DURATION = timedelta(days=30)
+    REMEMBER_COOKIE_SECURE = True
+    REMEMBER_COOKIE_HTTPONLY = True
+    REMEMBER_COOKIE_SAMESITE = 'Lax'
+
 
 class TestingConfig(Config):
     TESTING = True
@@ -29,3 +35,4 @@ class TestingConfig(Config):
     GOOGLE_CLIENT_ID = 'test-google-client-id'
     GOOGLE_CLIENT_SECRET = 'test-google-client-secret'
     SESSION_COOKIE_SECURE = False
+    REMEMBER_COOKIE_SECURE = False
