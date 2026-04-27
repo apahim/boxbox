@@ -28,10 +28,10 @@ def _ensure_demo_track(user_id):
     slug = list(tracks_data.keys())[0]
     data = tracks_data[slug]
 
-    # Check if this user already has this track
-    track = Track.query.filter_by(slug=slug, created_by=user_id).first()
-    if track:
-        return track
+    # Use the official track if it exists
+    official = Track.query.filter_by(slug=slug, created_by=None).first()
+    if official:
+        return official
 
     # Ensure unique slug if another user owns a track with the same slug
     base_slug = slug
