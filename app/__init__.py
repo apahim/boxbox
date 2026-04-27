@@ -161,6 +161,9 @@ def create_app(config_name=None):
     from app.legal import bp as legal_bp
     app.register_blueprint(legal_bp)
 
+    from app.admin import bp as admin_bp
+    app.register_blueprint(admin_bp, url_prefix='/admin')
+
     # CLI commands
     from app.cli import seed_tracks, import_session, reingest_session, seed_demo, set_admin
     app.cli.add_command(seed_tracks)

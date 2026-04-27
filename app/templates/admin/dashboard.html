@@ -1,0 +1,267 @@
+{% extends "base.html" %}
+
+{% block title %}Admin - BoxBox{% endblock %}
+
+{% block extra_head %}
+<style>
+    .stat-card { text-align: center; }
+    .stat-card .bi { font-size: 1.4rem; }
+    .stat-card .stat-num { font-size: 2rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+    .stat-card .stat-label { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--bb-text-muted); }
+    .health-card { display: flex; align-items: center; gap: 12px; padding: 12px 16px; }
+    .health-card .health-num { font-size: 1.5rem; font-weight: 700; font-variant-numeric: tabular-nums; min-width: 2ch; }
+    .health-card .health-label { font-size: 0.85rem; color: var(--bb-text-muted); }
+    .section-title { font-size: 1rem; font-weight: 600; margin: 2rem 0 0.75rem; display: flex; align-items: center; gap: 6px; }
+    @media (max-width: 767px) {
+        .stat-card .stat-num { font-size: 1.5rem; }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<h2 class="mb-4">Admin Dashboard</h2>
+
+{# ── Global Stats ── #}
+<div class="row g-3 mb-3">
+    <div class="col-6 col-md">
+        <div class="card h-100">
+            <div class="card-body stat-card">
+                <i class="bi bi-people" style="color:var(--bb-blue)"></i>
+                <div class="stat-num">{{ total_users }}</div>
+                <div class="stat-label">Users</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-6 col-md">
+        <div class="card h-100">
+            <div class="card-body stat-card">
+                <i class="bi bi-speedometer2" style="color:var(--bb-green)"></i>
+                <div class="stat-num">{{ total_sessions }}</div>
+                <div class="stat-label">Sessions</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-6 col-md">
+        <div class="card h-100">
+            <div class="card-body stat-card">
+                <i class="bi bi-stopwatch" style="color:var(--bb-amber)"></i>
+                <div class="stat-num">{{ total_laps }}</div>
+                <div class="stat-label">Laps</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-6 col-md">
+        <div class="card h-100">
+            <div class="card-body stat-card">
+                <i class="bi bi-geo-alt" style="color:var(--bb-red)"></i>
+                <div class="stat-num">{{ total_tracks }}</div>
+                <div class="stat-label">Tracks</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-6 col-md">
+        <div class="card h-100">
+            <div class="card-body stat-card">
+                <i class="bi bi-calendar-event" style="color:var(--bb-text-muted)"></i>
+                <div class="stat-num">{{ total_events }}</div>
+                <div class="stat-label">Events</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{# ── Data Health ── #}
+<h5 class="section-title"><i class="bi bi-heart-pulse" style="color:var(--bb-red)"></i> Data Health</h5>
+<div class="row g-3 mb-3">
+    <div class="col-sm-6 col-lg-4">
+        <div class="card h-100">
+            <div class="health-card">
+                <div class="health-num" style="color:{% if zero_lap_sessions %}var(--bb-red){% else %}var(--bb-green){% endif %}">{{ zero_lap_sessions }}</div>
+                <div>
+                    <div style="font-size:0.85rem;">Zero-lap sessions</div>
+                    <div class="health-label">CSV parse or gate failure</div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-sm-6 col-lg-4">
+        <div class="card h-100">
+            <div class="health-card">
+                <div class="health-num" style="color:{% if single_lap_sessions %}var(--bb-amber){% else %}var(--bb-green){% endif %}">{{ single_lap_sessions }}</div>
+                <div>
+                    <div style="font-size:0.85rem;">Single-lap sessions</div>
+                    <div class="health-label">Likely S/F gate issue</div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-sm-6 col-lg-4">
+        <div class="card h-100">
+            <div class="health-card">
+                <div class="health-num" style="color:{% if all_outlier_sessions %}var(--bb-amber){% else %}var(--bb-green){% endif %}">{{ all_outlier_sessions }}</div>
+                <div>
+                    <div style="font-size:0.85rem;">All-outlier sessions</div>
+                    <div class="health-label">Every lap flagged as outlier</div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-sm-6 col-lg-4">
+        <div class="card h-100">
+            <div class="health-card">
+                <div class="health-num" style="color:{% if needs_reingest_count %}var(--bb-blue){% else %}var(--bb-green){% endif %}">{{ needs_reingest_count }}</div>
+                <div>
+                    <div style="font-size:0.85rem;">Needs reingest</div>
+                    <div class="health-label">Flagged for reprocessing</div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-sm-6 col-lg-4">
+        <div class="card h-100">
+            <div class="health-card">
+                <div class="health-num" style="color:{% if missing_uploads %}var(--bb-text-muted){% else %}var(--bb-green){% endif %}">{{ missing_uploads }}</div>
+                <div>
+                    <div style="font-size:0.85rem;">Missing CSV backup</div>
+                    <div class="health-label">Cannot reingest</div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{# ── Problematic Sessions ── #}
+<h5 class="section-title"><i class="bi bi-exclamation-triangle" style="color:var(--bb-amber)"></i> Problematic Sessions</h5>
+{% if problem_sessions %}
+<div class="table-responsive">
+    <table class="table table-hover">
+        <thead>
+            <tr>
+                <th>Date</th>
+                <th>User</th>
+                <th>Track</th>
+                <th>Laps</th>
+                <th>Clean</th>
+                <th>Issues</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for s in problem_sessions %}
+            <tr>
+                <td>{{ s.date.strftime('%Y-%m-%d') }}</td>
+                <td>{{ s.user.display_name }}</td>
+                <td>{{ s.track.name if s.track else '—' }}</td>
+                <td>{{ s.total_laps if s.total_laps is not none else '—' }}</td>
+                <td>{{ s.clean_laps if s.clean_laps is not none else '—' }}</td>
+                <td>
+                    {% if s.total_laps is none or s.total_laps == 0 %}
+                    <span class="badge bg-danger">No Laps</span>
+                    {% endif %}
+                    {% if s.total_laps == 1 %}
+                    <span class="badge bg-warning text-dark">Single Lap</span>
+                    {% endif %}
+                    {% if s.total_laps is not none and s.total_laps > 0 and s.clean_laps == 0 %}
+                    <span class="badge bg-warning text-dark">All Outliers</span>
+                    {% endif %}
+                    {% if s.needs_reingest %}
+                    <span class="badge bg-info text-dark">Needs Reingest</span>
+                    {% endif %}
+                </td>
+                <td>
+                    <a href="{{ url_for('dashboard.view', session_id=s.id) }}" class="btn btn-sm btn-outline-secondary" title="View"><i class="bi bi-eye"></i></a>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+<div class="bb-empty">
+    <i class="bi bi-check-circle"></i>
+    <p>All sessions look healthy.</p>
+</div>
+{% endif %}
+
+{# ── Track Health ── #}
+<h5 class="section-title"><i class="bi bi-geo-alt" style="color:var(--bb-blue)"></i> Track Health</h5>
+{% if track_health %}
+<div class="table-responsive">
+    <table class="table table-hover">
+        <thead>
+            <tr>
+                <th>Track</th>
+                <th>Sessions</th>
+                <th>Zero-Lap</th>
+                <th>Corners</th>
+                <th>S/F Gate</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for th in track_health %}
+            <tr>
+                <td>
+                    {{ th.track.name }}
+                    {% if th.track.created_by is none %}
+                    <span class="badge bg-success" style="font-size:0.65rem;">Official</span>
+                    {% endif %}
+                </td>
+                <td>{{ th.session_count }}</td>
+                <td>
+                    {% if th.zero_lap_count %}
+                    <span style="color:var(--bb-red)">{{ th.zero_lap_count }}</span>
+                    {% else %}
+                    0
+                    {% endif %}
+                </td>
+                <td>{{ th.corner_count }}</td>
+                <td>
+                    {% if th.has_gate %}
+                    <i class="bi bi-check-lg" style="color:var(--bb-green)"></i>
+                    {% else %}
+                    <i class="bi bi-x-lg" style="color:var(--bb-text-dim)"></i>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+<div class="bb-empty">
+    <i class="bi bi-geo-alt"></i>
+    <p>No tracks yet.</p>
+</div>
+{% endif %}
+
+{# ── Recent Users ── #}
+<h5 class="section-title"><i class="bi bi-person-plus" style="color:var(--bb-green)"></i> Recent Users</h5>
+<div class="table-responsive">
+    <table class="table table-hover">
+        <thead>
+            <tr>
+                <th>Name</th>
+                <th>Email</th>
+                <th>Joined</th>
+                <th>Sessions</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for user, session_count in recent_users %}
+            <tr>
+                <td>{{ user.display_name }}</td>
+                <td style="color:var(--bb-text-muted)">{{ user.email }}</td>
+                <td>{{ user.created_at.strftime('%Y-%m-%d') if user.created_at else '—' }}</td>
+                <td>{{ session_count }}</td>
+                <td>
+                    {% if user.is_admin %}
+                    <span class="badge bg-info text-dark" style="font-size:0.65rem;">Admin</span>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}
