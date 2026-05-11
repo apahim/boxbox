@@ -20,6 +20,8 @@
     .self-row { background: rgba(34, 197, 94, 0.06); }
     .leaderboard-medal { font-size: 1.1rem; }
     .gap-value { color: var(--bb-text-muted); font-size: 0.9rem; font-variant-numeric: tabular-nums; }
+    .label-badge { font-size: 0.7rem; padding: 2px 6px; background: rgba(255,255,255,0.08); border-radius: 4px; margin-right: 2px; }
+    .source-text { font-size: 0.85rem; color: var(--bb-text-muted); text-transform: capitalize; }
     .share-section {
         margin-top: 24px;
         padding: 16px 20px;
@@ -100,6 +102,8 @@
                 <th>Driver</th>
                 <th>Best Lap</th>
                 <th>Date</th>
+                <th>Source</th>
+                <th>Labels</th>
                 <th>Gap</th>
             </tr>
         </thead>
@@ -173,11 +177,22 @@ function loadResults() {
             var nameHtml = r.name;
             if (r.is_self) nameHtml += ' <span class="badge bg-success" style="font-size:0.6rem;">You</span>';
 
+            var sourceHtml = r.source ? '<span class="source-text">' + r.source + '</span>' : '';
+
+            var labelsHtml = '';
+            if (r.labels && r.labels.length) {
+                r.labels.forEach(function(l) {
+                    labelsHtml += '<span class="label-badge">' + l + '</span>';
+                });
+            }
+
             tr.innerHTML =
                 '<td class="leaderboard-pos">' + posText + '</td>' +
                 '<td>' + nameHtml + '</td>' +
                 '<td style="font-variant-numeric:tabular-nums;">' + r.best_time_fmt + '</td>' +
                 '<td class="text-muted" style="font-size:0.85rem;">' + (r.lap_date_fmt || '') + '</td>' +
+                '<td>' + sourceHtml + '</td>' +
+                '<td>' + labelsHtml + '</td>' +
                 '<td class="gap-value">' + (r.gap_fmt || '—') + '</td>';
 
             tbody.appendChild(tr);

@@ -426,7 +426,7 @@ def _compute_leaderboard(lb, current_user_id):
                 continue
         uid = s.user_id
         if uid not in best_per_user or s.best_lap_time < best_per_user[uid][0]:
-            best_per_user[uid] = (s.best_lap_time, s.date)
+            best_per_user[uid] = (s.best_lap_time, s.date, s.data_source, s.labels)
 
     sorted_results = sorted(best_per_user.items(), key=lambda x: x[1][0])
     sorted_results = sorted_results[:lb.max_drivers]
@@ -439,7 +439,7 @@ def _compute_leaderboard(lb, current_user_id):
 
     leader_time = sorted_results[0][1][0]
     results = []
-    for i, (user_id, (best_time, lap_date)) in enumerate(sorted_results):
+    for i, (user_id, (best_time, lap_date, data_source, labels)) in enumerate(sorted_results):
         user = users.get(user_id)
         if not user:
             continue
@@ -454,6 +454,8 @@ def _compute_leaderboard(lb, current_user_id):
             'is_self': user_id == current_user_id,
             'lap_date': lap_date.isoformat() if lap_date else None,
             'lap_date_fmt': lap_date.strftime('%-d %b %Y') if lap_date else '',
+            'source': data_source or '',
+            'labels': labels or [],
         })
 
     return results

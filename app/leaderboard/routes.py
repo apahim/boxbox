@@ -69,11 +69,27 @@ def list_leaderboards():
         created_by=current_user.id
     ).order_by(Leaderboard.created_at.desc()).all()
 
+    shares_by_lb = {}
+    if mine:
+        mine_ids = [lb.id for lb in mine]
+        all_shares = LeaderboardShare.query.filter(
+            LeaderboardShare.leaderboard_id.in_(mine_ids)
+        ).all()
+        for s in all_shares:
+            if s.user:
+                shares_by_lb.setdefault(s.leaderboard_id, []).append({
+                    'id': s.user.id,
+                    'name': s.user.display_name,
+                    'email': s.user.email,
+                })
+
     return render_template('leaderboard/list.html',
                            official=official,
                            shared_with_me=shared_with_me,
                            mine=mine,
-                           period_label=_period_label)
+                           period_label=_period_label,
+                           shares_by_lb=shares_by_lb,
+                           is_admin=current_user.is_admin)
 
 
 # ── Create ──

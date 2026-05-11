@@ -34,16 +34,16 @@ def users(app):
         s1 = Session(user_id=u1.id, track_id=track.id,
                      date=date.today() - timedelta(days=5),
                      best_lap_time=65.123, clean_laps=10, total_laps=12,
-                     labels=['Dry', 'Race'])
+                     labels=['Dry', 'Race'], data_source='racechrono')
         s2 = Session(user_id=u1.id, track_id=track.id,
                      date=date.today() - timedelta(days=100),
                      best_lap_time=66.500, clean_laps=8, total_laps=10,
-                     labels=['Wet'])
+                     labels=['Wet'], data_source='racechrono')
         # Bob: one session
         s3 = Session(user_id=u2.id, track_id=track.id,
                      date=date.today() - timedelta(days=10),
                      best_lap_time=64.000, clean_laps=15, total_laps=18,
-                     labels=['Dry'])
+                     labels=['Dry'], data_source='gopro')
         db.session.add_all([s1, s2, s3])
         db.session.commit()
 
@@ -421,6 +421,28 @@ class TestLeaderboardResults:
         resp = client.get(f'/api/leaderboard/{lb_id}/results')
         assert resp.status_code == 403
 
+    def test_results_include_source_and_labels(self, client, app, users):
+        with app.app_context():
+            lb = Leaderboard(
+                name='Source Check', track_id=users['track'].id,
+                created_by=users['alice'].id, visibility='official',
+                period_type='all_time',
+            )
+            db.session.add(lb)
+            db.session.commit()
+            lb_id = lb.id
+
+        _login(client, app, users['alice'])
+        resp = client.get(f'/api/leaderboard/{lb_id}/results')
+        results = resp.get_json()['results']
+        # Bob is P1 with gopro source
+        assert results[0]['source'] == 'gopro'
+        assert results[0]['labels'] == ['Dry']
+        # Alice is P2 with racechrono source (best lap from s1)
+        assert results[1]['source'] == 'racechrono'
+        assert 'Dry' in results[1]['labels']
+        assert 'Race' in results[1]['labels']
+
     def test_results_exclude_demo_sessions(self, client, app, users):
         with app.app_context():
             demo = Session(
@@ -566,6 +588,40 @@ class TestLeaderboardRoutes:
         with app.app_context():
             lb = db.session.get(Leaderboard, lb_id)
             assert lb.visibility == 'official'
+
+    def test_unpublish_admin(self, client, app, users):
+        with app.app_context():
+            lb = Leaderboard(
+                name='Official LB', track_id=users['track'].id,
+                created_by=users['alice'].id, visibility='official',
+            )
+            db.session.add(lb)
+            db.session.commit()
+            lb_id = lb.id
+
+        _login(client, app, users['admin'])
+        resp = client.post(f'/leaderboard/{lb_id}/unpublish',
+                           headers={'X-Requested-With': 'fetch'})
+        assert resp.status_code == 200
+
+        with app.app_context():
+            lb = db.session.get(Leaderboard, lb_id)
+            assert lb.visibility == 'personal'
+
+    def test_unpublish_non_admin_forbidden(self, client, app, users):
+        with app.app_context():
+            lb = Leaderboard(
+                name='Official LB', track_id=users['track'].id,
+                created_by=users['alice'].id, visibility='official',
+            )
+            db.session.add(lb)
+            db.session.commit()
+            lb_id = lb.id
+
+        _login(client, app, users['alice'])
+        resp = client.post(f'/leaderboard/{lb_id}/unpublish',
+                           headers={'X-Requested-With': 'fetch'})
+        assert resp.status_code == 403
 
     def test_edit_leaderboard(self, client, app, users):
         with app.app_context():
