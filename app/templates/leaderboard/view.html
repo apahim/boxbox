@@ -3,6 +3,9 @@
 {% block title %}{{ lb.name }} - BoxBox{% endblock %}
 
 {% block extra_head %}
+{% if mapkit_token %}
+<script src="https://cdn.apple-mapkit.com/mk/5.x.x/mapkit.js" crossorigin></script>
+{% endif %}
 <style>
     .lb-header {
         display: flex;
@@ -38,6 +41,9 @@
         border-bottom: 1px solid var(--bb-border);
     }
     .shared-user:last-child { border-bottom: none; }
+    .mapkit-wrap { position: relative; height: 600px; border-radius: 8px; overflow: hidden; }
+    .mapkit-wrap .mk-map { width: 100%; height: 100%; }
+    .mapkit-wrap canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 1; }
 </style>
 {% endblock %}
 
@@ -111,6 +117,53 @@
     </table>
 </div>
 
+<!-- Raceline comparison -->
+{% if mapkit_token %}
+<div id="raceline-section" style="display:none; margin-top: 24px;">
+    <h4><i class="bi bi-arrows-angle-expand"></i> Compare Racing Lines</h4>
+    <p class="text-muted" style="font-size:0.85rem;">Select two drivers to overlay and animate their racing lines.</p>
+    <div class="card p-3 mb-2">
+        <div class="d-flex flex-wrap align-items-end gap-2 gap-md-3">
+            <div style="min-width: 0; flex: 1 1 200px; max-width: 280px;">
+                <label class="form-label fw-semibold mb-1" style="font-size: 0.85rem; color: #22c55e;">Driver A</label>
+                <div class="d-flex flex-column gap-1">
+                    <select id="rlSelectADriver" class="form-select form-select-sm" style="border-left: 3px solid #22c55e;">
+                        <option value="">&mdash; Driver &mdash;</option>
+                    </select>
+                    <select id="rlSelectA" class="form-select form-select-sm" style="border-left: 3px solid #22c55e;" disabled>
+                        <option value="">&mdash; Lap &mdash;</option>
+                    </select>
+                </div>
+            </div>
+            <div style="min-width: 0; flex: 1 1 200px; max-width: 280px;">
+                <label class="form-label fw-semibold mb-1" style="font-size: 0.85rem; color: #3b82f6;">Driver B</label>
+                <div class="d-flex flex-column gap-1">
+                    <select id="rlSelectBSession" class="form-select form-select-sm" style="border-left: 3px solid #3b82f6;">
+                        <option value="">&mdash; Driver &mdash;</option>
+                    </select>
+                    <select id="rlSelectB" class="form-select form-select-sm" style="border-left: 3px solid #3b82f6;" disabled>
+                        <option value="">&mdash; Lap &mdash;</option>
+                    </select>
+                </div>
+            </div>
+            <div id="rlDeltaDisplay" class="d-flex align-items-end" style="font-size: 0.85rem; font-variant-numeric: tabular-nums; padding-bottom: 4px;"></div>
+        </div>
+    </div>
+    <div class="row"><div class="col-12"><div class="card p-2">
+        <div class="mapkit-wrap" id="racelineWrap"><div class="mk-map" id="racelineMap"></div><canvas id="racelineCanvas"></canvas></div>
+        <div id="racelinePlayback" class="d-flex align-items-center gap-2 mt-2 px-2" style="font-size: 0.85rem;">
+            <button id="rlPlayBtn" class="btn btn-sm btn-outline-primary" title="Play/Pause" style="min-width: 36px;">&#9654;</button>
+            <input id="rlTimeline" type="range" class="form-range flex-grow-1" min="0" max="100" step="0.1" value="0" style="height: 20px;">
+            <span id="rlTimeDisplay" style="min-width: 55px; text-align: right; font-variant-numeric: tabular-nums;">0.0s</span>
+            <select id="rlSpeedSelect" class="form-select form-select-sm" style="width: auto;">
+                <option value="1">1x</option><option value="2" selected>2x</option><option value="5">5x</option><option value="10">10x</option>
+            </select>
+        </div>
+        <div id="racelineLegend" class="d-flex flex-wrap gap-2 mt-2 px-2" style="font-size: 0.8rem;"></div>
+    </div></div></div>
+</div>
+{% endif %}
+
 <!-- Share section (creator only) -->
 {% if is_creator %}
 <div class="share-section">
@@ -135,6 +188,10 @@
 {% endblock %}
 
 {% block extra_scripts %}
+{% if mapkit_token %}
+<script src="{{ url_for('static', filename='js/mapkit-helpers.js') }}"></script>
+<script src="{{ url_for('static', filename='js/raceline.js') }}"></script>
+{% endif %}
 <script>
 var CSRF = '{{ csrf_token() }}';
 
@@ -199,12 +256,40 @@ function loadResults() {
         });
 
         table.style.display = '';
+        initRacelineComparison(data.results);
     })
     .catch(function() {
         loading.style.display = 'none';
         btn.disabled = false;
         empty.style.display = '';
         empty.querySelector('p') && (empty.querySelector('p').textContent = 'Failed to load results.');
+    });
+}
+
+var racelineInited = false;
+function initRacelineComparison(results) {
+    if (racelineInited) return;
+    if (typeof Raceline === 'undefined' || typeof MapHelpers === 'undefined') return;
+    var section = document.getElementById('raceline-section');
+    if (!section) return;
+
+    var entries = (results || []).filter(function(r) { return r.session_id; }).map(function(r) {
+        return { session_id: r.session_id, name: r.name, best_time_fmt: r.best_time_fmt, position: r.position };
+    });
+    if (entries.length < 2) return;
+
+    racelineInited = true;
+    section.style.display = '';
+    MapHelpers.initMapKit('{{ mapkit_token }}');
+
+    var fetchRacelineFn = function(sessionId) {
+        return fetch('/api/leaderboard/{{ lb.id }}/raceline/' + sessionId, { credentials: 'same-origin' })
+            .then(function(r) { return r.ok ? r.json() : null; })
+            .catch(function() { return null; });
+    };
+
+    MapHelpers.waitForMapKit(function() {
+        Raceline.initLeaderboard({ entries: entries, fetchRacelineFn: fetchRacelineFn });
     });
 }
 

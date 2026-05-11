@@ -1,7 +1,7 @@
 import json
 import re
 
-from flask import render_template, redirect, url_for, flash, request, jsonify, abort
+from flask import render_template, redirect, url_for, flash, request, jsonify, abort, current_app
 from flask_login import login_required, current_user
 
 from app import db
@@ -148,11 +148,13 @@ def view(lb_id):
             for s in shares if s.user
         ]
 
+    mapkit_token = current_app.config.get('MAPKIT_TOKEN', '')
     return render_template('leaderboard/view.html',
                            lb=lb,
                            is_creator=is_creator,
                            shared_users=shared_users,
-                           period_label=_period_label(lb))
+                           period_label=_period_label(lb),
+                           mapkit_token=mapkit_token)
 
 
 # ── Edit ──

@@ -338,6 +338,19 @@ def api_tracks():
 
 # ── Leaderboard results ──
 
+def _check_leaderboard_access(lb):
+    if lb.visibility == 'official':
+        return True, None
+    if lb.created_by == current_user.id:
+        return True, None
+    if lb.visibility == 'shared':
+        if LeaderboardShare.query.filter_by(
+            leaderboard_id=lb.id, user_id=current_user.id
+        ).first():
+            return True, None
+    return False, (jsonify(error='Access denied'), 403)
+
+
 @bp.route('/leaderboard/<int:lb_id>/results')
 def leaderboard_results(lb_id):
     """Compute and return leaderboard results."""
@@ -348,18 +361,9 @@ def leaderboard_results(lb_id):
     if not lb:
         return jsonify(error='Not found'), 404
 
-    # Access check
-    if lb.visibility == 'official':
-        pass
-    elif lb.created_by == current_user.id:
-        pass
-    elif lb.visibility == 'shared':
-        if not LeaderboardShare.query.filter_by(
-            leaderboard_id=lb.id, user_id=current_user.id
-        ).first():
-            return jsonify(error='Access denied'), 403
-    else:
-        return jsonify(error='Access denied'), 403
+    ok, err = _check_leaderboard_access(lb)
+    if not ok:
+        return err
 
     results = _compute_leaderboard(lb, current_user.id)
 
@@ -426,7 +430,7 @@ def _compute_leaderboard(lb, current_user_id):
                 continue
         uid = s.user_id
         if uid not in best_per_user or s.best_lap_time < best_per_user[uid][0]:
-            best_per_user[uid] = (s.best_lap_time, s.date, s.data_source, s.labels)
+            best_per_user[uid] = (s.best_lap_time, s.date, s.data_source, s.labels, s.id)
 
     sorted_results = sorted(best_per_user.items(), key=lambda x: x[1][0])
     sorted_results = sorted_results[:lb.max_drivers]
@@ -439,7 +443,7 @@ def _compute_leaderboard(lb, current_user_id):
 
     leader_time = sorted_results[0][1][0]
     results = []
-    for i, (user_id, (best_time, lap_date, data_source, labels)) in enumerate(sorted_results):
+    for i, (user_id, (best_time, lap_date, data_source, labels, session_id)) in enumerate(sorted_results):
         user = users.get(user_id)
         if not user:
             continue
@@ -452,6 +456,7 @@ def _compute_leaderboard(lb, current_user_id):
             'gap': round(gap, 3),
             'gap_fmt': f'+{gap:.3f}' if i > 0 else '',
             'is_self': user_id == current_user_id,
+            'session_id': session_id,
             'lap_date': lap_date.isoformat() if lap_date else None,
             'lap_date_fmt': lap_date.strftime('%-d %b %Y') if lap_date else '',
             'source': data_source or '',
@@ -459,3 +464,32 @@ def _compute_leaderboard(lb, current_user_id):
         })
 
     return results
+
+
+@bp.route('/leaderboard/<int:lb_id>/raceline/<int:session_id>')
+def leaderboard_raceline(lb_id, session_id):
+    """Return raceline data for a session visible in a leaderboard."""
+    if not current_user.is_authenticated:
+        return jsonify(error='Authentication required'), 401
+
+    lb = db.session.get(Leaderboard, lb_id)
+    if not lb:
+        return jsonify(error='Not found'), 404
+
+    ok, err = _check_leaderboard_access(lb)
+    if not ok:
+        return err
+
+    results = _compute_leaderboard(lb, current_user.id)
+    valid_session_ids = {r['session_id'] for r in results}
+    if session_id not in valid_session_ids:
+        return jsonify(error='Session not in leaderboard'), 403
+
+    cd = ChartData.query.filter_by(
+        session_id=session_id,
+        chart_type='raceline',
+        chart_key='overview',
+    ).first()
+    if not cd:
+        return jsonify(error='No raceline data'), 404
+    return jsonify(cd.data)
