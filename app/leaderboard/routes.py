@@ -67,6 +67,8 @@ def list_leaderboards():
 
     mine = Leaderboard.query.filter_by(
         created_by=current_user.id
+    ).filter(
+        Leaderboard.visibility != 'official'
     ).order_by(Leaderboard.created_at.desc()).all()
 
     shares_by_lb = {}
