@@ -1,0 +1,131 @@
+{% extends "base.html" %}
+
+{% block title %}Leaderboards - BoxBox{% endblock %}
+
+{% block extra_head %}
+<style>
+    .lb-card {
+        background: var(--bb-surface);
+        border: 1px solid var(--bb-border);
+        border-radius: 8px;
+        padding: 16px 20px;
+        margin-bottom: 12px;
+        transition: opacity 0.4s, transform 0.4s;
+    }
+    .lb-card.removing {
+        opacity: 0;
+        transform: translateX(40px);
+        pointer-events: none;
+    }
+    .lb-card h5 { margin: 0 0 4px; font-size: 1rem; }
+    .lb-card .lb-meta { color: var(--bb-text-muted); font-size: 0.85rem; }
+    .lb-card .lb-actions { margin-top: 10px; display: flex; gap: 8px; }
+    .lb-card.official { border-left: 3px solid var(--bb-amber); }
+    .lb-card.shared { border-left: 3px solid var(--bb-blue); }
+    .lb-card.mine { border-left: 3px solid var(--bb-green); }
+    .section-title { font-size: 1.05rem; font-weight: 600; margin: 24px 0 12px; color: var(--bb-text-muted); }
+    .section-title:first-of-type { margin-top: 0; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h2>Leaderboards</h2>
+    <a href="{{ url_for('leaderboard.create') }}" class="btn btn-primary"><i class="bi bi-plus-lg"></i> Create Leaderboard</a>
+</div>
+
+{% if official %}
+<h3 class="section-title"><i class="bi bi-award"></i> Official</h3>
+{% for lb in official %}
+<div class="lb-card official">
+    <h5><a href="{{ url_for('leaderboard.view', lb_id=lb.id) }}" style="text-decoration:none; color:var(--bb-text);">{{ lb.name }}</a></h5>
+    <div class="lb-meta">
+        <i class="bi bi-geo-alt"></i> {{ lb.track.name if lb.track else '—' }}
+        · {{ period_label(lb) }}
+        · Top {{ lb.max_drivers }}
+        {% if lb.labels %} · <i class="bi bi-tags"></i> {{ lb.labels | join(', ') }}{% endif %}
+    </div>
+    <div class="lb-actions">
+        <a href="{{ url_for('leaderboard.view', lb_id=lb.id) }}" class="btn btn-sm btn-outline-primary"><i class="bi bi-eye"></i> View</a>
+    </div>
+</div>
+{% endfor %}
+{% endif %}
+
+{% if shared_with_me %}
+<h3 class="section-title"><i class="bi bi-share"></i> Shared with Me</h3>
+{% for lb in shared_with_me %}
+<div class="lb-card shared">
+    <h5><a href="{{ url_for('leaderboard.view', lb_id=lb.id) }}" style="text-decoration:none; color:var(--bb-text);">{{ lb.name }}</a></h5>
+    <div class="lb-meta">
+        <i class="bi bi-geo-alt"></i> {{ lb.track.name if lb.track else '—' }}
+        · {{ period_label(lb) }}
+        · Top {{ lb.max_drivers }}
+        {% if lb.labels %} · <i class="bi bi-tags"></i> {{ lb.labels | join(', ') }}{% endif %}
+        · Shared by {{ lb.creator.display_name }}
+    </div>
+    <div class="lb-actions">
+        <a href="{{ url_for('leaderboard.view', lb_id=lb.id) }}" class="btn btn-sm btn-outline-primary"><i class="bi bi-eye"></i> View</a>
+    </div>
+</div>
+{% endfor %}
+{% endif %}
+
+{% if mine %}
+<h3 class="section-title"><i class="bi bi-person"></i> My Leaderboards</h3>
+{% for lb in mine %}
+<div class="lb-card mine" id="lb-{{ lb.id }}">
+    <h5>
+        <a href="{{ url_for('leaderboard.view', lb_id=lb.id) }}" style="text-decoration:none; color:var(--bb-text);">{{ lb.name }}</a>
+        {% if lb.visibility == 'official' %}
+        <span class="badge bg-warning text-dark" style="font-size:0.65rem;">Official</span>
+        {% elif lb.visibility == 'shared' %}
+        <span class="badge bg-info" style="font-size:0.65rem;">Shared</span>
+        {% endif %}
+    </h5>
+    <div class="lb-meta">
+        <i class="bi bi-geo-alt"></i> {{ lb.track.name if lb.track else '—' }}
+        · {{ period_label(lb) }}
+        · Top {{ lb.max_drivers }}
+        {% if lb.labels %} · <i class="bi bi-tags"></i> {{ lb.labels | join(', ') }}{% endif %}
+    </div>
+    <div class="lb-actions">
+        <a href="{{ url_for('leaderboard.view', lb_id=lb.id) }}" class="btn btn-sm btn-outline-primary"><i class="bi bi-eye"></i> View</a>
+        <a href="{{ url_for('leaderboard.edit', lb_id=lb.id) }}" class="btn btn-sm btn-outline-secondary"><i class="bi bi-pencil"></i> Edit</a>
+        <button class="btn btn-sm btn-outline-danger" onclick="deleteLb({{ lb.id }}, this)"><i class="bi bi-trash"></i></button>
+    </div>
+</div>
+{% endfor %}
+{% endif %}
+
+{% if not official and not shared_with_me and not mine %}
+<div class="bb-empty">
+    <i class="bi bi-trophy"></i>
+    <p>No leaderboards yet. Create one to start comparing lap times.</p>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+function deleteLb(lbId, btn) {
+    if (!confirm('Delete this leaderboard?')) return;
+    btn.disabled = true;
+    var csrf = '{{ csrf_token() }}';
+    fetch('/leaderboard/' + lbId + '/delete', {
+        method: 'POST',
+        headers: { 'X-Requested-With': 'fetch', 'X-CSRFToken': csrf },
+        credentials: 'same-origin',
+    }).then(function(r) {
+        if (r.ok) {
+            var card = document.getElementById('lb-' + lbId);
+            card.classList.add('removing');
+            setTimeout(function() { card.remove(); }, 400);
+        } else {
+            btn.disabled = false;
+            alert('Failed to delete');
+        }
+    }).catch(function() { btn.disabled = false; alert('Network error'); });
+}
+</script>
+{% endblock %}

@@ -306,6 +306,64 @@ class EventParticipant(db.Model):
     )
 
 
+class Leaderboard(db.Model):
+    __tablename__ = 'leaderboards'
+
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(200), nullable=False)
+    track_id = db.Column(db.Integer, db.ForeignKey('tracks.id'), nullable=False)
+    labels = db.Column(db.JSON, default=list)
+    period_type = db.Column(db.String(20), nullable=False, default='all_time')
+    period_start = db.Column(db.Date, nullable=True)
+    period_end = db.Column(db.Date, nullable=True)
+    max_drivers = db.Column(db.Integer, nullable=False, default=10)
+    visibility = db.Column(db.String(20), nullable=False, default='personal')
+    created_by = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+
+    track = db.relationship('Track', backref='leaderboards')
+    creator = db.relationship('User', backref='leaderboards',
+                              foreign_keys=[created_by])
+    shares = db.relationship('LeaderboardShare', backref='leaderboard',
+                             lazy='dynamic', cascade='all, delete-orphan')
+
+
+class LeaderboardShare(db.Model):
+    __tablename__ = 'leaderboard_shares'
+
+    id = db.Column(db.Integer, primary_key=True)
+    leaderboard_id = db.Column(db.Integer, db.ForeignKey('leaderboards.id'),
+                               nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    shared_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+
+    user = db.relationship('User', backref='shared_leaderboards')
+
+    __table_args__ = (
+        db.UniqueConstraint('leaderboard_id', 'user_id',
+                            name='uq_leaderboard_share'),
+        db.Index('ix_leaderboard_share_user', 'user_id'),
+    )
+
+
+def format_driver_name(user, current_user_id):
+    """Return full name for self, 'FirstName L.' for others."""
+    if user.id == current_user_id:
+        return user.display_name
+    parts = (user.display_name or '').strip().split()
+    if len(parts) >= 2:
+        return f"{parts[0]} {parts[-1][0]}."
+    return parts[0] if parts else 'Anonymous'
+
+
+def format_laptime(seconds):
+    if seconds is None:
+        return '—'
+    mins = int(seconds // 60)
+    secs = seconds % 60
+    return f'{mins}:{secs:06.3f}'
+
+
 def visible_tracks_for_user(user_id):
     """Return tracks visible to a user: own tracks + event tracks.
 

@@ -161,6 +161,9 @@ def create_app(config_name=None):
     from app.legal import bp as legal_bp
     app.register_blueprint(legal_bp)
 
+    from app.leaderboard import bp as leaderboard_bp
+    app.register_blueprint(leaderboard_bp, url_prefix='/leaderboard')
+
     from app.admin import bp as admin_bp
     app.register_blueprint(admin_bp, url_prefix='/admin')
 

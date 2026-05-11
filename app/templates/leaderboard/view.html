@@ -1,0 +1,240 @@
+{% extends "base.html" %}
+
+{% block title %}{{ lb.name }} - BoxBox{% endblock %}
+
+{% block extra_head %}
+<style>
+    .lb-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        flex-wrap: wrap;
+        gap: 12px;
+        margin-bottom: 20px;
+    }
+    .lb-header-info h2 { margin: 0 0 4px; }
+    .lb-header-meta { color: var(--bb-text-muted); font-size: 0.9rem; }
+    .lb-header-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+    .results-loading { text-align: center; padding: 40px 0; color: var(--bb-text-muted); }
+    .results-empty { text-align: center; padding: 40px 0; color: var(--bb-text-muted); }
+    .self-row { background: rgba(34, 197, 94, 0.06); }
+    .leaderboard-medal { font-size: 1.1rem; }
+    .gap-value { color: var(--bb-text-muted); font-size: 0.9rem; font-variant-numeric: tabular-nums; }
+    .share-section {
+        margin-top: 24px;
+        padding: 16px 20px;
+        background: var(--bb-surface);
+        border: 1px solid var(--bb-border);
+        border-radius: 8px;
+    }
+    .share-section h4 { font-size: 1rem; margin: 0 0 12px; }
+    .shared-user {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 6px 0;
+        border-bottom: 1px solid var(--bb-border);
+    }
+    .shared-user:last-child { border-bottom: none; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="lb-header">
+    <div class="lb-header-info">
+        <h2>
+            {{ lb.name }}
+            {% if lb.visibility == 'official' %}
+            <span class="badge bg-warning text-dark" style="font-size:0.6rem; vertical-align:middle;">Official</span>
+            {% elif lb.visibility == 'shared' %}
+            <span class="badge bg-info" style="font-size:0.6rem; vertical-align:middle;">Shared</span>
+            {% endif %}
+        </h2>
+        <div class="lb-header-meta">
+            <i class="bi bi-geo-alt"></i> {{ lb.track.name if lb.track else '—' }}
+            · <i class="bi bi-calendar3"></i> {{ period_label }}
+            · Top {{ lb.max_drivers }}
+            {% if lb.labels %} · <i class="bi bi-tags"></i> {{ lb.labels | join(', ') }}{% endif %}
+        </div>
+    </div>
+    <div class="lb-header-actions">
+        <button class="btn btn-sm btn-outline-secondary" onclick="loadResults()" id="reload-btn">
+            <i class="bi bi-arrow-clockwise"></i> Reload
+        </button>
+        {% if is_creator %}
+        <a href="{{ url_for('leaderboard.edit', lb_id=lb.id) }}" class="btn btn-sm btn-outline-secondary"><i class="bi bi-pencil"></i> Edit</a>
+        <form method="POST" action="{{ url_for('leaderboard.delete', lb_id=lb.id) }}" style="display:inline;" onsubmit="return confirm('Delete this leaderboard?');">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button class="btn btn-sm btn-outline-danger"><i class="bi bi-trash"></i> Delete</button>
+        </form>
+        {% endif %}
+        {% if current_user.is_admin %}
+            {% if lb.visibility != 'official' %}
+            <form method="POST" action="{{ url_for('leaderboard.publish', lb_id=lb.id) }}" style="display:inline;">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button class="btn btn-sm btn-outline-warning"><i class="bi bi-award"></i> Publish</button>
+            </form>
+            {% else %}
+            <form method="POST" action="{{ url_for('leaderboard.unpublish', lb_id=lb.id) }}" style="display:inline;">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button class="btn btn-sm btn-outline-secondary"><i class="bi bi-award"></i> Unpublish</button>
+            </form>
+            {% endif %}
+        {% endif %}
+    </div>
+</div>
+
+<!-- Results table -->
+<div id="results-loading" class="results-loading">
+    <span class="spinner-border spinner-border-sm"></span> Loading results...
+</div>
+<div id="results-empty" class="results-empty" style="display:none;">
+    <i class="bi bi-trophy" style="font-size:2rem; display:block; margin-bottom:8px;"></i>
+    No results found for this leaderboard configuration.
+</div>
+<div class="table-responsive" id="results-table" style="display:none;">
+    <table class="table">
+        <thead>
+            <tr>
+                <th style="width:40px">#</th>
+                <th>Driver</th>
+                <th>Best Lap</th>
+                <th>Gap</th>
+            </tr>
+        </thead>
+        <tbody id="results-body"></tbody>
+    </table>
+</div>
+
+<!-- Share section (creator only) -->
+{% if is_creator %}
+<div class="share-section">
+    <h4><i class="bi bi-share"></i> Share</h4>
+    <div class="mb-3">
+        <div class="input-group">
+            <input type="text" class="form-control" id="share-emails" placeholder="Enter email addresses, separated by commas">
+            <button class="btn btn-outline-primary" onclick="shareLb()"><i class="bi bi-person-plus"></i> Share</button>
+        </div>
+        <div id="share-feedback" class="small mt-1"></div>
+    </div>
+    <div id="shared-users-list">
+    {% for u in shared_users %}
+        <div class="shared-user" id="shared-{{ u.id }}">
+            <span>{{ u.name }} <span class="text-muted">({{ u.email }})</span></span>
+            <button class="btn btn-sm btn-outline-danger" onclick="unshareLb({{ u.id }}, this)"><i class="bi bi-x-lg"></i></button>
+        </div>
+    {% endfor %}
+    </div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+var CSRF = '{{ csrf_token() }}';
+
+function loadResults() {
+    var btn = document.getElementById('reload-btn');
+    var loading = document.getElementById('results-loading');
+    var empty = document.getElementById('results-empty');
+    var table = document.getElementById('results-table');
+    var tbody = document.getElementById('results-body');
+
+    btn.disabled = true;
+    loading.style.display = '';
+    empty.style.display = 'none';
+    table.style.display = 'none';
+
+    fetch('/api/leaderboard/{{ lb.id }}/results', {
+        credentials: 'same-origin',
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+        loading.style.display = 'none';
+        btn.disabled = false;
+
+        if (!data.results || !data.results.length) {
+            empty.style.display = '';
+            return;
+        }
+
+        tbody.innerHTML = '';
+        data.results.forEach(function(r) {
+            var tr = document.createElement('tr');
+            if (r.is_self) tr.className = 'self-row';
+
+            var posText;
+            if (r.position === 1) posText = '<span class="leaderboard-medal" title="1st">&#129351;</span>';
+            else if (r.position === 2) posText = '<span class="leaderboard-medal" title="2nd">&#129352;</span>';
+            else if (r.position === 3) posText = '<span class="leaderboard-medal" title="3rd">&#129353;</span>';
+            else posText = r.position;
+
+            var nameHtml = r.name;
+            if (r.is_self) nameHtml += ' <span class="badge bg-success" style="font-size:0.6rem;">You</span>';
+
+            tr.innerHTML =
+                '<td class="leaderboard-pos">' + posText + '</td>' +
+                '<td>' + nameHtml + '</td>' +
+                '<td style="font-variant-numeric:tabular-nums;">' + r.best_time_fmt + '</td>' +
+                '<td class="gap-value">' + (r.gap_fmt || '—') + '</td>';
+
+            tbody.appendChild(tr);
+        });
+
+        table.style.display = '';
+    })
+    .catch(function() {
+        loading.style.display = 'none';
+        btn.disabled = false;
+        empty.style.display = '';
+        empty.querySelector('p') && (empty.querySelector('p').textContent = 'Failed to load results.');
+    });
+}
+
+loadResults();
+
+{% if is_creator %}
+function shareLb() {
+    var input = document.getElementById('share-emails');
+    var feedback = document.getElementById('share-feedback');
+    var emails = input.value.trim();
+    if (!emails) return;
+
+    fetch('/leaderboard/{{ lb.id }}/share', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
+        credentials: 'same-origin',
+        body: JSON.stringify({ emails: emails }),
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+        var parts = [];
+        if (data.added && data.added.length) parts.push('<span class="text-success">Shared with: ' + data.added.join(', ') + '</span>');
+        if (data.errors && data.errors.length) parts.push('<span class="text-danger">' + data.errors.join('; ') + '</span>');
+        feedback.innerHTML = parts.join('<br>');
+        input.value = '';
+        if (data.added && data.added.length) location.reload();
+    })
+    .catch(function() {
+        feedback.innerHTML = '<span class="text-danger">Network error</span>';
+    });
+}
+
+function unshareLb(userId, btn) {
+    btn.disabled = true;
+    fetch('/leaderboard/{{ lb.id }}/unshare/' + userId, {
+        method: 'POST',
+        headers: { 'X-Requested-With': 'fetch', 'X-CSRFToken': CSRF },
+        credentials: 'same-origin',
+    }).then(function(r) {
+        if (r.ok) {
+            var el = document.getElementById('shared-' + userId);
+            if (el) el.remove();
+        } else {
+            btn.disabled = false;
+        }
+    }).catch(function() { btn.disabled = false; });
+}
+{% endif %}
+</script>
+{% endblock %}

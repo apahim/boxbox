@@ -5,7 +5,11 @@ from flask_login import current_user
 
 from app import db
 from app.api import bp
-from app.models import Session, ChartData, Track, Telemetry, Lap, EventParticipant, visible_tracks_for_user
+from app.models import (
+    Session, ChartData, Track, Telemetry, Lap, EventParticipant, User,
+    Leaderboard, LeaderboardShare, visible_tracks_for_user,
+    format_driver_name, format_laptime,
+)
 
 
 def api_login_required(f):
@@ -342,3 +346,122 @@ def api_tracks():
         {'id': t.id, 'name': t.name, 'slug': t.slug}
         for t in tracks
     ])
+
+
+# ── Leaderboard results ──
+
+@bp.route('/leaderboard/<int:lb_id>/results')
+def leaderboard_results(lb_id):
+    """Compute and return leaderboard results."""
+    if not current_user.is_authenticated:
+        return jsonify(error='Authentication required'), 401
+
+    lb = db.session.get(Leaderboard, lb_id)
+    if not lb:
+        return jsonify(error='Not found'), 404
+
+    # Access check
+    if lb.visibility == 'official':
+        pass
+    elif lb.created_by == current_user.id:
+        pass
+    elif lb.visibility == 'shared':
+        if not LeaderboardShare.query.filter_by(
+            leaderboard_id=lb.id, user_id=current_user.id
+        ).first():
+            return jsonify(error='Access denied'), 403
+    else:
+        return jsonify(error='Access denied'), 403
+
+    results = _compute_leaderboard(lb, current_user.id)
+
+    period_labels = {
+        'last_30': 'Last 30 days',
+        'last_90': 'Last 90 days',
+        'this_year': 'This year',
+        'all_time': 'All time',
+    }
+    if lb.period_type == 'custom' and lb.period_start and lb.period_end:
+        plabel = f"{lb.period_start.strftime('%-d %b %Y')} – {lb.period_end.strftime('%-d %b %Y')}"
+    else:
+        plabel = period_labels.get(lb.period_type, lb.period_type)
+
+    return jsonify(
+        results=results,
+        track_name=lb.track.name if lb.track else None,
+        period_label=plabel,
+    )
+
+
+def _compute_leaderboard(lb, current_user_id):
+    from datetime import date, timedelta
+    from sqlalchemy import func
+
+    today = date.today()
+    if lb.period_type == 'last_30':
+        start_date = today - timedelta(days=30)
+        end_date = today
+    elif lb.period_type == 'last_90':
+        start_date = today - timedelta(days=90)
+        end_date = today
+    elif lb.period_type == 'this_year':
+        start_date = date(today.year, 1, 1)
+        end_date = today
+    elif lb.period_type == 'custom':
+        start_date = lb.period_start
+        end_date = lb.period_end
+    else:
+        start_date = None
+        end_date = None
+
+    # Build base session filter
+    session_query = Session.query.filter(
+        Session.track_id == lb.track_id,
+        Session.best_lap_time.isnot(None),
+    )
+    if start_date:
+        session_query = session_query.filter(Session.date >= start_date)
+    if end_date:
+        session_query = session_query.filter(Session.date <= end_date)
+
+    sessions = session_query.all()
+
+    # Filter by labels in Python (SQLite compatible)
+    required_labels = set(lb.labels or [])
+    best_per_user = {}
+    for s in sessions:
+        if required_labels:
+            session_labels = set(s.labels or [])
+            if not required_labels.issubset(session_labels):
+                continue
+        uid = s.user_id
+        if uid not in best_per_user or s.best_lap_time < best_per_user[uid]:
+            best_per_user[uid] = s.best_lap_time
+
+    sorted_results = sorted(best_per_user.items(), key=lambda x: x[1])
+    sorted_results = sorted_results[:lb.max_drivers]
+
+    if not sorted_results:
+        return []
+
+    user_ids = [r[0] for r in sorted_results]
+    users = {u.id: u for u in User.query.filter(User.id.in_(user_ids)).all()}
+
+    leader_time = sorted_results[0][1]
+    results = []
+    for i, (user_id, best_time) in enumerate(sorted_results):
+        user = users.get(user_id)
+        if not user:
+            continue
+        gap = best_time - leader_time
+        results.append({
+            'position': i + 1,
+            'name': format_driver_name(user, current_user_id),
+            'best_time': best_time,
+            'best_time_fmt': format_laptime(best_time),
+            'gap': round(gap, 3),
+            'gap_fmt': f'+{gap:.3f}' if i > 0 else '',
+            'is_self': user_id == current_user_id,
+        })
+
+    return results
