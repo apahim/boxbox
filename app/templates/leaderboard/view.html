@@ -124,27 +124,17 @@
     <p class="text-muted" style="font-size:0.85rem;">Select two drivers to overlay and animate their racing lines.</p>
     <div class="card p-3 mb-2">
         <div class="d-flex flex-wrap align-items-end gap-2 gap-md-3">
-            <div style="min-width: 0; flex: 1 1 200px; max-width: 280px;">
-                <label class="form-label fw-semibold mb-1" style="font-size: 0.85rem; color: #22c55e;">Driver A</label>
-                <div class="d-flex flex-column gap-1">
-                    <select id="rlSelectADriver" class="form-select form-select-sm" style="border-left: 3px solid #22c55e;">
-                        <option value="">&mdash; Driver &mdash;</option>
-                    </select>
-                    <select id="rlSelectA" class="form-select form-select-sm" style="border-left: 3px solid #22c55e;" disabled>
-                        <option value="">&mdash; Lap &mdash;</option>
-                    </select>
-                </div>
+            <div style="min-width: 0; flex: 1 1 200px; max-width: 320px;">
+                <label for="rlSelectA" class="form-label fw-semibold mb-1" style="font-size: 0.85rem; color: #22c55e;">Lap A</label>
+                <select id="rlSelectA" class="form-select form-select-sm" style="border-left: 3px solid #22c55e;">
+                    <option value="">&mdash; Select &mdash;</option>
+                </select>
             </div>
-            <div style="min-width: 0; flex: 1 1 200px; max-width: 280px;">
-                <label class="form-label fw-semibold mb-1" style="font-size: 0.85rem; color: #3b82f6;">Driver B</label>
-                <div class="d-flex flex-column gap-1">
-                    <select id="rlSelectBSession" class="form-select form-select-sm" style="border-left: 3px solid #3b82f6;">
-                        <option value="">&mdash; Driver &mdash;</option>
-                    </select>
-                    <select id="rlSelectB" class="form-select form-select-sm" style="border-left: 3px solid #3b82f6;" disabled>
-                        <option value="">&mdash; Lap &mdash;</option>
-                    </select>
-                </div>
+            <div style="min-width: 0; flex: 1 1 200px; max-width: 320px;">
+                <label for="rlSelectB" class="form-label fw-semibold mb-1" style="font-size: 0.85rem; color: #3b82f6;">Lap B</label>
+                <select id="rlSelectB" class="form-select form-select-sm" style="border-left: 3px solid #3b82f6;">
+                    <option value="">&mdash; Select &mdash;</option>
+                </select>
             </div>
             <div id="rlDeltaDisplay" class="d-flex align-items-end" style="font-size: 0.85rem; font-variant-numeric: tabular-nums; padding-bottom: 4px;"></div>
         </div>
