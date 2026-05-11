@@ -66,6 +66,22 @@ def profile():
                            track_count=track_count)
 
 
+@bp.route('/profile/update', methods=['POST'])
+@login_required
+def update_profile():
+    display_name = request.form.get('display_name', '').strip()
+    if not display_name:
+        flash('Display name cannot be empty.', 'danger')
+        return redirect(url_for('auth.profile'))
+    if len(display_name) > 100:
+        flash('Display name is too long.', 'danger')
+        return redirect(url_for('auth.profile'))
+    current_user.display_name = display_name
+    db.session.commit()
+    flash('Display name updated.', 'success')
+    return redirect(url_for('auth.profile'))
+
+
 @bp.route('/profile/delete', methods=['POST'])
 @login_required
 def delete_account():

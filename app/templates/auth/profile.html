@@ -12,7 +12,18 @@
                 <table class="table table-borderless mb-0">
                     <tr>
                         <td class="text-muted" style="width:40%;">Display Name</td>
-                        <td>{{ current_user.display_name }}</td>
+                        <td>
+                            <span id="displayNameText">{{ current_user.display_name }}</span>
+                            <button class="btn btn-sm btn-link p-0 ms-2" id="editNameBtn" title="Edit"><i class="bi bi-pencil"></i></button>
+                            <form method="POST" action="{{ url_for('auth.update_profile') }}" id="editNameForm" class="d-none">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                <div class="d-flex gap-1 align-items-center">
+                                    <input type="text" name="display_name" class="form-control form-control-sm" value="{{ current_user.display_name }}" maxlength="100" required style="max-width: 200px;">
+                                    <button type="submit" class="btn btn-sm btn-primary"><i class="bi bi-check-lg"></i></button>
+                                    <button type="button" class="btn btn-sm btn-outline-secondary" id="cancelNameBtn"><i class="bi bi-x-lg"></i></button>
+                                </div>
+                            </form>
+                        </td>
                     </tr>
                     <tr>
                         <td class="text-muted">Email</td>
@@ -81,4 +92,18 @@
         </div>
     </div>
 </div>
+
+<script>
+    document.getElementById("editNameBtn").addEventListener("click", function() {
+        document.getElementById("displayNameText").classList.add("d-none");
+        this.classList.add("d-none");
+        document.getElementById("editNameForm").classList.remove("d-none");
+        document.querySelector("#editNameForm input[name=display_name]").focus();
+    });
+    document.getElementById("cancelNameBtn").addEventListener("click", function() {
+        document.getElementById("displayNameText").classList.remove("d-none");
+        document.getElementById("editNameBtn").classList.remove("d-none");
+        document.getElementById("editNameForm").classList.add("d-none");
+    });
+</script>
 {% endblock %}

@@ -77,6 +77,46 @@ class TestCallback:
         assert User.query.count() == 0
 
 
+class TestUpdateProfile:
+    def _auth(self, client, user_id):
+        with client.session_transaction() as sess:
+            sess['_user_id'] = str(user_id)
+
+    def test_update_display_name(self, client, db_session):
+        from datetime import datetime, timezone
+        user = User(email='test@gmail.com', display_name='Old Name', google_id='g-1',
+                    terms_accepted_at=datetime.now(timezone.utc))
+        db_session.add(user)
+        db_session.commit()
+        self._auth(client, user.id)
+
+        resp = client.post('/auth/profile/update',
+                           data={'display_name': 'New Name'},
+                           follow_redirects=True)
+        assert resp.status_code == 200
+        db_session.expire(user)
+        assert user.display_name == 'New Name'
+
+    def test_empty_display_name_rejected(self, client, db_session):
+        from datetime import datetime, timezone
+        user = User(email='test@gmail.com', display_name='Name', google_id='g-2',
+                    terms_accepted_at=datetime.now(timezone.utc))
+        db_session.add(user)
+        db_session.commit()
+        self._auth(client, user.id)
+
+        resp = client.post('/auth/profile/update',
+                           data={'display_name': '  '},
+                           follow_redirects=True)
+        assert b'cannot be empty' in resp.data
+        assert db_session.get(User, user.id).display_name == 'Name'
+
+    def test_unauthenticated_redirect(self, client):
+        resp = client.post('/auth/profile/update', data={'display_name': 'X'})
+        assert resp.status_code == 302
+        assert '/login' in resp.headers['Location']
+
+
 class TestLogout:
     def test_logout(self, app, client, db_session):
         user = User(email='test@gmail.com', display_name='Test', google_id='google-123')
