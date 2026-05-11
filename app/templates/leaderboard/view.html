@@ -99,6 +99,7 @@
                 <th style="width:40px">#</th>
                 <th>Driver</th>
                 <th>Best Lap</th>
+                <th>Date</th>
                 <th>Gap</th>
             </tr>
         </thead>
@@ -176,6 +177,7 @@ function loadResults() {
                 '<td class="leaderboard-pos">' + posText + '</td>' +
                 '<td>' + nameHtml + '</td>' +
                 '<td style="font-variant-numeric:tabular-nums;">' + r.best_time_fmt + '</td>' +
+                '<td class="text-muted" style="font-size:0.85rem;">' + (r.lap_date_fmt || '') + '</td>' +
                 '<td class="gap-value">' + (r.gap_fmt || '—') + '</td>';
 
             tbody.appendChild(tr);

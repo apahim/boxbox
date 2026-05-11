@@ -248,6 +248,7 @@ class TestLeaderboardResults:
             db.session.add(lb)
             db.session.commit()
             lb_id = lb.id
+            bob_session_date = users['sessions'][2].date
 
         _login(client, app, users['alice'])
         resp = client.get(f'/api/leaderboard/{lb_id}/results')
@@ -260,10 +261,13 @@ class TestLeaderboardResults:
         assert results[0]['best_time'] == 64.0
         assert results[0]['position'] == 1
         assert results[0]['gap_fmt'] == ''
+        assert results[0]['lap_date'] == bob_session_date.isoformat()
+        assert results[0]['lap_date_fmt'] != ''
         # Alice's best is 65.123 (not 66.500)
         assert results[1]['best_time'] == 65.123
         assert results[1]['position'] == 2
         assert results[1]['is_self'] is True
+        assert 'lap_date' in results[1]
 
     def test_results_ordered_asc(self, client, app, users):
         with app.app_context():
@@ -416,6 +420,30 @@ class TestLeaderboardResults:
         _login(client, app, users['bob'])
         resp = client.get(f'/api/leaderboard/{lb_id}/results')
         assert resp.status_code == 403
+
+    def test_results_exclude_demo_sessions(self, client, app, users):
+        with app.app_context():
+            demo = Session(
+                user_id=users['bob'].id, track_id=users['track'].id,
+                date=date.today() - timedelta(days=1),
+                best_lap_time=50.0, clean_laps=5, total_laps=5,
+                labels=['Demo'],
+            )
+            db.session.add(demo)
+            lb = Leaderboard(
+                name='No Demos', track_id=users['track'].id,
+                created_by=users['alice'].id, visibility='official',
+                period_type='all_time',
+            )
+            db.session.add(lb)
+            db.session.commit()
+            lb_id = lb.id
+
+        _login(client, app, users['alice'])
+        resp = client.get(f'/api/leaderboard/{lb_id}/results')
+        results = resp.get_json()['results']
+        # Bob's demo session (50.0) should be excluded; his real session (64.0) used
+        assert results[0]['best_time'] == 64.0
 
 
 # ── Route tests ──

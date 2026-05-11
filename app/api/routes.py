@@ -430,15 +430,17 @@ def _compute_leaderboard(lb, current_user_id):
     required_labels = set(lb.labels or [])
     best_per_user = {}
     for s in sessions:
+        if 'Demo' in (s.labels or []):
+            continue
         if required_labels:
             session_labels = set(s.labels or [])
             if not required_labels.issubset(session_labels):
                 continue
         uid = s.user_id
-        if uid not in best_per_user or s.best_lap_time < best_per_user[uid]:
-            best_per_user[uid] = s.best_lap_time
+        if uid not in best_per_user or s.best_lap_time < best_per_user[uid][0]:
+            best_per_user[uid] = (s.best_lap_time, s.date)
 
-    sorted_results = sorted(best_per_user.items(), key=lambda x: x[1])
+    sorted_results = sorted(best_per_user.items(), key=lambda x: x[1][0])
     sorted_results = sorted_results[:lb.max_drivers]
 
     if not sorted_results:
@@ -447,9 +449,9 @@ def _compute_leaderboard(lb, current_user_id):
     user_ids = [r[0] for r in sorted_results]
     users = {u.id: u for u in User.query.filter(User.id.in_(user_ids)).all()}
 
-    leader_time = sorted_results[0][1]
+    leader_time = sorted_results[0][1][0]
     results = []
-    for i, (user_id, best_time) in enumerate(sorted_results):
+    for i, (user_id, (best_time, lap_date)) in enumerate(sorted_results):
         user = users.get(user_id)
         if not user:
             continue
@@ -462,6 +464,8 @@ def _compute_leaderboard(lb, current_user_id):
             'gap': round(gap, 3),
             'gap_fmt': f'+{gap:.3f}' if i > 0 else '',
             'is_self': user_id == current_user_id,
+            'lap_date': lap_date.isoformat() if lap_date else None,
+            'lap_date_fmt': lap_date.strftime('%-d %b %Y') if lap_date else '',
         })
 
     return results
