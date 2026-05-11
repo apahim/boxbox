@@ -94,7 +94,7 @@ def dashboard():
         total_sessions=total_sessions,
         total_laps=total_laps,
         total_tracks=total_tracks,
-        total_events=total_events,
+
         zero_lap_sessions=zero_lap_sessions,
         single_lap_sessions=single_lap_sessions,
         all_outlier_sessions=all_outlier_sessions,
