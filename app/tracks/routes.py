@@ -43,10 +43,14 @@ def list_tracks():
     official_ids = set()
 
     for t in tracks:
+        if t.created_by == current_user.id or (t.created_by is None and current_user.is_admin):
+            session_count = t.sessions.count()
+        else:
+            session_count = t.sessions.filter_by(user_id=current_user.id).count()
         item = {
             'track': t,
             'corner_count': t.corners.count(),
-            'session_count': t.sessions.count(),
+            'session_count': session_count,
         }
         if t.created_by is None:
             official_tracks.append(item)
@@ -194,7 +198,10 @@ def edit(track_id):
         flash('Corners saved.', 'success')
         return redirect(url_for('tracks.edit', track_id=track.id))
 
-    session_count = track.sessions.count()
+    if can_edit:
+        session_count = track.sessions.count()
+    else:
+        session_count = track.sessions.filter_by(user_id=current_user.id).count()
     corners = TrackCorner.query.filter_by(track_id=track.id).order_by(TrackCorner.sort_order).all()
     corners_list = [
         {
