@@ -8,7 +8,7 @@ from app import db
 from app.leaderboard import bp
 from app.leaderboard.forms import LeaderboardForm
 from app.models import (
-    Leaderboard, LeaderboardShare, User, visible_tracks_for_user,
+    Leaderboard, LeaderboardShare, Track, User,
 )
 
 EMAIL_RE = re.compile(r'^[^@\s]+@[^@\s]+\.[^@\s]+$')
@@ -45,11 +45,10 @@ def _period_label(lb):
 
 
 def _populate_track_choices(form):
-    tracks = visible_tracks_for_user(current_user.id).all()
-    form.track_id.choices = [
-        (t.id, t.name + (' (Official)' if t.created_by is None else ''))
-        for t in tracks
-    ]
+    tracks = Track.query.filter(
+        Track.created_by.is_(None)
+    ).order_by(Track.name).all()
+    form.track_id.choices = [(t.id, t.name) for t in tracks]
 
 
 # ── List ──

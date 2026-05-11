@@ -8,7 +8,7 @@ from sqlalchemy import func
 from app import db
 from app.tracks import bp
 from app.tracks.forms import TrackForm
-from app.models import Track, TrackCorner, Session, Telemetry, User, Event, EventParticipant, visible_tracks_for_user
+from app.models import Track, TrackCorner, Session, Telemetry, User, visible_tracks_for_user
 
 
 def _slugify(name):
@@ -22,25 +22,8 @@ def _slugify(name):
 def list_tracks():
     tracks = visible_tracks_for_user(current_user.id).all()
 
-    # Build map of track_id → event names for events the user participates in
-    event_track_map = {}
-    participations = EventParticipant.query.filter(
-        EventParticipant.user_id == current_user.id,
-        EventParticipant.status.in_(['accepted', 'organizer']),
-    ).all()
-    event_ids = [p.event_id for p in participations]
-    if event_ids:
-        events = Event.query.filter(
-            Event.id.in_(event_ids),
-            Event.track_id.isnot(None),
-        ).all()
-        for e in events:
-            event_track_map.setdefault(e.track_id, []).append(e.name)
-
     official_tracks = []
     user_tracks = []
-    event_tracks = []
-    official_ids = set()
 
     for t in tracks:
         if t.created_by == current_user.id or (t.created_by is None and current_user.is_admin):
@@ -54,18 +37,12 @@ def list_tracks():
         }
         if t.created_by is None:
             official_tracks.append(item)
-            official_ids.add(t.id)
         elif t.created_by == current_user.id:
             user_tracks.append(item)
-        else:
-            if t.id not in official_ids:
-                event_tracks.append(item)
 
     return render_template('tracks/list.html',
                            official_tracks=official_tracks,
-                           user_tracks=user_tracks,
-                           event_tracks=event_tracks,
-                           event_track_map=event_track_map)
+                           user_tracks=user_tracks)
 
 
 @bp.route('/create', methods=['GET', 'POST'])
@@ -129,10 +106,7 @@ def edit(track_id):
     is_owner = (track.created_by == current_user.id) and not is_official
     can_edit = is_owner or (is_official and current_user.is_admin)
 
-    # Lock track if it's used by any event
-    linked_events = Event.query.filter_by(track_id=track.id).all()
-    locked_by_event = len(linked_events) > 0
-    readonly = not can_edit or locked_by_event
+    readonly = not can_edit
 
     if request.method == 'POST':
         if readonly:
@@ -245,8 +219,6 @@ def edit(track_id):
             if creator:
                 creator_name = creator.display_name
 
-    event_names = [e.name for e in linked_events] if locked_by_event else []
-
     return render_template('tracks/edit.html',
                            track=track,
                            corners=corners_list,
@@ -259,8 +231,6 @@ def edit(track_id):
                            is_owner=is_owner,
                            is_official=is_official,
                            can_edit=can_edit,
-                           locked_by_event=locked_by_event,
-                           event_names=event_names,
                            creator_name=creator_name)
 
 

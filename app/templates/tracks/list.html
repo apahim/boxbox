@@ -83,10 +83,6 @@
                     {{ item.track.name }}
                     {% if section == 'official' %}
                     <span class="badge bg-success" style="font-size:0.65rem; font-weight:500; margin-left:4px;">Official</span>
-                    {% elif section == 'event' %}
-                    {% for ename in event_track_map.get(item.track.id, []) %}
-                    <span class="badge bg-info" style="font-size:0.65rem; font-weight:500; margin-left:4px;">{{ ename }}</span>
-                    {% endfor %}
                     {% endif %}
                 </td>
                 <td data-label="Corners" data-sort="{{ item.corner_count }}">{{ item.corner_count }}</td>
@@ -128,7 +124,7 @@
 </div>
 {% endmacro %}
 
-{% if not official_tracks and not user_tracks and not event_tracks %}
+{% if not official_tracks and not user_tracks %}
 <div class="bb-empty">
     <i class="bi bi-geo-alt"></i>
     <p>No tracks yet. Add one to get started.</p>
@@ -146,13 +142,6 @@
 <div class="track-section">
     <h5><i class="bi bi-person-fill" style="color:var(--bb-blue)"></i> Your Tracks</h5>
     {{ track_table(user_tracks, 'user', 'userTable') }}
-</div>
-{% endif %}
-
-{% if event_tracks %}
-<div class="track-section">
-    <h5><i class="bi bi-calendar-event-fill" style="color:var(--bb-cyan)"></i> Event Tracks</h5>
-    {{ track_table(event_tracks, 'event', 'eventTable') }}
 </div>
 {% endif %}
 

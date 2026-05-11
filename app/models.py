@@ -22,9 +22,6 @@ class User(UserMixin, db.Model):
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
 
     sessions = db.relationship('Session', backref='user', lazy='dynamic')
-    event_participations = db.relationship('EventParticipant', backref='user',
-                                           lazy='dynamic',
-                                           foreign_keys='EventParticipant.user_id')
 
 
 class Track(db.Model):
@@ -253,59 +250,6 @@ class SessionUpload(db.Model):
     uploaded_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
 
 
-class Event(db.Model):
-    __tablename__ = 'events'
-
-    id = db.Column(db.Integer, primary_key=True)
-    name = db.Column(db.String(200), nullable=False)
-    date = db.Column(db.Date, nullable=False)
-    time = db.Column(db.String(10), nullable=True)
-    track_id = db.Column(db.Integer, db.ForeignKey('tracks.id'), nullable=True)
-    created_by = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
-    description = db.Column(db.Text, nullable=True)
-    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
-
-    track = db.relationship('Track', backref='events')
-    creator = db.relationship('User', backref='created_events',
-                              foreign_keys=[created_by])
-    participants = db.relationship('EventParticipant', backref='event',
-                                   lazy='dynamic', cascade='all, delete-orphan')
-
-    @property
-    def status(self):
-        today = date_type.today()
-        if self.date > today:
-            return 'upcoming'
-        elif self.date == today:
-            return 'today'
-        else:
-            return 'completed'
-
-
-class EventParticipant(db.Model):
-    __tablename__ = 'event_participants'
-
-    id = db.Column(db.Integer, primary_key=True)
-    event_id = db.Column(db.Integer, db.ForeignKey('events.id'), nullable=False)
-    email = db.Column(db.String(255), nullable=False)
-    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
-    session_id = db.Column(db.Integer, db.ForeignKey('sessions.id'), nullable=True)
-    role = db.Column(db.String(20), nullable=False, default='participant')
-    status = db.Column(db.String(20), nullable=False, default='pending')
-    invited_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
-    responded_at = db.Column(db.DateTime, nullable=True)
-
-    session = db.relationship('Session', backref='event_links')
-
-    __table_args__ = (
-        db.UniqueConstraint('event_id', 'email', name='uq_event_participant_email'),
-        db.UniqueConstraint('event_id', 'session_id',
-                            name='uq_event_participant_session'),
-        db.Index('ix_event_participant_email', 'email'),
-        db.Index('ix_event_participant_user', 'user_id'),
-    )
-
-
 class Leaderboard(db.Model):
     __tablename__ = 'leaderboards'
 
@@ -365,26 +309,13 @@ def format_laptime(seconds):
 
 
 def visible_tracks_for_user(user_id):
-    """Return tracks visible to a user: own tracks + event tracks.
+    """Return tracks visible to a user: own tracks + official tracks.
 
     Returns a query of Track objects ordered by name.
     """
-    own_ids = db.session.query(Track.id).filter(
-        Track.created_by == user_id
-    )
-
-    event_track_ids = db.session.query(Event.track_id).join(
-        EventParticipant, EventParticipant.event_id == Event.id
-    ).filter(
-        EventParticipant.user_id == user_id,
-        EventParticipant.status.in_(['accepted', 'organizer']),
-        Event.track_id.isnot(None),
-    )
-
     return Track.query.filter(
         db.or_(
-            Track.id.in_(own_ids),
-            Track.id.in_(event_track_ids),
+            Track.created_by == user_id,
             Track.created_by.is_(None),
         )
     ).order_by(Track.name)

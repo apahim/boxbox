@@ -4,7 +4,7 @@ from sqlalchemy import func
 
 from app import db
 from app.admin import bp
-from app.models import User, Session, Lap, Track, SessionUpload, Event
+from app.models import User, Session, Lap, Track, SessionUpload
 
 
 def _require_admin():
@@ -21,7 +21,6 @@ def dashboard():
     total_sessions = Session.query.count()
     total_laps = Lap.query.count()
     total_tracks = Track.query.count()
-    total_events = Event.query.count()
 
     zero_lap_sessions = Session.query.filter(
         db.or_(Session.total_laps == 0, Session.total_laps.is_(None))

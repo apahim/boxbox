@@ -13,33 +13,15 @@ from app import db, limiter
 from app.sessions import bp
 from app.sessions.forms import SessionCreateForm, SessionEditForm
 from app.models import (
-    Session, Track, TrackCorner, Event,
+    Session, Track, TrackCorner,
     Lap, Telemetry, CornerRecord, CornerSummary,
-    SectorTime, ChartData, SessionUpload, EventParticipant,
+    SectorTime, ChartData, SessionUpload,
     visible_tracks_for_user,
 )
 
 
-def _event_track_map_for_user(user_id):
-    """Return dict of track_id → event name for the user's events."""
-    participations = EventParticipant.query.filter(
-        EventParticipant.user_id == user_id,
-        EventParticipant.status.in_(['accepted', 'organizer']),
-    ).all()
-    event_ids = [p.event_id for p in participations]
-    if not event_ids:
-        return {}
-    events = Event.query.filter(
-        Event.id.in_(event_ids), Event.track_id.isnot(None),
-    ).all()
-    result = {}
-    for e in events:
-        result.setdefault(e.track_id, []).append(e.name)
-    return result
-
-
-def _track_choices(tracks, event_track_map, include_none=False):
-    """Build track dropdown choices with event labels."""
+def _track_choices(tracks, include_none=False):
+    """Build track dropdown choices."""
     choices = []
     if include_none:
         choices.append((0, '— No track —'))
@@ -47,9 +29,6 @@ def _track_choices(tracks, event_track_map, include_none=False):
         label = t.name
         if t.created_by is None:
             label += ' (Official)'
-        event_names = event_track_map.get(t.id)
-        if event_names:
-            label += ' (Event: ' + ', '.join(event_names) + ')'
         choices.append((t.id, label))
     return choices
 
@@ -86,8 +65,7 @@ def create():
 
     # Populate track choices and coordinates for GPS auto-matching
     tracks = visible_tracks_for_user(current_user.id).all()
-    etm = _event_track_map_for_user(current_user.id)
-    form.track_id.choices = _track_choices(tracks, etm)
+    form.track_id.choices = _track_choices(tracks)
     track_coords_js = {t.id: {'name': t.name, 'lat': t.lat, 'lon': t.lon} for t in tracks}
 
     if form.validate_on_submit():
@@ -213,7 +191,7 @@ def edit(session_id):
     # Populate choices
     tracks = visible_tracks_for_user(current_user.id).all()
     etm = _event_track_map_for_user(current_user.id)
-    form.track_id.choices = _track_choices(tracks, etm, include_none=True)
+    form.track_id.choices = _track_choices(tracks, include_none=True)
 
     if request.method == 'GET':
         form.date.data = session.date
@@ -259,8 +237,6 @@ def delete(session_id):
 
     # Bulk SQL deletes — much faster than ORM cascade
     try:
-        # Unlink from any events before deleting
-        EventParticipant.query.filter_by(session_id=session.id).update({'session_id': None})
         Telemetry.query.filter_by(session_id=session.id).delete()
         Lap.query.filter_by(session_id=session.id).delete()
         CornerRecord.query.filter_by(session_id=session.id).delete()

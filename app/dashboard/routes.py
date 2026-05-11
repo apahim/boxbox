@@ -3,7 +3,7 @@ from flask_login import login_required, current_user
 
 from app import db
 from app.dashboard import bp
-from app.models import Session, TrackCorner, EventParticipant
+from app.models import Session, TrackCorner
 
 
 @bp.route('/<int:session_id>')
@@ -15,20 +15,7 @@ def view(session_id):
 
     is_owner = session.user_id == current_user.id
     if not is_owner:
-        # Check event-scoped access: both users must be accepted participants
-        # of the same event where the target session is linked
-        has_access = db.session.query(EventParticipant).filter(
-            EventParticipant.event_id.in_(
-                db.session.query(EventParticipant.event_id).filter(
-                    EventParticipant.session_id == session.id,
-                    EventParticipant.status.in_(['accepted', 'organizer']),
-                )
-            ),
-            EventParticipant.user_id == current_user.id,
-            EventParticipant.status.in_(['accepted', 'organizer']),
-        ).first()
-        if not has_access:
-            abort(403)
+        abort(403)
 
     has_corners = False
     has_gate = False

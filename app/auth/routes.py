@@ -5,8 +5,7 @@ from app import db, limiter, oauth
 from app.auth import bp
 from app.models import (User, Session, Track, TrackCorner, Telemetry, Lap,
                         CornerRecord, CornerSummary, SectorTime, ChartData,
-                        SessionUpload, Event, EventParticipant,
-                        Leaderboard, LeaderboardShare)
+                        SessionUpload, Leaderboard, LeaderboardShare)
 
 
 @bp.route('/login')
@@ -46,12 +45,6 @@ def callback():
             user = User(email=email, display_name=name, google_id=google_id)
             db.session.add(user)
         db.session.commit()
-
-    # Claim any pending event invitations that match this email
-    EventParticipant.query.filter_by(
-        email=email, user_id=None
-    ).update({'user_id': user.id})
-    db.session.commit()
 
     login_user(user, remember=True)
     return redirect(url_for('index'))
@@ -99,12 +92,6 @@ def delete_account():
         ChartData.query.filter_by(session_id=s.id).delete()
         SessionUpload.query.filter_by(session_id=s.id).delete()
         db.session.delete(s)
-
-    # Delete events created by this user (cascade deletes participants)
-    Event.query.filter_by(created_by=user.id).delete()
-
-    # Remove this user from other events
-    EventParticipant.query.filter_by(user_id=user.id).delete()
 
     # Delete leaderboard shares for this user, then leaderboards they created
     LeaderboardShare.query.filter_by(user_id=user.id).delete()
