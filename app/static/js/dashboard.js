@@ -263,7 +263,6 @@
         var trackId = meta.dataset.trackId;
         var currentSessionId = parseInt(meta.dataset.sessionIdVal);
 
-        // Fetch current session raceline + sibling sessions at the same track
         Promise.all([
             api("/raceline"),
             trackId && !shareToken ? fetch("/api/tracks/" + trackId + "/sessions", { credentials: "same-origin" })
@@ -273,51 +272,31 @@
             var allSessions = results[1];
             if (!currentData) return;
 
-            // Filter to sessions that aren't the current one
-            var otherIds = [];
             var currentMeta = null;
             for (var i = 0; i < allSessions.length; i++) {
-                if (allSessions[i].id !== currentSessionId) {
-                    otherIds.push(allSessions[i].id);
-                } else {
-                    currentMeta = allSessions[i];
-                }
+                if (allSessions[i].id === currentSessionId) { currentMeta = allSessions[i]; break; }
             }
 
-            if (otherIds.length === 0) {
-                // No other sessions, just init with current data
-                MapHelpers.waitForMapKit(function() { Raceline.init(currentData); });
-                return;
-            }
+            var initData = {
+                sessions: [{
+                    laps: currentData.laps,
+                    is_current: true,
+                    session_id: currentSessionId,
+                    date: currentMeta ? currentMeta.date : "",
+                    labels: currentMeta ? (currentMeta.labels || []) : []
+                }],
+                sessionMeta: allSessions
+            };
 
-            // Fetch raceline data for sibling sessions
-            fetch("/api/sessions/raceline?session_ids=" + otherIds.join(","), { credentials: "same-origin" })
-                .then(function(r) { return r.ok ? r.json() : null; })
-                .then(function(evoData) {
-                    // Build combined sessions array: current first, then others
-                    var sessions = [{
-                        laps: currentData.laps,
-                        is_current: true,
-                        session_id: currentSessionId,
-                        date: currentMeta ? currentMeta.date : "",
-                        labels: currentMeta ? (currentMeta.labels || []) : []
-                    }];
+            var fetchSessionRaceline = function(sessionId) {
+                return fetch("/api/sessions/" + sessionId + "/raceline", { credentials: "same-origin" })
+                    .then(function(r) { return r.ok ? r.json() : null; })
+                    .catch(function() { return null; });
+            };
 
-                    if (evoData && evoData.sessions) {
-                        for (var j = 0; j < evoData.sessions.length; j++) {
-                            var s = evoData.sessions[j];
-                            s.is_current = false;
-                            sessions.push(s);
-                        }
-                    }
-
-                    MapHelpers.waitForMapKit(function() {
-                        Raceline.init({ sessions: sessions });
-                    });
-                })
-                .catch(function() {
-                    MapHelpers.waitForMapKit(function() { Raceline.init(currentData); });
-                });
+            MapHelpers.waitForMapKit(function() {
+                Raceline.init(initData, fetchSessionRaceline);
+            });
         });
     }
 

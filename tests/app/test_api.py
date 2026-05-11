@@ -243,6 +243,14 @@ class TestTrackSessionsAPI:
         assert resp.status_code == 200
         assert resp.get_json() == []
 
+    def test_track_sessions_sorted_by_date_desc(self, client, seed_sessions):
+        user, track_a, _, s1, s2, _ = seed_sessions
+        self._auth(client, user.id)
+        resp = client.get(f'/api/tracks/{track_a.id}/sessions')
+        data = resp.get_json()
+        dates = [s['date'] for s in data]
+        assert dates == sorted(dates, reverse=True)
+
     def test_sessions_raceline_returns_lap_data(self, client, seed_sessions):
         user, _, _, s1, s2, _ = seed_sessions
         self._auth(client, user.id)

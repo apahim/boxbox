@@ -6,6 +6,8 @@ window.Raceline = (function() {
     var animRAF = null, animLastTS = null, animSpeed = 2;
     var markerMeta = [];
     var rlData = null;
+    var fetchRaceline = null;
+    var sessionCache = {};
 
     function interpPos(lap, t) {
         if (!lap.t || lap.t.length === 0) return null;
@@ -48,8 +50,28 @@ window.Raceline = (function() {
     function parseLapRef(val) {
         if (!val) return null;
         var parts = val.split("-");
-        var si = parseInt(parts[0]), li = parseInt(parts[1]);
-        return rlData.sessions[si] ? rlData.sessions[si].laps[li] || null : null;
+        var sessionId = parseInt(parts[0]), li = parseInt(parts[1]);
+        if (rlData.sessions[0].session_id === sessionId) {
+            return rlData.sessions[0].laps[li] || null;
+        }
+        if (sessionCache[sessionId]) {
+            return sessionCache[sessionId].laps[li] || null;
+        }
+        return null;
+    }
+
+    function populateLapB(session, sessionId) {
+        var selB = document.getElementById("rlSelectB");
+        selB.innerHTML = '<option value="">&mdash; Lap &mdash;</option>';
+        session.laps.forEach(function(lap, li) {
+            if (lap.is_outlier) return;
+            var opt = document.createElement("option");
+            opt.value = sessionId + "-" + li;
+            opt.textContent = "Lap " + lap.lap + " — " + lap.time_fmt + (lap.is_best ? " (best)" : "");
+            selB.appendChild(opt);
+        });
+        selB.disabled = false;
+        renderRaceline();
     }
 
     function addPolyline(lap, color, opacity) {
@@ -194,40 +216,52 @@ window.Raceline = (function() {
         drawMarkers();
     }
 
-    function init(data) {
+    function init(data, fetchSessionRacelineFn) {
         rlData = data;
+        fetchRaceline = fetchSessionRacelineFn || null;
+        sessionCache = {};
         if (!rlData) return;
         if (!rlData.sessions && (!rlData.laps || rlData.laps.length === 0)) return;
 
-        // Wrap single-session raceline into sessions format
         if (!rlData.sessions) {
-            rlData = { sessions: [{ laps: rlData.laps, is_current: true, date: "" }] };
+            rlData = { sessions: [{ laps: rlData.laps, is_current: true, session_id: 0, date: "" }], sessionMeta: [] };
         }
+
+        var currentSession = rlData.sessions[0];
 
         // Populate Lap A selector
         var selA = document.getElementById("rlSelectA");
         selA.innerHTML = "";
-        rlData.sessions.forEach(function(session, si) {
-            if (!session.is_current) return;
-            session.laps.forEach(function(lap, li) {
-                if (lap.is_outlier) return;
-                var opt = document.createElement("option");
-                opt.value = si + "-" + li;
-                opt.textContent = "Lap " + lap.lap + " \u2014 " + lap.time_fmt + (lap.is_best ? " (best)" : "");
-                if (lap.is_best) opt.selected = true;
-                selA.appendChild(opt);
-            });
+        currentSession.laps.forEach(function(lap, li) {
+            if (lap.is_outlier) return;
+            var opt = document.createElement("option");
+            opt.value = currentSession.session_id + "-" + li;
+            opt.textContent = "Lap " + lap.lap + " \u2014 " + lap.time_fmt + (lap.is_best ? " (best)" : "");
+            if (lap.is_best) opt.selected = true;
+            selA.appendChild(opt);
         });
 
-        // Populate session B selector
+        // Populate session B selector from sorted metadata
         var selBS = document.getElementById("rlSelectBSession");
         selBS.innerHTML = '<option value="">&mdash; Session &mdash;</option>';
-        rlData.sessions.forEach(function(session, si) {
+        var meta = rlData.sessionMeta || [];
+        if (meta.length > 0) {
+            meta.forEach(function(sm) {
+                var opt = document.createElement("option");
+                opt.value = sm.id;
+                var isCurrent = (sm.id === currentSession.session_id);
+                var text = sm.date || "Session " + sm.id;
+                if (sm.labels && sm.labels.length > 0) text += " [" + sm.labels.join(", ") + "]";
+                if (isCurrent) text += " (current)";
+                opt.textContent = text;
+                selBS.appendChild(opt);
+            });
+        } else {
             var opt = document.createElement("option");
-            opt.value = si;
-            opt.textContent = (session.date || "Current") + (session.is_current ? " (current)" : "");
+            opt.value = currentSession.session_id;
+            opt.textContent = (currentSession.date || "Current") + " (current)";
             selBS.appendChild(opt);
-        });
+        }
 
         // Events
         document.getElementById("rlPlayBtn").addEventListener("click", function() {
@@ -242,35 +276,45 @@ window.Raceline = (function() {
         document.getElementById("rlSelectB").addEventListener("change", renderRaceline);
 
         selBS.addEventListener("change", function() {
-            var si = this.value;
+            var sessionId = this.value;
             var selB = document.getElementById("rlSelectB");
             selB.innerHTML = '<option value="">&mdash; Lap &mdash;</option>';
-            if (si === "") { selB.disabled = true; renderRaceline(); return; }
-            var session = rlData.sessions[parseInt(si)];
-            if (!session) { selB.disabled = true; renderRaceline(); return; }
-            session.laps.forEach(function(lap, li) {
-                if (lap.is_outlier) return;
-                var opt = document.createElement("option");
-                opt.value = si + "-" + li;
-                opt.textContent = "Lap " + lap.lap + " \u2014 " + lap.time_fmt + (lap.is_best ? " (best)" : "");
-                selB.appendChild(opt);
+            if (sessionId === "") { selB.disabled = true; renderRaceline(); return; }
+            sessionId = parseInt(sessionId);
+
+            if (sessionId === currentSession.session_id) {
+                populateLapB(currentSession, sessionId);
+                return;
+            }
+
+            if (sessionCache[sessionId]) {
+                populateLapB(sessionCache[sessionId], sessionId);
+                return;
+            }
+
+            if (!fetchRaceline) { selB.disabled = true; renderRaceline(); return; }
+            selB.disabled = true;
+            selB.innerHTML = '<option value="">Loading\u2026</option>';
+            fetchRaceline(sessionId).then(function(rData) {
+                if (selBS.value !== String(sessionId)) return;
+                if (!rData || !rData.laps) {
+                    selB.innerHTML = '<option value="">&mdash; No data &mdash;</option>';
+                    renderRaceline();
+                    return;
+                }
+                var session = { laps: rData.laps, is_current: false, session_id: sessionId };
+                sessionCache[sessionId] = session;
+                populateLapB(session, sessionId);
             });
-            selB.disabled = false;
-            renderRaceline();
         });
 
         // Pre-select Lap B: current session, first clean lap that isn't Lap A
-        for (var si = 0; si < rlData.sessions.length; si++) {
-            if (rlData.sessions[si].is_current) {
-                selBS.value = String(si);
-                selBS.dispatchEvent(new Event("change"));
-                var selB = document.getElementById("rlSelectB");
-                for (var i = 1; i < selB.options.length; i++) {
-                    if (selB.options[i].value !== selA.value) {
-                        selB.value = selB.options[i].value;
-                        break;
-                    }
-                }
+        selBS.value = String(currentSession.session_id);
+        selBS.dispatchEvent(new Event("change"));
+        var selB = document.getElementById("rlSelectB");
+        for (var i = 1; i < selB.options.length; i++) {
+            if (selB.options[i].value !== selA.value) {
+                selB.value = selB.options[i].value;
                 break;
             }
         }

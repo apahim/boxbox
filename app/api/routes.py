@@ -275,7 +275,7 @@ def sessions_raceline():
     sessions = Session.query.filter(
         Session.id.in_(session_ids),
         Session.user_id == current_user.id
-    ).all()
+    ).order_by(Session.date.desc()).all()
 
     result = []
     for s in sessions:
