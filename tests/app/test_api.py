@@ -413,10 +413,10 @@ class TestShareToken:
         The DB may return a naive datetime even if stored as tz-aware.
         The decorator must handle both without TypeError.
         """
-        from datetime import datetime
+        from datetime import datetime, timedelta, timezone
         session = db.session.get(Session, shared_session.id)
-        # Simulate DB returning a naive datetime (no tzinfo)
-        session.share_token_created_at = datetime(2026, 4, 1, 12, 0, 0)
+        # Simulate DB returning a naive datetime (no tzinfo), within expiry window
+        session.share_token_created_at = (datetime.now(timezone.utc) - timedelta(hours=1)).replace(tzinfo=None)
         db.session.commit()
 
         resp = client.get(
