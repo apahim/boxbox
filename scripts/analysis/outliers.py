@@ -45,23 +45,17 @@ def detect_outliers(laptimes_df, time_col="seconds", iqr_multiplier=1.5):
     q1 = times.quantile(0.25)
     q3 = times.quantile(0.75)
     iqr = q3 - q1
-    lower = q1 - iqr_multiplier * iqr
     upper = q3 + iqr_multiplier * iqr
 
-    mask = (times >= lower) & (times <= upper)
+    mask = times <= upper
     clean_df = laptimes_df[mask].copy()
 
     excluded = []
     for _, row in laptimes_df[~mask].iterrows():
-        reason = "IQR outlier"
-        if row[time_col] > upper:
-            reason += f" (>{upper:.3f}s)"
-        else:
-            reason += f" (<{lower:.3f}s)"
         excluded.append({
             "lap": int(row["lap"]),
             "time": round(float(row[time_col]), 3),
-            "reason": reason,
+            "reason": f"IQR outlier (>{upper:.3f}s)",
         })
 
     return clean_df, excluded
