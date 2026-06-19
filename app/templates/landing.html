@@ -154,11 +154,17 @@
         overflow: hidden;
         display: flex;
         flex-direction: column;
+        box-shadow: 0 0 20px rgba(229, 62, 62, 0.12);
+        transition: box-shadow 0.2s;
+    }
+    .feature-card:hover {
+        box-shadow: 0 0 28px rgba(229, 62, 62, 0.22);
     }
     .feature-card-img {
         overflow: hidden;
         border-bottom: 1px solid var(--bb-border);
         aspect-ratio: 16 / 9;
+        cursor: zoom-in;
     }
     .feature-card-img img {
         display: block;
@@ -170,6 +176,28 @@
     }
     .feature-card:hover .feature-card-img img {
         opacity: 1;
+    }
+
+    /* ---- Lightbox ---- */
+    .lightbox-overlay {
+        display: none;
+        position: fixed;
+        inset: 0;
+        z-index: 9999;
+        background: rgba(0, 0, 0, 0.85);
+        align-items: center;
+        justify-content: center;
+        cursor: zoom-out;
+        padding: 2rem;
+    }
+    .lightbox-overlay.open {
+        display: flex;
+    }
+    .lightbox-overlay img {
+        max-width: 100%;
+        max-height: 100%;
+        border-radius: 8px;
+        box-shadow: 0 0 40px rgba(229, 62, 62, 0.2);
     }
     /* ---- Works-with strip ---- */
     .landing-sources {
@@ -419,6 +447,11 @@
     </div>
 </section>
 
+<!-- Lightbox -->
+<div class="lightbox-overlay" id="lightbox">
+    <img src="" alt="">
+</div>
+
 <!-- Bottom CTA -->
 <section class="landing-bottom-cta">
     <h3>Your laps have a story. Let's read it.</h3>
@@ -451,6 +484,31 @@
     }, { threshold: 0.15 });
 
     els.forEach(function(el) { observer.observe(el); });
+})();
+
+(function() {
+    var overlay = document.getElementById('lightbox');
+    var overlayImg = overlay.querySelector('img');
+
+    document.querySelectorAll('.feature-card-img').forEach(function(el) {
+        el.addEventListener('click', function() {
+            var src = el.querySelector('img').src;
+            overlayImg.src = src;
+            overlay.classList.add('open');
+        });
+    });
+
+    overlay.addEventListener('click', function() {
+        overlay.classList.remove('open');
+        overlayImg.src = '';
+    });
+
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape' && overlay.classList.contains('open')) {
+            overlay.classList.remove('open');
+            overlayImg.src = '';
+        }
+    });
 })();
 </script>
 {% endblock %}
