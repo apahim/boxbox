@@ -29,10 +29,10 @@ class TestLogin:
         resp = client.get('/auth/login/google')
         assert resp.status_code == 302
 
-    def test_protected_redirect(self, client):
+    def test_landing_page_for_anonymous(self, client):
         resp = client.get('/', follow_redirects=False)
-        assert resp.status_code == 302
-        assert '/auth/login' in resp.headers['Location']
+        assert resp.status_code == 200
+        assert b'Sign in with Google' in resp.data
 
 
 class TestCallback:

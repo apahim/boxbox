@@ -206,6 +206,6 @@ def create_app(config_name=None):
     def index():
         if current_user.is_authenticated:
             return redirect(url_for('sessions.list_sessions'))
-        return redirect(url_for('auth.login'))
+        return render_template('landing.html')
 
     return app
