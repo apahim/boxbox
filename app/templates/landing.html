@@ -167,16 +167,24 @@
     .feature-card:hover .feature-card-img img {
         opacity: 1;
     }
-    .feature-card-icon {
+    /* ---- Works-with strip ---- */
+    .landing-sources {
         display: flex;
         align-items: center;
         justify-content: center;
-        padding: 2.5rem 1rem;
-        border-bottom: 1px solid var(--bb-border);
-        background: var(--bb-surface-alt);
+        gap: 1.5rem;
+        margin-top: 2rem;
     }
-    .feature-card-icon .bi {
-        font-size: 3rem;
+    .landing-sources .source-item {
+        display: flex;
+        align-items: center;
+        gap: 0.4rem;
+        font-size: 0.8rem;
+        font-weight: 500;
+        color: var(--bb-text-muted);
+    }
+    .landing-sources .source-item .bi {
+        font-size: 1rem;
         color: var(--bb-text-dim);
     }
     .feature-card-body {
@@ -280,7 +288,6 @@
     }
     .reveal-delay-1 { transition-delay: 0.1s; }
     .reveal-delay-2 { transition-delay: 0.2s; }
-    .reveal-delay-3 { transition-delay: 0.3s; }
 
     /* ---- Responsive ---- */
     @media (max-width: 767.98px) {
@@ -303,13 +310,17 @@
     <div class="hero-bg-photo"></div>
     <span class="bb-brand"><span class="bb-box1">Box</span><span class="bb-box2">Box</span></span>
     <h1 class="landing-tagline">Know your laps.</h1>
-    <p class="landing-subtitle">Upload telemetry from your kart sessions, analyze every lap and corner, and compare performance over time.</p>
+    <p class="landing-subtitle">Extract GPS telemetry from your GoPro or RaceChrono, analyze every lap and corner, and compare performance over time.</p>
     <a href="{{ url_for('auth.login_google') }}" class="btn landing-cta">
         <svg width="18" height="18" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>
         Sign in with Google
     </a>
     <a href="https://boxbox.ie/dashboard/share/vMVZwQg0vVxfGOJvBIcbSA" class="landing-demo-link">See a demo session &rarr;</a>
     <p class="landing-audience">Built for club and rental kart racers</p>
+    <div class="landing-sources">
+        <span class="source-item"><i class="bi bi-camera-video"></i> GoPro</span>
+        <span class="source-item"><i class="bi bi-phone"></i> RaceChrono</span>
+    </div>
 
     <div class="hero-screenshot-wrap">
         <div class="hero-screenshot">
@@ -323,7 +334,7 @@
     <h2 class="landing-features-heading">Everything from your session, in one place</h2>
     <p class="landing-features-sub">Real data from your laps — no guesswork.</p>
     <div class="row g-3">
-        <div class="col-md-6 col-lg-6 reveal">
+        <div class="col-md-6 col-lg-4 reveal">
             <div class="card feature-card">
                 <div class="feature-card-img">
                     <img src="{{ url_for('static', filename='img/boxbox-delta.webp') }}" alt="Time delta and throttle/brake phase charts" loading="lazy">
@@ -334,7 +345,7 @@
                 </div>
             </div>
         </div>
-        <div class="col-md-6 col-lg-6 reveal reveal-delay-1">
+        <div class="col-md-6 col-lg-4 reveal reveal-delay-1">
             <div class="card feature-card">
                 <div class="feature-card-img">
                     <img src="{{ url_for('static', filename='img/boxbox-line.webp') }}" alt="A/B raceline comparison on satellite map" loading="lazy">
@@ -345,7 +356,7 @@
                 </div>
             </div>
         </div>
-        <div class="col-md-6 col-lg-6 reveal reveal-delay-2">
+        <div class="col-md-6 col-lg-4 reveal reveal-delay-2">
             <div class="card feature-card">
                 <div class="feature-card-img">
                     <img src="{{ url_for('static', filename='img/boxbox-corner.webp') }}" alt="Corner analysis map with per-corner rankings" loading="lazy">
@@ -353,17 +364,6 @@
                 <div class="feature-card-body">
                     <h5><i class="bi bi-sign-turn-right"></i> Corner Breakdown</h5>
                     <p>Find which corners cost you time and which ones you're nailing, ranked from weakest to strongest.</p>
-                </div>
-            </div>
-        </div>
-        <div class="col-md-6 col-lg-6 reveal reveal-delay-3">
-            <div class="card feature-card">
-                <div class="feature-card-icon">
-                    <i class="bi bi-trophy"></i>
-                </div>
-                <div class="feature-card-body">
-                    <h5><i class="bi bi-trophy"></i> Leaderboards</h5>
-                    <p>Stack your best laps against other drivers at the same track and watch your ranking climb.</p>
                 </div>
             </div>
         </div>
@@ -378,7 +378,7 @@
             <div class="landing-step reveal">
                 <div class="step-circle">1</div>
                 <h6>Record</h6>
-                <p>Log your session with RaceChrono</p>
+                <p>Log your session with RaceChrono or GoPro</p>
             </div>
         </div>
         <div class="d-none d-md-flex col-md-auto landing-step-line reveal" style="padding:1rem 0 0; flex:0 0 48px;">
@@ -388,7 +388,7 @@
             <div class="landing-step reveal">
                 <div class="step-circle">2</div>
                 <h6>Upload</h6>
-                <p>Export the CSV and upload it here</p>
+                <p>Drop your CSV or GoPro MP4 — telemetry is extracted instantly</p>
             </div>
         </div>
         <div class="d-none d-md-flex col-md-auto landing-step-line reveal" style="padding:1rem 0 0; flex:0 0 48px;">
