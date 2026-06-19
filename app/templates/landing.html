@@ -6,8 +6,7 @@
 <style>
     /* ---- Hero ---- */
     .landing-hero {
-        padding: 5rem 0 2rem;
-        text-align: center;
+        padding: 5rem 0 3rem;
         position: relative;
         overflow: hidden;
     }
@@ -15,7 +14,7 @@
         content: '';
         position: absolute;
         top: -20%;
-        left: 50%;
+        left: 30%;
         transform: translateX(-50%);
         width: 800px;
         height: 600px;
@@ -34,11 +33,18 @@
         z-index: 0;
         pointer-events: none;
     }
-    .landing-hero > * {
+    .hero-row {
         position: relative;
         z-index: 1;
+        display: flex;
+        align-items: center;
+        gap: 3rem;
     }
-    .landing-hero .bb-brand {
+    .hero-text {
+        flex: 0 0 auto;
+        max-width: 400px;
+    }
+    .hero-text .bb-brand {
         font-size: 3.5rem;
         letter-spacing: -0.03em;
     }
@@ -52,8 +58,7 @@
     .landing-subtitle {
         font-size: 1rem;
         color: var(--bb-text-muted);
-        max-width: 420px;
-        margin: 0 auto 2.5rem;
+        margin: 0 0 2rem;
         line-height: 1.6;
     }
     .landing-cta {
@@ -77,55 +82,54 @@
         color: #fff;
         box-shadow: 0 0 24px rgba(229, 62, 62, 0.45);
     }
-    .landing-demo-link {
-        display: block;
-        margin-top: 1rem;
-        font-size: 0.85rem;
-        color: var(--bb-text-muted);
-    }
-    .landing-demo-link:hover {
-        color: var(--bb-text);
+    .hero-meta {
+        margin-top: 1.5rem;
     }
     .landing-audience {
-        margin-top: 2rem;
         font-size: 0.8rem;
         color: var(--bb-text-dim);
         letter-spacing: 0.06em;
         text-transform: uppercase;
         font-weight: 600;
+        margin: 0 0 0.75rem;
     }
 
     /* ---- Hero screenshot ---- */
     .hero-screenshot-wrap {
-        margin-top: 3.5rem;
-        perspective: 1200px;
+        flex: 1;
+        min-width: 0;
     }
     .hero-screenshot {
+        display: block;
         position: relative;
-        max-width: 900px;
-        margin: 0 auto;
         border-radius: 12px;
         overflow: hidden;
         border: 1px solid var(--bb-border);
         box-shadow:
             0 4px 24px rgba(0, 0, 0, 0.4),
             0 0 0 1px rgba(255, 255, 255, 0.03);
-        transform: rotateX(2deg);
+        transition: border-color 0.2s, box-shadow 0.2s;
+    }
+    .hero-screenshot:hover {
+        border-color: var(--bb-text-dim);
+        box-shadow:
+            0 8px 32px rgba(0, 0, 0, 0.5),
+            0 0 0 1px rgba(255, 255, 255, 0.06);
     }
     .hero-screenshot img {
         display: block;
         width: 100%;
         height: auto;
     }
-    .hero-screenshot::after {
-        content: '';
-        position: absolute;
-        bottom: 0;
-        left: 0;
-        right: 0;
-        height: 80px;
-        background: linear-gradient(transparent, var(--bb-bg));
-        pointer-events: none;
+    .hero-screenshot-label {
+        display: block;
+        text-align: center;
+        margin-top: 0.6rem;
+        font-size: 0.8rem;
+        color: var(--bb-text-dim);
+    }
+    .hero-screenshot-label:hover {
+        color: var(--bb-text-muted);
     }
 
     /* ---- Features ---- */
@@ -171,9 +175,7 @@
     .landing-sources {
         display: flex;
         align-items: center;
-        justify-content: center;
         gap: 1.5rem;
-        margin-top: 2rem;
     }
     .landing-sources .source-item {
         display: flex;
@@ -290,12 +292,20 @@
     .reveal-delay-2 { transition-delay: 0.2s; }
 
     /* ---- Responsive ---- */
+    @media (max-width: 991.98px) {
+        .hero-row {
+            flex-direction: column;
+            text-align: center;
+        }
+        .hero-text { max-width: 480px; margin: 0 auto; }
+        .hero-meta { display: flex; flex-direction: column; align-items: center; }
+        .landing-sources { justify-content: center; }
+        .hero-screenshot-wrap { max-width: 600px; margin: 0 auto; }
+    }
     @media (max-width: 767.98px) {
         .landing-hero { padding: 3.5rem 0 1.5rem; }
-        .landing-hero .bb-brand { font-size: 2.5rem; }
+        .hero-text .bb-brand { font-size: 2.5rem; }
         .landing-tagline { font-size: 1.15rem; }
-        .hero-screenshot-wrap { margin-top: 2.5rem; }
-        .hero-screenshot { transform: none; }
         .landing-features .col-md-6 { margin-bottom: 1rem; }
         .landing-step-line { display: none; }
         .landing-step { margin-bottom: 1.5rem; }
@@ -308,23 +318,28 @@
 <!-- Hero -->
 <div class="landing-hero">
     <div class="hero-bg-photo"></div>
-    <span class="bb-brand"><span class="bb-box1">Box</span><span class="bb-box2">Box</span></span>
-    <h1 class="landing-tagline">Know your laps.</h1>
-    <p class="landing-subtitle">Extract GPS telemetry from your GoPro or RaceChrono, analyze every lap and corner, and compare performance over time.</p>
-    <a href="{{ url_for('auth.login_google') }}" class="btn landing-cta">
-        <svg width="18" height="18" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>
-        Sign in with Google
-    </a>
-    <a href="https://boxbox.ie/dashboard/share/vMVZwQg0vVxfGOJvBIcbSA" class="landing-demo-link">See a demo session &rarr;</a>
-    <p class="landing-audience">Built for club and rental kart racers</p>
-    <div class="landing-sources">
-        <span class="source-item"><i class="bi bi-camera-video"></i> GoPro</span>
-        <span class="source-item"><i class="bi bi-phone"></i> RaceChrono</span>
-    </div>
-
-    <div class="hero-screenshot-wrap">
-        <div class="hero-screenshot">
-            <img src="{{ url_for('static', filename='img/boxbox-overview.webp') }}" alt="BoxBox session dashboard showing lap times, consistency stats, and coaching insights" width="1400" height="848" loading="eager">
+    <div class="hero-row">
+        <div class="hero-text">
+            <span class="bb-brand"><span class="bb-box1">Box</span><span class="bb-box2">Box</span></span>
+            <h1 class="landing-tagline">Know your laps.</h1>
+            <p class="landing-subtitle">Extract GPS telemetry from your GoPro or RaceChrono, analyze every lap and corner, and compare performance over time.</p>
+            <a href="{{ url_for('auth.login_google') }}" class="btn landing-cta">
+                <svg width="18" height="18" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>
+                Sign in with Google
+            </a>
+            <div class="hero-meta">
+                <p class="landing-audience">Built for club and rental kart racers</p>
+                <div class="landing-sources">
+                    <span class="source-item"><i class="bi bi-camera-video"></i> GoPro</span>
+                    <span class="source-item"><i class="bi bi-phone"></i> RaceChrono</span>
+                </div>
+            </div>
+        </div>
+        <div class="hero-screenshot-wrap">
+            <a href="https://boxbox.ie/dashboard/share/vMVZwQg0vVxfGOJvBIcbSA" class="hero-screenshot">
+                <img src="{{ url_for('static', filename='img/boxbox-overview.webp') }}" alt="BoxBox session dashboard showing lap times, consistency stats, and coaching insights" width="1400" height="848" loading="eager">
+            </a>
+            <a href="https://boxbox.ie/dashboard/share/vMVZwQg0vVxfGOJvBIcbSA" class="hero-screenshot-label">See a demo session &rarr;</a>
         </div>
     </div>
 </div>
