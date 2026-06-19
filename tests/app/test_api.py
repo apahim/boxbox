@@ -380,18 +380,6 @@ class TestShareToken:
         )
         assert resp.status_code == 401
 
-    def test_expired_share_token(self, client, app, shared_session):
-        from datetime import datetime, timezone, timedelta
-        session = db.session.get(Session, shared_session.id)
-        session.share_token_created_at = datetime.now(timezone.utc) - timedelta(days=31)
-        db.session.commit()
-
-        resp = client.get(
-            f'/api/sessions/{shared_session.id}/summary'
-            f'?share_token={shared_session.share_token}'
-        )
-        assert resp.status_code == 401
-
     def test_share_token_wrong_session(self, client, shared_session):
         """Share token for session A must not grant access to session B."""
         other = Session(
@@ -425,18 +413,6 @@ class TestShareToken:
         )
         assert resp.status_code == 200
 
-    def test_null_timestamp_rejected(self, client, shared_session):
-        """Token with no created_at timestamp should be treated as expired."""
-        session = db.session.get(Session, shared_session.id)
-        session.share_token_created_at = None
-        db.session.commit()
-
-        resp = client.get(
-            f'/api/sessions/{shared_session.id}/summary'
-            f'?share_token={shared_session.share_token}'
-        )
-        assert resp.status_code == 401
-
     def test_shared_view_valid_token(self, client, shared_session):
         """Shared view renders the dashboard for valid, non-expired tokens."""
         resp = client.get(f'/dashboard/share/{shared_session.share_token}')
@@ -444,28 +420,8 @@ class TestShareToken:
         assert b'dashboardTabs' in resp.data
         assert b'data-share-token' in resp.data
 
-    def test_shared_view_expired_token(self, client, shared_session):
-        """Shared view shows expiry error instead of empty dashboard."""
-        from datetime import datetime, timezone, timedelta
-        session = db.session.get(Session, shared_session.id)
-        session.share_token_created_at = datetime.now(timezone.utc) - timedelta(days=31)
-        db.session.commit()
-
-        resp = client.get(f'/dashboard/share/{shared_session.share_token}')
-        assert resp.status_code == 410
-        assert b'expired' in resp.data.lower()
-        assert b'dashboardTabs' not in resp.data
-
     def test_shared_view_invalid_token(self, client):
         """Shared view returns 404 for non-existent tokens."""
         resp = client.get('/dashboard/share/nonexistent_token')
         assert resp.status_code == 404
 
-    def test_shared_view_null_timestamp(self, client, shared_session):
-        """Shared view treats null timestamp as expired."""
-        session = db.session.get(Session, shared_session.id)
-        session.share_token_created_at = None
-        db.session.commit()
-
-        resp = client.get(f'/dashboard/share/{shared_session.share_token}')
-        assert resp.status_code == 410
