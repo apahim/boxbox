@@ -4,9 +4,12 @@
 
 {% block extra_head %}
 <style>
+    /* ---- Hero ---- */
     .landing-hero {
-        padding: 6rem 0 4rem;
+        padding: 5rem 0 2rem;
         text-align: center;
+        position: relative;
+        overflow: hidden;
     }
     .landing-hero .bb-brand {
         font-size: 3.5rem;
@@ -46,31 +49,101 @@
         color: var(--bb-text);
     }
 
-    .landing-features {
-        padding: 3rem 0;
-        border-top: 1px solid var(--bb-border);
+    /* ---- Hero screenshot ---- */
+    .hero-screenshot-wrap {
+        margin-top: 3.5rem;
+        perspective: 1200px;
     }
-    .landing-features .card {
-        height: 100%;
-        padding: 1.75rem;
+    .hero-screenshot {
+        position: relative;
+        max-width: 900px;
+        margin: 0 auto;
+        border-radius: 12px;
+        overflow: hidden;
+        border: 1px solid var(--bb-border);
+        box-shadow:
+            0 4px 24px rgba(0, 0, 0, 0.4),
+            0 0 0 1px rgba(255, 255, 255, 0.03);
+        transform: rotateX(2deg);
     }
-    .landing-features .card .bi {
-        font-size: 1.5rem;
-        color: var(--bb-text-muted);
-        margin-bottom: 0.75rem;
+    .hero-screenshot img {
         display: block;
+        width: 100%;
+        height: auto;
     }
-    .landing-features .card h5 {
-        font-size: 0.95rem;
+    .hero-screenshot::after {
+        content: '';
+        position: absolute;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        height: 80px;
+        background: linear-gradient(transparent, var(--bb-bg));
+        pointer-events: none;
+    }
+
+    /* ---- Features ---- */
+    .landing-features {
+        padding: 4rem 0;
+    }
+    .landing-features-heading {
+        font-size: 1.1rem;
+        font-weight: 600;
+        text-align: center;
         margin-bottom: 0.5rem;
+        color: var(--bb-text);
     }
-    .landing-features .card p {
-        font-size: 0.85rem;
+    .landing-features-sub {
+        text-align: center;
+        color: var(--bb-text-muted);
+        font-size: 0.9rem;
+        margin-bottom: 2.5rem;
+    }
+    .feature-card {
+        height: 100%;
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+    }
+    .feature-card-img {
+        overflow: hidden;
+        border-bottom: 1px solid var(--bb-border);
+        aspect-ratio: 16 / 10;
+    }
+    .feature-card-img img {
+        display: block;
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        opacity: 0.85;
+        transition: opacity 0.2s;
+    }
+    .feature-card:hover .feature-card-img img {
+        opacity: 1;
+    }
+    .feature-card-body {
+        padding: 1.25rem;
+        flex: 1;
+    }
+    .feature-card-body h5 {
+        font-size: 0.9rem;
+        margin-bottom: 0.35rem;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+    .feature-card-body h5 .bi {
+        font-size: 1rem;
+        color: var(--bb-text-muted);
+    }
+    .feature-card-body p {
+        font-size: 0.8rem;
         color: var(--bb-text-muted);
         margin: 0;
         line-height: 1.5;
     }
 
+    /* ---- How it works ---- */
     .landing-steps {
         padding: 3rem 0 4rem;
         border-top: 1px solid var(--bb-border);
@@ -121,10 +194,29 @@
         display: block;
     }
 
+    /* ---- CTA banner ---- */
+    .landing-bottom-cta {
+        text-align: center;
+        padding: 3rem 0 4rem;
+        border-top: 1px solid var(--bb-border);
+    }
+    .landing-bottom-cta h3 {
+        font-size: 1.15rem;
+        margin-bottom: 0.5rem;
+    }
+    .landing-bottom-cta p {
+        color: var(--bb-text-muted);
+        font-size: 0.9rem;
+        margin-bottom: 1.5rem;
+    }
+
+    /* ---- Responsive ---- */
     @media (max-width: 767.98px) {
-        .landing-hero { padding: 4rem 0 3rem; }
+        .landing-hero { padding: 3.5rem 0 1.5rem; }
         .landing-hero .bb-brand { font-size: 2.5rem; }
         .landing-tagline { font-size: 1.15rem; }
+        .hero-screenshot-wrap { margin-top: 2.5rem; }
+        .hero-screenshot { transform: none; }
         .landing-features .col-md-6 { margin-bottom: 1rem; }
         .landing-step-line { display: none; }
         .landing-step { margin-bottom: 1.5rem; }
@@ -133,6 +225,7 @@
 {% endblock %}
 
 {% block content %}
+<!-- Hero -->
 <div class="landing-hero">
     <span class="bb-brand"><span class="bb-box1">Box</span><span class="bb-box2">Box</span></span>
     <h1 class="landing-tagline">Know your laps.</h1>
@@ -142,41 +235,67 @@
         Sign in with Google
     </a>
     <a href="https://boxbox.ie/dashboard/share/vMVZwQg0vVxfGOJvBIcbSA" class="landing-demo-link">See a demo session &rarr;</a>
+
+    <div class="hero-screenshot-wrap">
+        <div class="hero-screenshot">
+            <img src="{{ url_for('static', filename='img/boxbox-overview.webp') }}" alt="BoxBox session dashboard showing lap times, consistency stats, and coaching insights" width="1400" height="848" loading="eager">
+        </div>
+    </div>
 </div>
 
+<!-- Features -->
 <section class="landing-features">
+    <h2 class="landing-features-heading">Everything from your session, in one place</h2>
+    <p class="landing-features-sub">Real data from your laps — no guesswork.</p>
     <div class="row g-3">
         <div class="col-md-6 col-lg-3">
-            <div class="card">
-                <i class="bi bi-stopwatch"></i>
-                <h5>Lap Analysis</h5>
-                <p>Lap times, sector splits, and consistency stats across every session.</p>
+            <div class="card feature-card">
+                <div class="feature-card-img">
+                    <img src="{{ url_for('static', filename='img/boxbox-delta.webp') }}" alt="Time delta and throttle/brake phase charts" loading="lazy">
+                </div>
+                <div class="feature-card-body">
+                    <h5><i class="bi bi-stopwatch"></i> Lap Analysis</h5>
+                    <p>Lap times, sector splits, and consistency stats across every session.</p>
+                </div>
             </div>
         </div>
         <div class="col-md-6 col-lg-3">
-            <div class="card">
-                <i class="bi bi-sign-turn-right"></i>
-                <h5>Corner Breakdown</h5>
-                <p>Per-corner speed, braking points, and throttle application analysis.</p>
+            <div class="card feature-card">
+                <div class="feature-card-img">
+                    <img src="{{ url_for('static', filename='img/boxbox-corner.webp') }}" alt="Corner analysis map with per-corner rankings" loading="lazy">
+                </div>
+                <div class="feature-card-body">
+                    <h5><i class="bi bi-sign-turn-right"></i> Corner Breakdown</h5>
+                    <p>Per-corner speed, braking points, and throttle application analysis.</p>
+                </div>
             </div>
         </div>
         <div class="col-md-6 col-lg-3">
-            <div class="card">
-                <i class="bi bi-map"></i>
-                <h5>Race Line Maps</h5>
-                <p>GPS traces overlaid on real track maps with Apple MapKit.</p>
+            <div class="card feature-card">
+                <div class="feature-card-img">
+                    <img src="{{ url_for('static', filename='img/boxbox-line.webp') }}" alt="A/B raceline comparison on satellite map" loading="lazy">
+                </div>
+                <div class="feature-card-body">
+                    <h5><i class="bi bi-map"></i> Race Line Maps</h5>
+                    <p>GPS traces overlaid on real track maps with Apple MapKit.</p>
+                </div>
             </div>
         </div>
         <div class="col-md-6 col-lg-3">
-            <div class="card">
-                <i class="bi bi-trophy"></i>
-                <h5>Leaderboards</h5>
-                <p>Compare your best laps against other drivers at the same track.</p>
+            <div class="card feature-card">
+                <div class="feature-card-img">
+                    <img src="{{ url_for('static', filename='img/session.webp') }}" alt="On-track kart racing action" loading="lazy">
+                </div>
+                <div class="feature-card-body">
+                    <h5><i class="bi bi-trophy"></i> Leaderboards</h5>
+                    <p>Compare your best laps against other drivers at the same track.</p>
+                </div>
             </div>
         </div>
     </div>
 </section>
 
+<!-- How it works -->
 <section class="landing-steps">
     <h2 class="landing-steps-heading">How it works</h2>
     <div class="row align-items-start">
@@ -208,5 +327,15 @@
             </div>
         </div>
     </div>
+</section>
+
+<!-- Bottom CTA -->
+<section class="landing-bottom-cta">
+    <h3>Ready to see your data?</h3>
+    <p>Free to use. Just sign in and upload your first session.</p>
+    <a href="{{ url_for('auth.login') }}" class="btn btn-outline-light landing-cta">
+        <svg width="18" height="18" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>
+        Get started
+    </a>
 </section>
 {% endblock %}
