@@ -11,6 +11,33 @@
         position: relative;
         overflow: hidden;
     }
+    .landing-hero::before {
+        content: '';
+        position: absolute;
+        top: -20%;
+        left: 50%;
+        transform: translateX(-50%);
+        width: 800px;
+        height: 600px;
+        background: radial-gradient(ellipse at center, rgba(229, 62, 62, 0.08) 0%, transparent 70%);
+        pointer-events: none;
+        z-index: 0;
+    }
+    .hero-bg-photo {
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: url("{{ url_for('static', filename='img/session.webp') }}") center top / cover no-repeat;
+        opacity: 0.06;
+        z-index: 0;
+        pointer-events: none;
+    }
+    .landing-hero > * {
+        position: relative;
+        z-index: 1;
+    }
     .landing-hero .bb-brand {
         font-size: 3.5rem;
         letter-spacing: -0.03em;
@@ -38,6 +65,17 @@
         font-size: 0.95rem;
         font-weight: 500;
         border-radius: 8px;
+        background-color: var(--bb-red);
+        border: 1px solid var(--bb-red);
+        color: #fff;
+        box-shadow: 0 0 20px rgba(229, 62, 62, 0.3);
+        transition: background-color 0.15s, box-shadow 0.15s;
+    }
+    .landing-cta:hover {
+        background-color: var(--bb-red-hover);
+        border-color: var(--bb-red-hover);
+        color: #fff;
+        box-shadow: 0 0 24px rgba(229, 62, 62, 0.45);
     }
     .landing-demo-link {
         display: block;
@@ -47,6 +85,14 @@
     }
     .landing-demo-link:hover {
         color: var(--bb-text);
+    }
+    .landing-audience {
+        margin-top: 2rem;
+        font-size: 0.8rem;
+        color: var(--bb-text-dim);
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        font-weight: 600;
     }
 
     /* ---- Hero screenshot ---- */
@@ -84,20 +130,20 @@
 
     /* ---- Features ---- */
     .landing-features {
-        padding: 4rem 0;
+        padding: 5rem 0;
     }
     .landing-features-heading {
-        font-size: 1.1rem;
+        font-size: 1.4rem;
         font-weight: 600;
         text-align: center;
-        margin-bottom: 0.5rem;
+        margin-bottom: 0.6rem;
         color: var(--bb-text);
     }
     .landing-features-sub {
         text-align: center;
         color: var(--bb-text-muted);
-        font-size: 0.9rem;
-        margin-bottom: 2.5rem;
+        font-size: 0.95rem;
+        margin-bottom: 3rem;
     }
     .feature-card {
         height: 100%;
@@ -108,7 +154,7 @@
     .feature-card-img {
         overflow: hidden;
         border-bottom: 1px solid var(--bb-border);
-        aspect-ratio: 16 / 10;
+        aspect-ratio: 16 / 9;
     }
     .feature-card-img img {
         display: block;
@@ -120,6 +166,18 @@
     }
     .feature-card:hover .feature-card-img img {
         opacity: 1;
+    }
+    .feature-card-icon {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 2.5rem 1rem;
+        border-bottom: 1px solid var(--bb-border);
+        background: var(--bb-surface-alt);
+    }
+    .feature-card-icon .bi {
+        font-size: 3rem;
+        color: var(--bb-text-dim);
     }
     .feature-card-body {
         padding: 1.25rem;
@@ -145,14 +203,14 @@
 
     /* ---- How it works ---- */
     .landing-steps {
-        padding: 3rem 0 4rem;
+        padding: 4rem 0 5rem;
         border-top: 1px solid var(--bb-border);
     }
     .landing-steps-heading {
-        font-size: 1.1rem;
+        font-size: 1.4rem;
         font-weight: 600;
         text-align: center;
-        margin-bottom: 2rem;
+        margin-bottom: 2.5rem;
         color: var(--bb-text);
     }
     .landing-step {
@@ -197,18 +255,32 @@
     /* ---- CTA banner ---- */
     .landing-bottom-cta {
         text-align: center;
-        padding: 3rem 0 4rem;
+        padding: 4rem 0 5rem;
         border-top: 1px solid var(--bb-border);
     }
     .landing-bottom-cta h3 {
-        font-size: 1.15rem;
-        margin-bottom: 0.5rem;
+        font-size: 1.3rem;
+        margin-bottom: 0.6rem;
     }
     .landing-bottom-cta p {
         color: var(--bb-text-muted);
         font-size: 0.9rem;
         margin-bottom: 1.5rem;
     }
+
+    /* ---- Scroll reveal ---- */
+    .reveal {
+        opacity: 0;
+        transform: translateY(24px);
+        transition: opacity 0.6s ease, transform 0.6s ease;
+    }
+    .reveal.visible {
+        opacity: 1;
+        transform: translateY(0);
+    }
+    .reveal-delay-1 { transition-delay: 0.1s; }
+    .reveal-delay-2 { transition-delay: 0.2s; }
+    .reveal-delay-3 { transition-delay: 0.3s; }
 
     /* ---- Responsive ---- */
     @media (max-width: 767.98px) {
@@ -220,6 +292,7 @@
         .landing-features .col-md-6 { margin-bottom: 1rem; }
         .landing-step-line { display: none; }
         .landing-step { margin-bottom: 1.5rem; }
+        .reveal { transition-delay: 0s !important; }
     }
 </style>
 {% endblock %}
@@ -227,14 +300,16 @@
 {% block content %}
 <!-- Hero -->
 <div class="landing-hero">
+    <div class="hero-bg-photo"></div>
     <span class="bb-brand"><span class="bb-box1">Box</span><span class="bb-box2">Box</span></span>
     <h1 class="landing-tagline">Know your laps.</h1>
     <p class="landing-subtitle">Upload telemetry from your kart sessions, analyze every lap and corner, and compare performance over time.</p>
-    <a href="{{ url_for('auth.login_google') }}" class="btn btn-outline-light landing-cta">
+    <a href="{{ url_for('auth.login_google') }}" class="btn landing-cta">
         <svg width="18" height="18" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>
         Sign in with Google
     </a>
     <a href="https://boxbox.ie/dashboard/share/vMVZwQg0vVxfGOJvBIcbSA" class="landing-demo-link">See a demo session &rarr;</a>
+    <p class="landing-audience">Built for club and rental kart racers</p>
 
     <div class="hero-screenshot-wrap">
         <div class="hero-screenshot">
@@ -248,47 +323,47 @@
     <h2 class="landing-features-heading">Everything from your session, in one place</h2>
     <p class="landing-features-sub">Real data from your laps — no guesswork.</p>
     <div class="row g-3">
-        <div class="col-md-6 col-lg-3">
+        <div class="col-md-6 col-lg-6 reveal">
             <div class="card feature-card">
                 <div class="feature-card-img">
                     <img src="{{ url_for('static', filename='img/boxbox-delta.webp') }}" alt="Time delta and throttle/brake phase charts" loading="lazy">
                 </div>
                 <div class="feature-card-body">
                     <h5><i class="bi bi-stopwatch"></i> Lap Analysis</h5>
-                    <p>Lap times, sector splits, and consistency stats across every session.</p>
+                    <p>See exactly where you gained or lost time with delta charts and throttle/brake traces.</p>
                 </div>
             </div>
         </div>
-        <div class="col-md-6 col-lg-3">
-            <div class="card feature-card">
-                <div class="feature-card-img">
-                    <img src="{{ url_for('static', filename='img/boxbox-corner.webp') }}" alt="Corner analysis map with per-corner rankings" loading="lazy">
-                </div>
-                <div class="feature-card-body">
-                    <h5><i class="bi bi-sign-turn-right"></i> Corner Breakdown</h5>
-                    <p>Per-corner speed, braking points, and throttle application analysis.</p>
-                </div>
-            </div>
-        </div>
-        <div class="col-md-6 col-lg-3">
+        <div class="col-md-6 col-lg-6 reveal reveal-delay-1">
             <div class="card feature-card">
                 <div class="feature-card-img">
                     <img src="{{ url_for('static', filename='img/boxbox-line.webp') }}" alt="A/B raceline comparison on satellite map" loading="lazy">
                 </div>
                 <div class="feature-card-body">
                     <h5><i class="bi bi-map"></i> Race Line Maps</h5>
-                    <p>GPS traces overlaid on real track maps with Apple MapKit.</p>
+                    <p>Compare your racing line against your best lap on real satellite maps — see every apex and exit.</p>
                 </div>
             </div>
         </div>
-        <div class="col-md-6 col-lg-3">
+        <div class="col-md-6 col-lg-6 reveal reveal-delay-2">
             <div class="card feature-card">
                 <div class="feature-card-img">
-                    <img src="{{ url_for('static', filename='img/session.webp') }}" alt="On-track kart racing action" loading="lazy">
+                    <img src="{{ url_for('static', filename='img/boxbox-corner.webp') }}" alt="Corner analysis map with per-corner rankings" loading="lazy">
+                </div>
+                <div class="feature-card-body">
+                    <h5><i class="bi bi-sign-turn-right"></i> Corner Breakdown</h5>
+                    <p>Find which corners cost you time and which ones you're nailing, ranked from weakest to strongest.</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6 col-lg-6 reveal reveal-delay-3">
+            <div class="card feature-card">
+                <div class="feature-card-icon">
+                    <i class="bi bi-trophy"></i>
                 </div>
                 <div class="feature-card-body">
                     <h5><i class="bi bi-trophy"></i> Leaderboards</h5>
-                    <p>Compare your best laps against other drivers at the same track.</p>
+                    <p>Stack your best laps against other drivers at the same track and watch your ranking climb.</p>
                 </div>
             </div>
         </div>
@@ -300,27 +375,27 @@
     <h2 class="landing-steps-heading">How it works</h2>
     <div class="row align-items-start">
         <div class="col-md col-4">
-            <div class="landing-step">
+            <div class="landing-step reveal">
                 <div class="step-circle">1</div>
                 <h6>Record</h6>
                 <p>Log your session with RaceChrono</p>
             </div>
         </div>
-        <div class="d-none d-md-flex col-md-auto landing-step-line" style="padding:1rem 0 0; flex:0 0 48px;">
+        <div class="d-none d-md-flex col-md-auto landing-step-line reveal" style="padding:1rem 0 0; flex:0 0 48px;">
             <span></span>
         </div>
         <div class="col-md col-4">
-            <div class="landing-step">
+            <div class="landing-step reveal">
                 <div class="step-circle">2</div>
                 <h6>Upload</h6>
                 <p>Export the CSV and upload it here</p>
             </div>
         </div>
-        <div class="d-none d-md-flex col-md-auto landing-step-line" style="padding:1rem 0 0; flex:0 0 48px;">
+        <div class="d-none d-md-flex col-md-auto landing-step-line reveal" style="padding:1rem 0 0; flex:0 0 48px;">
             <span></span>
         </div>
         <div class="col-md col-4">
-            <div class="landing-step">
+            <div class="landing-step reveal">
                 <div class="step-circle">3</div>
                 <h6>Analyze</h6>
                 <p>See your data, instantly</p>
@@ -331,11 +406,36 @@
 
 <!-- Bottom CTA -->
 <section class="landing-bottom-cta">
-    <h3>Ready to see your data?</h3>
-    <p>Free to use. Just sign in and upload your first session.</p>
-    <a href="{{ url_for('auth.login_google') }}" class="btn btn-outline-light landing-cta">
+    <h3>Your laps have a story. Let's read it.</h3>
+    <p>Free to use — sign in and upload your first session in under a minute.</p>
+    <a href="{{ url_for('auth.login_google') }}" class="btn landing-cta">
         <svg width="18" height="18" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>
-        Get started
+        Get started free
     </a>
 </section>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+(function() {
+    var els = document.querySelectorAll('.reveal');
+    if (!els.length) return;
+
+    if (!('IntersectionObserver' in window)) {
+        els.forEach(function(el) { el.classList.add('visible'); });
+        return;
+    }
+
+    var observer = new IntersectionObserver(function(entries) {
+        entries.forEach(function(entry) {
+            if (entry.isIntersecting) {
+                entry.target.classList.add('visible');
+                observer.unobserve(entry.target);
+            }
+        });
+    }, { threshold: 0.15 });
+
+    els.forEach(function(el) { observer.observe(el); });
+})();
+</script>
 {% endblock %}
