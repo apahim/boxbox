@@ -20,10 +20,10 @@ def _mock_authorize_access_token(userinfo=None):
 
 
 class TestLogin:
-    def test_login_page_loads(self, client):
-        resp = client.get('/auth/login')
-        assert resp.status_code == 200
-        assert b'Sign in with Google' in resp.data
+    def test_login_redirects_to_landing(self, client):
+        resp = client.get('/auth/login', follow_redirects=False)
+        assert resp.status_code == 302
+        assert resp.headers['Location'] == '/'
 
     def test_login_google_redirects(self, client):
         resp = client.get('/auth/login/google')
@@ -114,7 +114,7 @@ class TestUpdateProfile:
     def test_unauthenticated_redirect(self, client):
         resp = client.post('/auth/profile/update', data={'display_name': 'X'})
         assert resp.status_code == 302
-        assert '/login' in resp.headers['Location']
+        assert resp.headers['Location'].startswith('/')
 
 
 class TestLogout:

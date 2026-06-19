@@ -12,7 +12,7 @@ from app.models import (User, Session, Track, TrackCorner, Telemetry, Lap,
 def login():
     if current_user.is_authenticated:
         return redirect(url_for('index'))
-    return render_template('auth/login.html')
+    return redirect(url_for('index'))
 
 
 @bp.route('/login/google')
@@ -29,7 +29,7 @@ def callback():
 
     if not user_info:
         flash('Failed to get user info from Google.', 'danger')
-        return redirect(url_for('auth.login'))
+        return redirect(url_for('index'))
 
     google_id = user_info['sub']
     email = user_info['email'].lower()
@@ -108,10 +108,10 @@ def delete_account():
 
     logout_user()
     flash('Your account and all data have been deleted.', 'info')
-    return redirect(url_for('auth.login'))
+    return redirect(url_for('index'))
 
 
 @bp.route('/logout')
 def logout():
     logout_user()
-    return redirect(url_for('auth.login'))
+    return redirect(url_for('index'))

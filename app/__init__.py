@@ -124,7 +124,7 @@ def create_app(config_name=None):
     login_manager.init_app(app)
     csrf.init_app(app)
     limiter.init_app(app)
-    login_manager.login_view = 'auth.login'
+    login_manager.login_view = 'index'
 
     oauth.init_app(app)
     oauth.register(
@@ -182,7 +182,7 @@ def create_app(config_name=None):
         if current_user.terms_accepted_at:
             return
         allowed = {
-            'auth.login', 'auth.logout', 'auth.callback', 'auth.login_google',
+            'index', 'auth.logout', 'auth.callback', 'auth.login_google',
             'legal.terms', 'legal.privacy', 'legal.accept_terms', 'static',
             'dashboard.shared_view', 'health',
         }
