@@ -7,6 +7,7 @@ from summary_generated.yaml.
 
 import os
 
+import pandas as pd
 import pytest
 
 from app import db
@@ -15,6 +16,7 @@ from app.models import (
     CornerRecord, CornerSummary, SectorTime, ChartData, SessionUpload,
 )
 from app.sessions.ingest import ingest_session
+from scripts.analysis.outliers import detect_outliers
 from tests.app.conftest import seed_test_track
 
 
@@ -147,6 +149,30 @@ class TestIngestPipeline:
         assert ingested_session.weather is not None
         assert ingested_session.weather['condition'] == expected_summary['weather']['condition']
         assert ingested_session.weather['temp_c'] == expected_summary['weather']['temp_c']
+
+
+class TestOutlierDetection:
+    def test_fast_outlier_flagged(self):
+        """A half-lap (~37s among 70s laps) should be flagged as a fast IQR outlier."""
+        laps = pd.DataFrame({
+            'lap': range(15),
+            'seconds': [37.596, 71.57, 70.319, 70.765, 71.423, 70.376,
+                         72.615, 71.994, 71.147, 71.905, 72.624, 71.115,
+                         70.709, 70.707, 70.582],
+        })
+        clean, excluded = detect_outliers(laps)
+        excluded_laps = {e['lap'] for e in excluded}
+        assert 0 in excluded_laps, "Half-lap (lap 0) should be flagged as fast outlier"
+        assert all(e['lap'] != 0 or 'IQR outlier (<' in e['reason'] for e in excluded)
+
+    def test_normal_laps_not_excluded(self):
+        """Consistent laps should not be flagged."""
+        laps = pd.DataFrame({
+            'lap': range(10),
+            'seconds': [70.3, 70.7, 71.0, 71.1, 71.4, 71.6, 72.0, 70.5, 71.2, 70.8],
+        })
+        clean, excluded = detect_outliers(laps)
+        assert len(excluded) == 0
 
 
 @pytest.mark.skipif(not _has_test_data(), reason='Test data not available')

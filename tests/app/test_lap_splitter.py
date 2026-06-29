@@ -201,10 +201,9 @@ class TestSplitLapsByGate:
         result = split_laps_by_gate(df, sf_gate)
         assert list(result.columns) == ['x', 'y']
 
-    def test_synthetic_rows_inserted(self):
+    def test_synthetic_rows_at_lap_boundaries(self):
         lats, lons, times = _oval_path(n_laps=3)
         df = _make_telemetry(lats, lons, times)
-        original_len = len(df)
 
         sf_gate = {
             'sf_lat1': -0.001, 'sf_lon1': 0.0,
@@ -212,8 +211,13 @@ class TestSplitLapsByGate:
         }
 
         result = split_laps_by_gate(df, sf_gate)
-        # Synthetic rows should be added (one per crossing)
-        assert len(result) > original_len
+        unique_laps = sorted(result['lap_number'].unique())
+
+        # Each lap's last elapsed_time should equal the next lap's first
+        for i in range(len(unique_laps) - 1):
+            cur = result[result['lap_number'] == unique_laps[i]]
+            nxt = result[result['lap_number'] == unique_laps[i + 1]]
+            assert abs(cur['elapsed_time'].max() - nxt['elapsed_time'].min()) < 1e-6
 
     def test_does_not_mutate_input(self):
         lats, lons, times = _oval_path(n_laps=3)
@@ -241,3 +245,31 @@ class TestSplitLapsByGate:
         unique_laps = sorted(result['lap_number'].unique())
         # Lap numbers should be consecutive starting from 0
         assert unique_laps == list(range(len(unique_laps)))
+
+    def test_partial_first_and_last_laps_dropped(self):
+        """Data before the first gate crossing (out-lap) and after the last
+        crossing (in-lap) should be excluded since they aren't full laps."""
+        lats, lons, times = _oval_path(n_laps=3)
+        df = _make_telemetry(lats, lons, times)
+
+        sf_gate = {
+            'sf_lat1': -0.001, 'sf_lon1': 0.0,
+            'sf_lat2': 0.001, 'sf_lon2': 0.0,
+        }
+
+        result = split_laps_by_gate(df, sf_gate)
+
+        # All remaining telemetry should start at or after the first crossing
+        crossings = _find_crossings(
+            lats, lons, times,
+            sf_gate['sf_lat1'], sf_gate['sf_lon1'],
+            sf_gate['sf_lat2'], sf_gate['sf_lon2'],
+            directional=False,
+        )
+        crossings = _debounce_crossings(crossings)
+        first_crossing_time = crossings[0]['time']
+        last_crossing_time = crossings[-1]['time']
+
+        assert result['elapsed_time'].min() >= first_crossing_time
+        assert result['elapsed_time'].max() <= last_crossing_time
+        assert result['lap_number'].min() == 0

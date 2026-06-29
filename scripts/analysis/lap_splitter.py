@@ -173,4 +173,16 @@ def split_laps_by_gate(telemetry_df, sf_gate):
 
     df['lap_number'] = lap_numbers
 
+    # Drop partial laps: data before the first gate crossing (out-lap) and
+    # after the last crossing (in-lap) are never complete gate-to-gate laps.
+    first_crossing = crossing_times[0]
+    last_crossing = crossing_times[-1]
+    df = df[(df['elapsed_time'] >= first_crossing) & (df['elapsed_time'] <= last_crossing)].copy()
+
+    # Renumber laps so the first full lap is 0
+    if not df.empty:
+        min_lap = df['lap_number'].min()
+        if min_lap > 0:
+            df['lap_number'] = df['lap_number'] - min_lap
+
     return df
