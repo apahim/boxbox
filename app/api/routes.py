@@ -84,7 +84,7 @@ def session_summary(session_id, session):
         ],
         data_source=session.data_source,
         video_filename=session.video_filename,
-        video_hash=session.video_hash,
+        video_hash=','.join(vh.hash for vh in session.video_hashes),
     )
 
 

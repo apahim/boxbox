@@ -96,8 +96,6 @@ class Session(db.Model):
     share_token = db.Column(db.String(32), unique=True, nullable=True, index=True)
     share_token_created_at = db.Column(db.DateTime, nullable=True)
     video_filename = db.Column(db.String(255), nullable=True)
-    video_hash = db.Column(db.String(255), nullable=True)
-
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
 
     def is_share_token_expired(self):
@@ -117,6 +115,8 @@ class Session(db.Model):
                                  cascade='all, delete-orphan')
     upload = db.relationship('SessionUpload', backref='session', uselist=False,
                              cascade='all, delete-orphan')
+    video_hashes = db.relationship('SessionVideoHash', backref='session', lazy='select',
+                                   cascade='all, delete-orphan')
 
 
 class Lap(db.Model):
@@ -241,6 +241,14 @@ class SessionUpload(db.Model):
     original_filename = db.Column(db.String(255))
     csv_compressed = db.Column(db.LargeBinary)
     uploaded_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+
+
+class SessionVideoHash(db.Model):
+    __tablename__ = 'session_video_hashes'
+
+    id = db.Column(db.Integer, primary_key=True)
+    session_id = db.Column(db.Integer, db.ForeignKey('sessions.id'), nullable=False)
+    hash = db.Column(db.String(64), nullable=False)
 
 
 class Leaderboard(db.Model):

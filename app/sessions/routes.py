@@ -15,7 +15,7 @@ from app.sessions.forms import SessionCreateForm, SessionEditForm
 from app.models import (
     Session, Track, TrackCorner,
     Lap, Telemetry, CornerRecord, CornerSummary,
-    SectorTime, ChartData, SessionUpload,
+    SectorTime, ChartData, SessionUpload, SessionVideoHash,
     visible_tracks_for_user,
 )
 
@@ -106,7 +106,7 @@ def create():
             # Create session record
             track = Track.query.get(form.track_id.data) if form.track_id.data else None
 
-            video_hash = request.form.get('video_hash') if data_source == 'gopro' else None
+            video_hash_str = request.form.get('video_hash') if data_source == 'gopro' else None
 
             session = Session(
                 user_id=current_user.id,
@@ -115,10 +115,15 @@ def create():
                 session_start=form.session_start.data.strftime('%H:%M') if form.session_start.data else None,
                 data_source=data_source,
                 labels=labels,
-                video_hash=video_hash,
             )
             db.session.add(session)
             db.session.flush()  # Get session.id
+
+            if video_hash_str:
+                for h in video_hash_str.split(','):
+                    h = h.strip()
+                    if h:
+                        db.session.add(SessionVideoHash(session_id=session.id, hash=h))
 
             # Get track corners
             sf_gate = None

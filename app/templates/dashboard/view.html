@@ -22,7 +22,7 @@
       data-has-gate="{{ 'true' if has_gate else 'false' }}"
       data-data-source="{{ session.data_source or '' }}"
       data-video-filename="{{ session.video_filename or '' }}"
-      data-video-hash="{{ session.video_hash or '' }}"
+      data-video-hash="{{ session.video_hashes | map(attribute='hash') | join(',') }}"
       data-csrf="{{ csrf_token() }}">
 
 <div class="row mb-4">
