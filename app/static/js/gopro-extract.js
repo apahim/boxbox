@@ -806,17 +806,27 @@ export function concatenateGoPro(results) {
     // Concatenate with offset adjustments
     var mergedRows = results[0].rows.slice();
     for (var i = 1; i < results.length; i++) {
-        var prevRows = results[i - 1].rows;
-        var prevLastRow = prevRows[prevRows.length - 1];
+        var prevLastRow = mergedRows[mergedRows.length - 1];
         var curRows = results[i].rows;
         var curFirstRow = curRows[0];
 
-        // Elapsed time offset: previous file's last elapsed_time + inter-file gap
+        // Trim overlap: drop rows from current file that fall within the previous file's time range
+        var prevLastTs = prevLastRow.timestamp;
+        var trimIdx = 0;
+        while (trimIdx < curRows.length && curRows[trimIdx].timestamp <= prevLastTs) {
+            trimIdx++;
+        }
+        if (trimIdx > 0) {
+            curRows = curRows.slice(trimIdx);
+            if (curRows.length === 0) continue;
+            curFirstRow = curRows[0];
+        }
+
+        // Elapsed time offset: previous merged row's elapsed_time + inter-file gap
         var timeGap = curFirstRow.timestamp - prevLastRow.timestamp;
-        if (timeGap < 0) timeGap = 0;
         var elapsedOffset = prevLastRow.elapsed_time + timeGap;
 
-        // Distance offset: previous file's last distance + gap distance
+        // Distance offset: previous merged row's distance + gap distance
         var gapDist = haversine(
             prevLastRow.latitude, prevLastRow.longitude,
             curFirstRow.latitude, curFirstRow.longitude

@@ -111,6 +111,12 @@ def load_racechrono_session(csv_path):
     if rename:
         df = df.rename(columns=rename)
 
+    # Drop rows where elapsed_time goes backwards (multi-file overlap artifact)
+    if 'elapsed_time' in df.columns:
+        mask = df['elapsed_time'].diff().fillna(0) >= 0
+        if not mask.all():
+            df = df[mask].reset_index(drop=True)
+
     return df
 
 
