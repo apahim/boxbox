@@ -758,13 +758,20 @@ document.getElementById('btn-upload').addEventListener('click', async function()
     }
 
     try {
+        var controller = new AbortController();
+        var uploadTimeout = setTimeout(function() {
+            controller.abort();
+        }, 10 * 60 * 1000);
+
         var resp = await fetch(form.action || window.location.href, {
             method: 'POST',
             body: formData,
             credentials: 'same-origin',
             headers: { 'X-Requested-With': 'fetch' },
+            signal: controller.signal,
         });
 
+        clearTimeout(uploadTimeout);
         clearInterval(stageTimer);
 
         if (resp.ok) {
@@ -786,11 +793,14 @@ document.getElementById('btn-upload').addEventListener('click', async function()
             retryBtn.style.display = '';
         }
     } catch (e) {
+        clearTimeout(uploadTimeout);
         clearInterval(stageTimer);
         progressBar.style.width = '100%';
         progressBar.classList.add('bg-danger');
         stageText.textContent = '';
-        errorDiv.textContent = 'Network error: ' + e.message;
+        errorDiv.textContent = e.name === 'AbortError'
+            ? 'Upload timed out. Please try a smaller export or try again later.'
+            : 'Network error: ' + e.message;
         errorDiv.style.display = '';
         retryBtn.style.display = '';
     }

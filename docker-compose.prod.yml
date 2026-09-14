@@ -25,6 +25,7 @@ services:
       MAPKIT_TOKEN: ${MAPKIT_TOKEN:?Set MAPKIT_TOKEN}
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:?Set GOOGLE_CLIENT_ID}
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:?Set GOOGLE_CLIENT_SECRET}
+    command: ["gunicorn", "--bind", "0.0.0.0:5000", "--workers", "2", "--timeout", "600", "--graceful-timeout", "30", "app:create_app()"]
     depends_on:
       db:
         condition: service_healthy
