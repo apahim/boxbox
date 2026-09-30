@@ -195,7 +195,6 @@ def edit(session_id):
 
     # Populate choices
     tracks = visible_tracks_for_user(current_user.id).all()
-    etm = _event_track_map_for_user(current_user.id)
     form.track_id.choices = _track_choices(tracks, include_none=True)
 
     if request.method == 'GET':
