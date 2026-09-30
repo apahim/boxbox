@@ -12,6 +12,7 @@ flask-wtf==1.2.2
 flask-limiter==4.1.1
 email-validator==2.3.0
 psycopg2-binary==2.9.11
+psycopg[binary]==3.2.10
 gunicorn==25.3.0
 authlib==1.6.9
 requests==2.32.5
