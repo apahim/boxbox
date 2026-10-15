@@ -57,6 +57,7 @@ venv/bin/podman-compose exec web python -m pytest tests/ -x -q # run tests in co
 - Deploys are fully automated: push to `main` → GitHub Actions (`.github/workflows/deploy.yml`) runs the test suite, builds the image as `ghcr.io/apahim/boxbox` (tagged `latest` + commit SHA), then SSHes to the droplet to pull the image, restart `web`, run `flask db upgrade`, and health-check `/health`
 - Never deploy by hand (no manual image pushes, no manual restarts) — all changes reach production via git push to `main`
 - Deploy credentials live in GitHub Actions secrets (`DROPLET_HOST`, `DROPLET_USER`, `DROPLET_SSH_KEY`)
+- The MapKit JS token (`MAPKIT_TOKEN`) expires roughly every 6 months — when it does, track maps stop loading while everything else keeps working. Check the Admin dashboard (Data Health → MapKit token) or startup logs. Regenerate with `venv/bin/python scripts/generate_mapkit_token.py --team-id <TEAM_ID>` (key: `config/AuthKey_*.p8`), update `.env.production` on the droplet, and restart `web`
 - This repo is public, so the production host/SSH details are intentionally not committed; they live in `DEPLOYMENT.local.md` (gitignored, loaded into OpenCode sessions via `opencode.jsonc`)
 
 ### Inspecting production

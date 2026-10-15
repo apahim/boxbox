@@ -1,8 +1,10 @@
-from flask import render_template, abort
+import time
+
+from flask import render_template, abort, current_app
 from flask_login import login_required, current_user
 from sqlalchemy import func
 
-from app import db
+from app import db, _mapkit_token_exp
 from app.admin import bp
 from app.models import User, Session, Lap, Track, SessionUpload
 
@@ -10,6 +12,26 @@ from app.models import User, Session, Lap, Track, SessionUpload
 def _require_admin():
     if not current_user.is_admin:
         abort(403)
+
+
+def _mapkit_token_status():
+    """Return (days_left, status) for the configured MapKit JS token.
+
+    status: 'ok', 'expiring' (< 30 days left), 'expired',
+            'unknown' (not a JWT), or 'unconfigured'.
+    """
+    token = current_app.config.get('MAPKIT_TOKEN')
+    if not token:
+        return None, 'unconfigured'
+    exp = _mapkit_token_exp(token)
+    if exp is None:
+        return None, 'unknown'
+    days_left = int((exp - time.time()) // 86400)
+    if days_left < 0:
+        return days_left, 'expired'
+    if days_left < 30:
+        return days_left, 'expiring'
+    return days_left, 'ok'
 
 
 @bp.route('/')
@@ -88,6 +110,8 @@ def dashboard():
         .all()
     )
 
+    mapkit_days_left, mapkit_status = _mapkit_token_status()
+
     return render_template(
         'admin/dashboard.html',
         total_users=total_users,
@@ -103,4 +127,6 @@ def dashboard():
         problem_sessions=problem_sessions,
         track_health=track_health,
         recent_users=recent_users,
+        mapkit_days_left=mapkit_days_left,
+        mapkit_status=mapkit_status,
     )

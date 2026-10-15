@@ -119,6 +119,30 @@
             </div>
         </div>
     </div>
+    <div class="col-sm-6 col-lg-4">
+        <div class="card h-100">
+            <div class="health-card">
+                {% if mapkit_status == 'expired' %}
+                <div class="health-num" style="color:var(--bb-red)">0</div>
+                {% elif mapkit_status in ('unknown', 'unconfigured') %}
+                <div class="health-num" style="color:var(--bb-text-muted)">?</div>
+                {% else %}
+                <div class="health-num" style="color:{% if mapkit_status == 'expiring' %}var(--bb-amber){% else %}var(--bb-green){% endif %}">{{ mapkit_days_left }}</div>
+                {% endif %}
+                <div>
+                    <div style="font-size:0.85rem;">MapKit token</div>
+                    <div class="health-label">
+                        {% if mapkit_status == 'ok' %}Days until expiry
+                        {% elif mapkit_status == 'expiring' %}Expires in {{ mapkit_days_left }} days — rotate soon
+                        {% elif mapkit_status == 'expired' %}Expired — track maps broken
+                        {% elif mapkit_status == 'unconfigured' %}Not configured
+                        {% else %}Expiry unknown
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
 </div>
 
 {# ── Problematic Sessions ── #}

@@ -1,4 +1,6 @@
+import base64
 import hashlib
+import json
 import logging
 import time
 
@@ -32,6 +34,24 @@ def _configure_logging(app):
         app.logger.setLevel(logging.INFO)
 
 
+def _mapkit_token_exp(token):
+    """Return the exp claim (unix seconds) of a JWT, or None if unparseable.
+
+    Does not verify the signature — used only to check token expiry.
+    """
+    parts = token.split('.')
+    if len(parts) != 3:
+        return None
+    payload = parts[1]
+    payload += '=' * (-len(payload) % 4)
+    try:
+        claims = json.loads(base64.urlsafe_b64decode(payload))
+    except (ValueError, TypeError):
+        return None
+    exp = claims.get('exp')
+    return float(exp) if isinstance(exp, (int, float)) else None
+
+
 def _validate_env(app):
     """Ensure critical env vars are set for production."""
     if app.config.get('TESTING') or app.debug:
@@ -39,6 +59,18 @@ def _validate_env(app):
 
     if not app.config.get('MAPKIT_TOKEN'):
         raise RuntimeError('MAPKIT_TOKEN environment variable is required')
+
+    exp = _mapkit_token_exp(app.config['MAPKIT_TOKEN'])
+    if exp is not None:
+        days_left = (exp - time.time()) / 86400
+        if days_left <= 0:
+            app.logger.error(
+                'MAPKIT_TOKEN has expired — track maps will not load. '
+                'Regenerate with scripts/generate_mapkit_token.py, '
+                'update .env.production on the droplet, and restart web'
+            )
+        elif days_left < 30:
+            app.logger.warning('MAPKIT_TOKEN expires in %d days', int(days_left))
 
     if app.config.get('SECRET_KEY') == 'dev-secret-change-me':
         raise RuntimeError('SECRET_KEY must be changed for production')
