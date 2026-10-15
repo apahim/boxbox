@@ -11,3 +11,4 @@ config/*.p8
 instance/
 .env
 .pytest_cache/
+DEPLOYMENT.local.md
