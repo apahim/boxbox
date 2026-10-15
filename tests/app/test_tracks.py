@@ -1,9 +1,9 @@
 """Tests for making tracks official/personal (admin actions)."""
 
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 
 from app import db
-from app.models import User, Track, visible_tracks_for_user
+from app.models import User, Track, Session, visible_tracks_for_user
 
 
 def _make_user(email, admin=False):
@@ -149,6 +149,68 @@ class TestMakePersonal:
 
             assert rv.status_code == 403
             assert track.created_by is None
+
+    def test_blocked_when_other_users_have_sessions(self, app, client):
+        with app.app_context():
+            admin = _make_user('admin@test.com', admin=True)
+            other = _make_user('other@test.com')
+            db.session.add_all([admin, other])
+            db.session.flush()
+            track = Track(slug='test_track', name='Test Track',
+                          lat=52.0, lon=-7.0, created_by=None)
+            db.session.add(track)
+            db.session.flush()
+            db.session.add(Session(user_id=other.id, track_id=track.id,
+                                   date=date.today()))
+            db.session.commit()
+
+            _login(client, admin)
+            rv = client.post(f'/tracks/{track.id}/make-personal')
+
+            # Redirected back with a flash error; track stays official
+            assert rv.status_code == 302
+            assert track.created_by is None
+
+    def test_fetch_returns_409_when_blocked(self, app, client):
+        with app.app_context():
+            admin = _make_user('admin@test.com', admin=True)
+            other = _make_user('other@test.com')
+            db.session.add_all([admin, other])
+            db.session.flush()
+            track = Track(slug='test_track', name='Test Track',
+                          lat=52.0, lon=-7.0, created_by=None)
+            db.session.add(track)
+            db.session.flush()
+            db.session.add(Session(user_id=other.id, track_id=track.id,
+                                   date=date.today()))
+            db.session.commit()
+
+            _login(client, admin)
+            rv = client.post(f'/tracks/{track.id}/make-personal',
+                             headers={'X-Requested-With': 'fetch'})
+
+            assert rv.status_code == 409
+            assert b'other users' in rv.data
+            assert track.created_by is None
+
+    def test_allowed_with_only_own_sessions(self, app, client):
+        with app.app_context():
+            admin = _make_user('admin@test.com', admin=True)
+            db.session.add(admin)
+            db.session.flush()
+            track = Track(slug='test_track', name='Test Track',
+                          lat=52.0, lon=-7.0, created_by=None)
+            db.session.add(track)
+            db.session.flush()
+            db.session.add(Session(user_id=admin.id, track_id=track.id,
+                                   date=date.today()))
+            db.session.commit()
+
+            _login(client, admin)
+            rv = client.post(f'/tracks/{track.id}/make-personal')
+
+            assert rv.status_code == 302
+            assert track.created_by == admin.id
 
 
 class TestOfficialTrackLifecycle:

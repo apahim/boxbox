@@ -321,6 +321,19 @@ def make_personal(track_id):
         abort(404)
 
     if track.created_by is None:
+        other_sessions = Session.query.filter(
+            Session.track_id == track.id,
+            Session.user_id != current_user.id,
+        ).count()
+        if other_sessions > 0:
+            msg = (f'Cannot make personal — {other_sessions} session'
+                   f'{"s" if other_sessions != 1 else ""} from other users '
+                   f'{"are" if other_sessions != 1 else "is"} on this track.')
+            if request.headers.get('X-Requested-With') == 'fetch':
+                return jsonify(error=msg), 409
+            flash(msg, 'danger')
+            return redirect(url_for('tracks.edit', track_id=track.id))
+
         track.created_by = current_user.id
         db.session.commit()
         flash(f'Track "{track.name}" is now personal (managed by you).', 'success')
