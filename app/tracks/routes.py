@@ -288,3 +288,41 @@ def assign_sessions(track_id):
 
     db.session.commit()
     return jsonify(ok=True, count=count)
+
+
+@bp.route('/<int:track_id>/make-official', methods=['POST'])
+@login_required
+def make_official(track_id):
+    """Make a personal track official (visible to all users). Admin only."""
+    if not current_user.is_admin:
+        abort(403)
+
+    track = db.session.get(Track, track_id)
+    if not track:
+        abort(404)
+
+    if track.created_by is not None:
+        track.created_by = None
+        db.session.commit()
+        flash(f'Track "{track.name}" is now official.', 'success')
+
+    return redirect(url_for('tracks.edit', track_id=track.id))
+
+
+@bp.route('/<int:track_id>/make-personal', methods=['POST'])
+@login_required
+def make_personal(track_id):
+    """Revert an official track to personal, managed by the acting admin."""
+    if not current_user.is_admin:
+        abort(403)
+
+    track = db.session.get(Track, track_id)
+    if not track:
+        abort(404)
+
+    if track.created_by is None:
+        track.created_by = current_user.id
+        db.session.commit()
+        flash(f'Track "{track.name}" is now personal (managed by you).', 'success')
+
+    return redirect(url_for('tracks.edit', track_id=track.id))
