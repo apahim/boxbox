@@ -232,3 +232,172 @@ class TestOfficialTrackLifecycle:
             assert rv.status_code == 302
             assert db.session.get(Track, track_id) is not None
             assert db.session.get(Track, track_id).created_by is None
+
+
+class TestTrackDetail:
+    def _make_track(self, owner_id=None, name='Test Track'):
+        track = Track(slug='test_track', name=name,
+                      lat=52.0, lon=-7.0, created_by=owner_id)
+        db.session.add(track)
+        return track
+
+    def test_owner_can_view_detail(self, app, client):
+        with app.app_context():
+            user = _make_user('user@test.com')
+            db.session.add(user)
+            db.session.flush()
+            track = self._make_track(owner_id=user.id)
+            db.session.commit()
+
+            _login(client, user)
+            rv = client.get(f'/tracks/{track.id}')
+
+            assert rv.status_code == 200
+            assert b'Test Track' in rv.data
+            assert b'Edit Setup' in rv.data
+
+    def test_official_detail_no_edit_button_for_non_admin(self, app, client):
+        with app.app_context():
+            other = _make_user('other@test.com')
+            db.session.add(other)
+            db.session.flush()
+            track = self._make_track(owner_id=None)
+            db.session.commit()
+
+            _login(client, other)
+            rv = client.get(f'/tracks/{track.id}')
+
+            assert rv.status_code == 200
+            assert b'Edit Setup' not in rv.data
+            assert b'Official' in rv.data
+
+    def test_official_detail_shows_edit_for_admin(self, app, client):
+        with app.app_context():
+            admin = _make_user('admin@test.com', admin=True)
+            db.session.add(admin)
+            db.session.flush()
+            track = self._make_track(owner_id=None)
+            db.session.commit()
+
+            _login(client, admin)
+            rv = client.get(f'/tracks/{track.id}')
+
+            assert rv.status_code == 200
+            assert b'Edit Setup' in rv.data
+
+    def test_other_users_personal_track_404(self, app, client):
+        with app.app_context():
+            owner = _make_user('owner@test.com')
+            other = _make_user('other@test.com')
+            db.session.add_all([owner, other])
+            db.session.flush()
+            track = self._make_track(owner_id=owner.id)
+            db.session.commit()
+
+            _login(client, other)
+            rv = client.get(f'/tracks/{track.id}')
+
+            assert rv.status_code == 404
+
+    def test_nonexistent_track_404(self, app, client):
+        with app.app_context():
+            user = _make_user('user@test.com')
+            db.session.add(user)
+            db.session.commit()
+
+            _login(client, user)
+            rv = client.get('/tracks/99999')
+
+            assert rv.status_code == 404
+
+    def test_anonymous_redirected(self, app, client):
+        with app.app_context():
+            user = _make_user('user@test.com')
+            db.session.add(user)
+            db.session.flush()
+            track = self._make_track(owner_id=user.id)
+            db.session.commit()
+
+            rv = client.get(f'/tracks/{track.id}')
+
+            assert rv.status_code == 302
+
+    def test_detail_shows_sessions_and_stats(self, app, client):
+        with app.app_context():
+            user = _make_user('user@test.com')
+            db.session.add(user)
+            db.session.flush()
+            track = self._make_track(owner_id=user.id)
+            db.session.flush()
+            db.session.add(Session(user_id=user.id, track_id=track.id,
+                                   date=date(2026, 5, 1),
+                                   best_lap_time=65.123, total_laps=10,
+                                   clean_laps=8, top_speed_kmh=95.5))
+            db.session.add(Session(user_id=user.id, track_id=track.id,
+                                   date=date(2026, 6, 1),
+                                   best_lap_time=61.5, total_laps=12,
+                                   clean_laps=10, top_speed_kmh=98.2))
+            db.session.commit()
+
+            _login(client, user)
+            rv = client.get(f'/tracks/{track.id}')
+            html = rv.data.decode()
+
+            assert rv.status_code == 200
+            # Aggregates: best lap across sessions
+            assert '1:01.500' in html
+            assert '<div class="stat-value">2</div>' in html  # session count
+            assert '<div class="stat-value">22</div>' in html  # total laps
+            assert '<div class="stat-value">98</div>' in html  # top speed rounded
+            assert '1 Jun 2026' in html  # last driven
+            # Both sessions listed with links to their dashboards
+            assert html.count('/dashboard/') == 2
+            assert '1 May 2026' in html
+
+    def test_detail_no_sessions_empty_state(self, app, client):
+        with app.app_context():
+            user = _make_user('user@test.com')
+            db.session.add(user)
+            db.session.flush()
+            track = self._make_track(owner_id=user.id)
+            db.session.commit()
+
+            _login(client, user)
+            rv = client.get(f'/tracks/{track.id}')
+
+            assert rv.status_code == 200
+            assert b'No sessions at this track yet' in rv.data
+
+    def test_detail_sf_gate_and_corner_status(self, app, client):
+        with app.app_context():
+            user = _make_user('user@test.com')
+            db.session.add(user)
+            db.session.flush()
+            track = self._make_track(owner_id=user.id)
+            db.session.flush()
+            from app.models import TrackCorner
+            db.session.add(TrackCorner(track_id=track.id, name='T1', sort_order=0,
+                                       trap_lat1=52.001, trap_lon1=-7.001,
+                                       trap_lat2=52.002, trap_lon2=-7.002))
+            db.session.commit()
+
+            _login(client, user)
+            rv = client.get(f'/tracks/{track.id}')
+
+            assert rv.status_code == 200
+            assert b'Not configured' in rv.data  # no S/F gate
+            assert b'Configured' not in rv.data
+
+    def test_list_links_to_detail(self, app, client):
+        with app.app_context():
+            user = _make_user('user@test.com')
+            db.session.add(user)
+            db.session.flush()
+            track = self._make_track(owner_id=user.id)
+            db.session.commit()
+
+            _login(client, user)
+            rv = client.get('/tracks/')
+
+            assert rv.status_code == 200
+            assert f'href="/tracks/{track.id}"'.encode() in rv.data

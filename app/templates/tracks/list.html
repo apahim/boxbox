@@ -80,39 +80,30 @@
             {% for item in items %}
             <tr>
                 <td data-label="Track">
-                    {{ item.track.name }}
+                    <a href="{{ url_for('tracks.detail', track_id=item.track.id) }}" style="text-decoration:none; color:var(--bb-text);">{{ item.track.name }}</a>
                     {% if section == 'official' %}
                     <span class="badge bg-success" style="font-size:0.65rem; font-weight:500; margin-left:4px;">Official</span>
                     {% endif %}
                 </td>
                 <td data-label="Corners" data-sort="{{ item.corner_count }}">{{ item.corner_count }}</td>
-                <td data-label="Sessions" data-sort="{{ item.session_count }}">{{ item.session_count }}</td>
+                <td data-label="Sessions" data-sort="{{ item.session_count }}">
+                    <a href="{{ url_for('tracks.detail', track_id=item.track.id) }}#sessions" style="text-decoration:none; color:var(--bb-text);">{{ item.session_count }}</a>
+                </td>
                 <td data-label="Timezone">{{ item.track.timezone }}</td>
                 <td data-label="Actions" class="text-nowrap">
-                    {% if section == 'user' %}
+                    {% if section == 'user' or current_user.is_admin %}
                     <a href="{{ url_for('tracks.edit', track_id=item.track.id) }}" class="btn btn-sm btn-outline-primary" title="Edit Corners"><i class="bi bi-pencil"></i></a>
-                    {% if current_user.is_admin %}
+                    {% if section == 'user' and current_user.is_admin %}
                     <form method="POST" action="{{ url_for('tracks.make_official', track_id=item.track.id) }}" class="d-inline">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                         <button type="submit" class="btn btn-sm btn-outline-warning" title="Make official"><i class="bi bi-award"></i></button>
                     </form>
-                    {% endif %}
-                    {% if item.session_count > 0 %}
-                    <button class="btn btn-sm btn-outline-danger" disabled
-                            title="Used by {{ item.session_count }} session{{ 's' if item.session_count != 1 }}"><i class="bi bi-trash"></i></button>
-                    {% else %}
-                    <form method="POST" action="{{ url_for('tracks.delete', track_id=item.track.id) }}" class="d-inline"
-                          onsubmit="return handleTrackDelete(this)">
-                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                        <button type="submit" class="btn btn-sm btn-outline-danger" title="Delete track"><i class="bi bi-trash"></i></button>
-                    </form>
-                    {% endif %}
                     {% elif section == 'official' and current_user.is_admin %}
-                    <a href="{{ url_for('tracks.edit', track_id=item.track.id) }}" class="btn btn-sm btn-outline-primary" title="Edit Corners"><i class="bi bi-pencil"></i></a>
                     <form method="POST" action="{{ url_for('tracks.make_personal', track_id=item.track.id) }}" class="d-inline">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                         <button type="submit" class="btn btn-sm btn-outline-secondary" title="Make personal"><i class="bi bi-award"></i></button>
                     </form>
+                    {% endif %}
                     {% if item.session_count > 0 %}
                     <button class="btn btn-sm btn-outline-danger" disabled
                             title="Used by {{ item.session_count }} session{{ 's' if item.session_count != 1 }}"><i class="bi bi-trash"></i></button>
@@ -124,7 +115,7 @@
                     </form>
                     {% endif %}
                     {% else %}
-                    <a href="{{ url_for('tracks.edit', track_id=item.track.id) }}" class="btn btn-sm btn-outline-secondary" title="View Track"><i class="bi bi-eye"></i></a>
+                    <a href="{{ url_for('tracks.detail', track_id=item.track.id) }}" class="btn btn-sm btn-outline-secondary" title="View Track"><i class="bi bi-eye"></i></a>
                     {% endif %}
                 </td>
             </tr>

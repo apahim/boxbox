@@ -22,17 +22,42 @@ def _slugify(name):
 def list_tracks():
     tracks = visible_tracks_for_user(current_user.id).all()
 
+    # Batch count queries to avoid per-track N+1
+    corner_counts = dict(
+        db.session.query(TrackCorner.track_id, func.count(TrackCorner.id))
+        .group_by(TrackCorner.track_id)
+        .all()
+    )
+
+    track_ids = [t.id for t in tracks]
+    own_session_counts = {}
+    all_session_counts = {}
+    if track_ids:
+        own_session_counts = dict(
+            db.session.query(Session.track_id, func.count(Session.id))
+            .filter(Session.track_id.in_(track_ids),
+                    Session.user_id == current_user.id)
+            .group_by(Session.track_id)
+            .all()
+        )
+        all_session_counts = dict(
+            db.session.query(Session.track_id, func.count(Session.id))
+            .filter(Session.track_id.in_(track_ids))
+            .group_by(Session.track_id)
+            .all()
+        )
+
     official_tracks = []
     user_tracks = []
 
     for t in tracks:
         if t.created_by == current_user.id or (t.created_by is None and current_user.is_admin):
-            session_count = t.sessions.count()
+            session_count = all_session_counts.get(t.id, 0)
         else:
-            session_count = t.sessions.filter_by(user_id=current_user.id).count()
+            session_count = own_session_counts.get(t.id, 0)
         item = {
             'track': t,
-            'corner_count': t.corners.count(),
+            'corner_count': corner_counts.get(t.id, 0),
             'session_count': session_count,
         }
         if t.created_by is None:
@@ -43,6 +68,65 @@ def list_tracks():
     return render_template('tracks/list.html',
                            official_tracks=official_tracks,
                            user_tracks=user_tracks)
+
+
+@bp.route('/<int:track_id>')
+@login_required
+def detail(track_id):
+    track = db.session.get(Track, track_id)
+    if not track:
+        abort(404)
+
+    # Same visibility as the tracks list: own tracks + official tracks
+    is_official = (track.created_by is None)
+    is_owner = (track.created_by == current_user.id) and not is_official
+    if not is_official and not is_owner:
+        abort(404)
+
+    can_edit = is_owner or (is_official and current_user.is_admin)
+
+    corners = TrackCorner.query.filter_by(track_id=track.id).order_by(TrackCorner.sort_order).all()
+    corners_list = [
+        {
+            'name': c.name,
+            'trap_lat1': c.trap_lat1, 'trap_lon1': c.trap_lon1,
+            'trap_lat2': c.trap_lat2, 'trap_lon2': c.trap_lon2,
+        }
+        for c in corners
+    ]
+
+    sessions = Session.query.filter_by(
+        user_id=current_user.id, track_id=track.id,
+    ).order_by(Session.date.desc(), Session.id.desc()).all()
+
+    best_lap = min((s.best_lap_time for s in sessions if s.best_lap_time), default=None)
+    top_speed = max((s.top_speed_kmh for s in sessions if s.top_speed_kmh), default=None)
+    total_laps = sum(s.total_laps or 0 for s in sessions)
+    last_driven = sessions[0].date if sessions else None
+
+    sf_gate = None
+    if track.sf_lat1 is not None:
+        sf_gate = {
+            'lat1': track.sf_lat1, 'lon1': track.sf_lon1,
+            'lat2': track.sf_lat2, 'lon2': track.sf_lon2,
+        }
+
+    mapkit_token = current_app.config.get('MAPKIT_TOKEN', '')
+
+    return render_template('tracks/detail.html',
+                           track=track,
+                           corners=corners_list,
+                           corners_json=json.dumps(corners_list),
+                           sf_gate_json=json.dumps(sf_gate),
+                           sessions=sessions,
+                           best_lap=best_lap,
+                           top_speed=top_speed,
+                           total_laps=total_laps,
+                           last_driven=last_driven,
+                           session_count=len(sessions),
+                           mapkit_token=mapkit_token,
+                           can_edit=can_edit,
+                           is_official=is_official)
 
 
 @bp.route('/create', methods=['GET', 'POST'])

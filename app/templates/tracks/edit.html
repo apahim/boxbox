@@ -96,7 +96,7 @@
         </form>
         {% endif %}
         {% endif %}
-        <a href="{{ url_for('tracks.list_tracks') }}" class="btn btn-sm btn-outline-secondary"><i class="bi bi-arrow-left"></i> Tracks</a>
+        <a href="{{ url_for('tracks.detail', track_id=track.id) }}" class="btn btn-sm btn-outline-secondary"><i class="bi bi-arrow-left"></i> Track</a>
     </div>
 </div>
 
