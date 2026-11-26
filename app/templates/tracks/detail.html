@@ -20,6 +20,11 @@
     #map-container .mk-map { width: 100%; height: 100%; }
     @media (max-width: 576px) { #map-container { height: 280px; } }
     .section-heading { font-size: 0.95rem; font-weight: 600; margin: 1.5rem 0 0.75rem; display: flex; align-items: center; gap: 6px; }
+    .dna-map-container { width: 100%; height: 380px; position: relative; background: var(--bb-surface-alt);
+        border-radius: 8px; overflow: hidden; }
+    .dna-map-container .dna-map { width: 100%; height: 100%; }
+    .dna-elevation { width: 100%; height: 240px; }
+    @media (max-width: 576px) { .dna-map-container { height: 260px; } }
 </style>
 {% endblock %}
 
@@ -108,6 +113,15 @@
     {% endif %}
 </div>
 
+<div id="track-dna" data-track-id="{{ track.id }}" hidden>
+    <h5 class="section-heading"><i class="bi bi-fingerprint" style="color:var(--bb-blue)"></i> Track DNA</h5>
+    <p class="text-muted" style="font-size:0.82rem;">
+        Consensus track character from all drivers' laps at this layout —
+        dimensions, corners, braking zones and elevation, with per-dimension
+        measurement quality.
+    </p>
+</div>
+
 <h5 class="section-heading" id="sessions"><i class="bi bi-speedometer2" style="color:var(--bb-blue)"></i> Your Sessions Here</h5>
 
 {% if sessions %}
@@ -154,6 +168,7 @@
 {% block extra_scripts %}
 {% if mapkit_token %}
 <script src="{{ url_for('static', filename='js/mapkit-helpers.js') }}"></script>
+<script>window.BB_MAPKIT_TOKEN = "{{ mapkit_token }}";</script>
 <script>
 (function() {
     var corners = {{ corners_json | safe }};
@@ -235,4 +250,5 @@
 })();
 </script>
 {% endif %}
+<script src="{{ url_for('static', filename='js/track-dna.js') }}"></script>
 {% endblock %}

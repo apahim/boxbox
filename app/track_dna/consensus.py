@@ -16,6 +16,7 @@ mixed — D1/D6).
 """
 
 import json
+import math
 
 from app import db
 from app.models import TrackConfig
@@ -34,6 +35,44 @@ from scripts.analysis.track_dna_elevation import (
     DEFAULT_ELEVATION_PARAMS,
     analyze_elevation,
 )
+
+# Phase 9 (plan 21.3): cap on the emitted trajectory's point count —
+# enough for a smooth satellite-map polyline at ~3-5 m spacing on a
+# 1 km circuit while keeping the stored card small.
+MAX_TRAJECTORY_POINTS = 300
+
+
+def _trajectory_block(consensus, track):
+    """Decimated (s, lat, lon) consensus trajectory (plan 21.3).
+
+    The loader projects telemetry about the track datum
+    (``project_to_meters`` with ``center=(track.lat, track.lon)``); this
+    is its exact inverse, so the UI can place any consensus-frame
+    s-position (zone troughs, corner apexes) on a map by linear
+    interpolation. The grid starts at s=0 and carries no periodic
+    duplicate; the loop is closed implicitly. Returns ``None`` when the
+    track has no datum (no map possible) or the consensus is empty.
+    """
+    if track.lat is None or track.lon is None:
+        return None
+    n = int(consensus.grid.size)
+    if n == 0:
+        return None
+    stride = max(1, -(-n // MAX_TRAJECTORY_POINTS))
+    kx = 111320.0 * math.cos(math.radians(track.lat))
+    points = []
+    for i in range(0, n, stride):
+        s = float(consensus.grid[i])
+        x = float(consensus.x[i])
+        y = float(consensus.y[i])
+        points.append([round(s, 1),
+                       round(track.lat + y / 110540.0, 6),
+                       round(track.lon + x / kx, 6)])
+    return {
+        'length_m': round(float(consensus.length_m), 2),
+        'n_points': len(points),
+        'points': points,
+    }
 
 
 def compute_config(track_config_id, condition='dry',
@@ -103,6 +142,7 @@ def compute_config(track_config_id, condition='dry',
                                 engine_params=engine_params,
                                 condition=condition)
     result['consensus'] = consensus.summary()
+    result['trajectory'] = _trajectory_block(consensus, track)
     braking = analyze_braking(consensus, params=braking_params)
     result['braking'] = braking.summary()
     elevation = analyze_elevation(consensus, params=elevation_params)

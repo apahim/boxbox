@@ -371,7 +371,12 @@ def track_dna_similar(track_id):
 
     from app.track_dna.scorecards import similar_payload
 
-    payload = similar_payload(track_id, condition)
+    # Phase 9 (plan 21.6, owner-confirmed): comparisons limited to the
+    # viewer's visible tracks — the payload names other tracks
+    visible_ids = {t.id for t
+                   in visible_tracks_for_user(current_user.id).all()}
+    payload = similar_payload(track_id, condition,
+                              visible_track_ids=visible_ids)
     if payload is None:
         return jsonify(error='No scorecard computed for this condition'), 404
     return jsonify(payload)

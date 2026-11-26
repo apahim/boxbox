@@ -24,6 +24,23 @@ from scripts.analysis.utils import project_to_meters
 STREAM_CHUNK = 5000
 
 
+def select_config_sessions(track_id, condition=None, track_config_id=None):
+    """``(dataset, verdicts)`` — the Phase-1 dataset plus its hygiene
+    verdicts, optionally filtered to one condition and one
+    configuration's member sessions. The exact selection
+    ``load_track_laps`` computes on (plan 21.4: one source of truth
+    for the compute path and the admin staleness check). Read-only."""
+
+    dataset = classify_track_sessions(track_id)
+    verdicts = [v for v in dataset.included
+                if condition is None or v.condition == condition]
+    if track_config_id is not None:
+        member_ids = {row[0] for row in db.session.query(Session.id).filter(
+            Session.track_config_id == track_config_id).all()}
+        verdicts = [v for v in verdicts if v.session_id in member_ids]
+    return dataset, verdicts
+
+
 def load_track_laps(track_id, condition=None, track_config_id=None):
     """Load hygiene-included sessions' numbered laps as engine inputs.
 
@@ -43,13 +60,8 @@ def load_track_laps(track_id, condition=None, track_config_id=None):
     if track is None:
         return None, [], None
 
-    dataset = classify_track_sessions(track_id)
-    verdicts = [v for v in dataset.included
-                if condition is None or v.condition == condition]
-    if track_config_id is not None:
-        member_ids = {row[0] for row in db.session.query(Session.id).filter(
-            Session.track_config_id == track_config_id).all()}
-        verdicts = [v for v in verdicts if v.session_id in member_ids]
+    dataset, verdicts = select_config_sessions(
+        track_id, condition=condition, track_config_id=track_config_id)
     if not verdicts:
         return track, [], dataset
 

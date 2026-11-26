@@ -1,17 +1,64 @@
 import time
 
-from flask import render_template, abort, current_app
+from flask import render_template, abort, current_app, flash, redirect, \
+    request, url_for
 from flask_login import login_required, current_user
 from sqlalchemy import func
 
 from app import db, _mapkit_token_exp
 from app.admin import bp
-from app.models import User, Session, Lap, Track, SessionUpload
+from app.models import User, Session, Lap, Track, SessionUpload, \
+    TrackConfig, TrackDnaScorecard
 
 
 def _require_admin():
     if not current_user.is_admin:
         abort(403)
+
+
+def _dna_health():
+    """Track DNA rows for the admin dashboard (plan 21.4): one row per
+    (track, config) — tracks without configurations don't appear — with
+    the latest card per condition (overall score, quality summary,
+    computed date) and the staleness verdict from fingerprint drift
+    (display-only: nothing recomputes automatically, D7 revised)."""
+
+    from app.track_dna.scorecards import current_fingerprint
+
+    rows = []
+    configs = (TrackConfig.query.join(Track)
+               .order_by(Track.name, TrackConfig.id).all())
+    for config in configs:
+        conditions = []
+        cards = TrackDnaScorecard.query.filter_by(
+            track_config_id=config.id).all()
+        by_condition = {}
+        for card in cards:
+            best = by_condition.get(card.condition)
+            if best is None or card.methodology_version > \
+                    best.methodology_version:
+                by_condition[card.condition] = card
+        for condition in ('dry', 'wet'):
+            card = by_condition.get(condition)
+            if card is None:
+                conditions.append({'condition': condition, 'card': None})
+                continue
+            counts = {}
+            for dim in card.dimensions_json:
+                quality = dim.get('quality')
+                counts[quality] = counts.get(quality, 0) + 1
+            stored = (card.dataset_json or {}).get('session_fingerprint')
+            conditions.append({
+                'condition': condition,
+                'card': card,
+                'quality_counts': counts,
+                'stale': (stored is not None
+                          and stored != current_fingerprint(
+                              config.id, condition)),
+            })
+        rows.append({'track': config.track, 'config': config,
+                     'conditions': conditions})
+    return rows
 
 
 def _mapkit_token_status():
@@ -32,6 +79,42 @@ def _mapkit_token_status():
     if days_left < 30:
         return days_left, 'expiring'
     return days_left, 'ok'
+
+
+@bp.route('/tracks/<int:track_id>/compute-dna', methods=['POST'])
+@login_required
+def compute_track_dna(track_id):
+    """Phase 9 (plan 21.4): the manual scorecard trigger — every
+    configuration x both conditions for one track, the same scope as
+    ``flask compute-track-dna TRACK_ID``. Synchronous by design
+    (gunicorn timeout 600 s; measured prod worst case ~19 s). D7
+    revised: this and the CLI are the only callers of the builder."""
+    _require_admin()
+    track = db.session.get(Track, track_id)
+    if track is None:
+        abort(404)
+
+    from app.track_dna.scorecards import CONDITIONS, build_scorecard
+
+    configs = track.configs.order_by(TrackConfig.id).all()
+    if not configs:
+        flash(f'Track "{track.name}" has no configurations — create one '
+              f'on its detail page first.', 'warning')
+        return redirect(url_for('admin.dashboard'))
+
+    summary = []
+    for config in configs:
+        for condition in CONDITIONS:
+            card, result = build_scorecard(config.id, condition)
+            if card is None:
+                summary.append(f'{config.name} {condition}: '
+                               f'{result.get("error", "failed")}')
+            else:
+                summary.append(f'{config.name} {condition}: '
+                               f'{card.overall_score:.2f}')
+    flash('Track DNA — ' + track.name + ': ' + '; '.join(summary),
+          'success')
+    return redirect(url_for('admin.dashboard'))
 
 
 @bp.route('/')
@@ -129,4 +212,5 @@ def dashboard():
         recent_users=recent_users,
         mapkit_days_left=mapkit_days_left,
         mapkit_status=mapkit_status,
+        dna_health=_dna_health(),
     )

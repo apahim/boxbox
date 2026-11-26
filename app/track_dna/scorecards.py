@@ -14,6 +14,7 @@ from dataclasses import asdict
 from app import db
 from app.models import Track, TrackConfig, TrackDnaScorecard
 from app.track_dna.consensus import compute_config
+from app.track_dna.loader import select_config_sessions
 from scripts.analysis.track_dna import DEFAULT_PARAMS
 from scripts.analysis.track_dna_braking import DEFAULT_BRAKING_PARAMS
 from scripts.analysis.track_dna_confidence import assign_confidence
@@ -119,6 +120,9 @@ def build_scorecard(track_config_id, condition='dry',
         'consensus': result['consensus'],
         'braking': result['braking'],
         'elevation': result['elevation'],
+        # Phase 9 (plan 21.3): decimated (s, lat, lon) consensus
+        # trajectory for the map; None when the track has no datum
+        'trajectory': result.get('trajectory'),
     }
     card.computed_at = db.func.now()
     card.stale = False
@@ -131,6 +135,24 @@ def session_fingerprint(session_ids):
     """Stable sha256 of the sorted session ids (staleness visibility)."""
     payload = json.dumps(sorted(int(s) for s in session_ids))
     return hashlib.sha256(payload.encode()).hexdigest()[:16]
+
+
+def current_fingerprint(track_config_id, condition='dry'):
+    """Re-derive a configuration's current session fingerprint (plan
+    21.4, admin staleness display).
+
+    Uses the same selection the compute path makes (the loader's
+    ``select_config_sessions``), so a mismatch with a stored card's
+    ``dataset_json['session_fingerprint']`` means exactly "the compute
+    input set changed". Read-only, display-only (D7 revised — nothing
+    acts on it). Returns ``None`` for an unknown config.
+    """
+    config = db.session.get(TrackConfig, track_config_id)
+    if config is None:
+        return None
+    _dataset, verdicts = select_config_sessions(
+        config.track_id, condition=condition, track_config_id=config.id)
+    return session_fingerprint([v.session_id for v in verdicts])
 
 
 def scorecards_for_track(track_id):
@@ -162,10 +184,16 @@ def card_payload(card):
     }
 
 
-def similar_payload(track_id, condition='dry'):
+def similar_payload(track_id, condition='dry', visible_track_ids=None):
     """On-the-fly weighted-Manhattan similarity (plan 19.3): the
     track's latest-version cards for the condition vs every other
-    configuration's card of the same condition and version."""
+    configuration's card of the same condition and version.
+
+    ``visible_track_ids`` (plan 21.6, owner-confirmed): optional set of
+    track ids the viewer may see — comparisons are limited to it. The
+    default (``None``) keeps the CLI/test behaviour of comparing
+    against every configuration.
+    """
     cards = [c for c in scorecards_for_track(track_id)
              if c.condition == condition]
     if not cards:
@@ -174,11 +202,14 @@ def similar_payload(track_id, condition='dry'):
     mine = [c for c in cards if c.methodology_version == version]
     my_config_ids = {c.track_config_id for c in mine}
 
-    others = (TrackDnaScorecard.query.join(TrackConfig)
-              .filter(TrackDnaScorecard.condition == condition,
-                      TrackDnaScorecard.methodology_version == version,
-                      TrackConfig.track_id != track_id)
-              .all())
+    others_q = (TrackDnaScorecard.query.join(TrackConfig)
+                .filter(TrackDnaScorecard.condition == condition,
+                        TrackDnaScorecard.methodology_version == version,
+                        TrackConfig.track_id != track_id))
+    if visible_track_ids is not None:
+        others_q = others_q.filter(
+            TrackConfig.track_id.in_(visible_track_ids))
+    others = others_q.all()
     names = {t.id: t.name for t in Track.query.all()}
 
     configs = []

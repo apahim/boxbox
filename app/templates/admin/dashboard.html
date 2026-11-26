@@ -249,6 +249,86 @@
 </div>
 {% endif %}
 
+{# ── Track DNA ── #}
+<h5 class="section-title"><i class="bi bi-fingerprint" style="color:var(--bb-blue)"></i> Track DNA</h5>
+{% if dna_health %}
+<div class="table-responsive">
+    <table class="table table-hover align-middle">
+        <thead>
+            <tr>
+                <th>Track</th>
+                <th>Configuration</th>
+                <th>Dry</th>
+                <th>Wet</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for row in dna_health %}
+            <tr>
+                <td>
+                    <a href="{{ url_for('tracks.detail', track_id=row.track.id) }}">{{ row.track.name }}</a>
+                    {% if row.track.created_by is none %}
+                    <span class="badge bg-success" style="font-size:0.65rem;">Official</span>
+                    {% endif %}
+                </td>
+                <td>{{ row.config.name }} <span class="badge bg-secondary" style="font-size:0.6rem;">{{ row.config.direction }}</span></td>
+                {% for cond in row.conditions %}
+                <td class="align-top">
+                    {% if cond.card %}
+                    <div>{% if cond.card.overall_score is not none %}<strong>{{ '%.2f'|format(cond.card.overall_score) }}</strong>/10{% else %}<strong>—</strong>{% endif %}
+                        <span class="text-muted" style="font-size:0.75rem;">{{ cond.card.computed_at.strftime('%d %b %Y') if cond.card.computed_at else '—' }}</span>
+                    </div>
+                    <div style="font-size:0.75rem;">
+                        {%- set m = cond.quality_counts.get('Measured', 0) -%}
+                        {%- set e = cond.quality_counts.get('Estimated', 0) -%}
+                        {%- set u = cond.quality_counts.get('Unavailable', 0) -%}
+                        {%- if m %}<span class="text-success">{{ m }} measured</span>{% endif -%}
+                        {%- if e %}{% if m %} · {% endif %}<span class="text-warning-emphasis">{{ e }} estimated</span>{% endif -%}
+                        {%- if u %}{% if m or e %} · {% endif %}<span class="text-muted">{{ u }} unavailable</span>{% endif -%}
+                    </div>
+                    {% if cond.stale %}
+                    <span class="badge bg-warning text-dark" title="The compute input sessions changed since this card was built">inputs changed</span>
+                    {% else %}
+                    <span class="badge bg-success" style="font-size:0.65rem;">current</span>
+                    {% endif %}
+                    {% else %}
+                    <span class="text-muted" style="font-size:0.8rem;">no card</span>
+                    {% endif %}
+                </td>
+                {% endfor %}
+                <td class="text-nowrap">
+                    <form method="post" action="{{ url_for('admin.compute_track_dna', track_id=row.track.id) }}" class="d-inline js-dna-recompute">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <button type="submit" class="btn btn-sm btn-outline-primary" title="Compute scorecards for every configuration x condition (takes a few seconds per condition)">
+                            <i class="bi bi-arrow-repeat"></i> Recompute
+                        </button>
+                    </form>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+<p class="text-muted" style="font-size:0.78rem;">
+    <i class="bi bi-info-circle"></i> Scorecards never recompute automatically: new sessions mark a card "inputs changed" until you recompute.
+</p>
+<script>
+    document.querySelectorAll('.js-dna-recompute').forEach(function(form) {
+        form.addEventListener('submit', function() {
+            var btn = form.querySelector('button');
+            btn.disabled = true;
+            btn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status"></span> Computing…';
+        });
+    });
+</script>
+{% else %}
+<div class="bb-empty">
+    <i class="bi bi-fingerprint"></i>
+    <p>No track configurations yet — create one from a track's detail page to build scorecards.</p>
+</div>
+{% endif %}
+
 {# ── Recent Users ── #}
 <h5 class="section-title"><i class="bi bi-person-plus" style="color:var(--bb-green)"></i> Recent Users</h5>
 <div class="table-responsive">
