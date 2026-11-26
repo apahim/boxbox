@@ -353,9 +353,13 @@ def test_single_lap_consensus():
     assert all(c.recurrence == 1.0 for c in result.corners)
     assert result.length_m == pytest.approx(geo.length_m, abs=0.5)
     conv = result.convergence
-    assert conv['acceptance'] is not None
-    assert conv['acceptance']['n_laps'] == 1
+    # Phase 8 honesty fix (plan 20.1): a 1-lap dataset has no
+    # subsampling draws (every size clamps to k=1=n), so there is no
+    # convergence evidence at all — acceptance is None rather than a
+    # vacuous pass on deterministic full-set draws.
+    assert conv['acceptance'] is None
     assert all(e['length_m']['spread'] == 0.0 for e in conv['draws'])
+    assert all(e['subsampling'] is False for e in conv['draws'])
 
 
 def test_consensus_dimensions_and_cross_check():

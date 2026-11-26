@@ -775,6 +775,14 @@ def _convergence(laps, params, engine_params):
     as NON-gating evidence: a seeded draw also resamples the user
     composition, a variance the Phase-3 anchor never measured, so
     their spreads are reported but do not gate acceptance.
+
+    Phase 8 honesty fix (plan 20.1): entries where k == n (the draw
+    IS the full dataset) are flagged ``subsampling: false`` and never
+    back the acceptance verdict — drawing the full set ``draws`` times
+    is deterministic, so their spreads read 0.0 and would pass the
+    anchors vacuously. The verdict reports ``demonstrated_n``: 50 for
+    n > 50 datasets (unchanged), the largest size strictly below n for
+    smaller ones, and no acceptance at all for a 1-lap dataset.
     """
     n = len(laps)
     rng = np.random.default_rng(params.convergence_seed)
@@ -790,6 +798,10 @@ def _convergence(laps, params, engine_params):
     entries = []
     for size in params.convergence_sizes:
         k = n if size is None else min(size, n)
+        subsampling = k < n          # Phase 8 honesty fix (plan 20.1):
+        #                            # k == n draws the full set 20x —
+        #                            # deterministic, spreads read 0.0
+        #                            # and verdicts pass vacuously
         flat = defaultdict(list)
         counts = []
         hier = defaultdict(list)
@@ -808,7 +820,8 @@ def _convergence(laps, params, engine_params):
             counts.append(core['corner_count'])
             hier['length_m'].append(core['length_m'])
             hier['straight_pct'].append(core['straight_pct'])
-        entry = {'n_laps': int(k), 'draws': int(params.convergence_draws)}
+        entry = {'n_laps': int(k), 'draws': int(params.convergence_draws),
+                 'subsampling': subsampling}
         for key, vals in flat.items():
             entry[key] = {'median': round(float(np.median(vals)), 3),
                           'spread': round(float(max(vals) - min(vals)), 3)}
@@ -822,15 +835,21 @@ def _convergence(laps, params, engine_params):
             for key, vals in hier.items()}
         entries.append(entry)
 
+    # Phase 8 honesty fix (plan 20.1): the verdict is only demonstrated
+    # where draws actually subsample (k < n). For n > 50 this is still
+    # the k=50 entry (the 15.6 anchor's calibration basis); for n <= 50
+    # it is the largest size strictly below n; a 1-lap dataset has no
+    # subsampling entry at all and acceptance is None (honest: no
+    # convergence evidence exists).
     ref = None
     for entry in entries:
-        if entry['n_laps'] <= 50 and (ref is None
-                                      or entry['n_laps'] > ref['n_laps']):
+        if (entry['subsampling'] and entry['n_laps'] <= 50
+                and (ref is None or entry['n_laps'] > ref['n_laps'])):
             ref = entry
     acceptance = None
     if ref is not None:
         acceptance = {
-            'n_laps': ref['n_laps'],
+            'demonstrated_n': ref['n_laps'],
             'basis': ('flat per-lap medians + recurrence corner count '
                       '(plan 15.6 anchor protocol)'),
             'length_spread_m': ref['length_m']['spread'],

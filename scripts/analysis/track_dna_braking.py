@@ -40,7 +40,7 @@ Design (owner-approved 2026-11-26, plan Section 17):
 """
 
 from collections import defaultdict
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 import numpy as np
 from scipy.ndimage import median_filter
@@ -67,6 +67,15 @@ class BrakingParams:
     sensitivity: tuple = (0.35, 0.45)  # reported alongside (D5)
     zone_threshold: float = 0.30      # zone eligibility (PoC recipe)
     zone_recurrence: float = 0.20     # min fraction of speed laps
+    minor_zone_recurrence: float = 0.10  # Phase 8 minor-zone floor (plan
+    #                                   # 20.4, owner-confirmed): clusters
+    #                                   # in [10%, 20%) surface as
+    #                                   # ``minor_zones`` evidence; zones
+    #                                   # proper and dimension 9 are
+    #                                   # untouched. Calibration: the 4th
+    #                                   # Kiltorcan dry region sits at
+    #                                   # 12.1%, the next-strongest chain
+    #                                   # at 3.4% — nothing borderline.
     zone_cluster_m: float = 30.0      # trough cluster link tolerance
     zone_valley_min_m: float = 10.0   # valley-split floor (see 17.3)
     peak_distance_m: float = 30.0     # min spacing between maxima
@@ -128,6 +137,10 @@ class TrackBraking:
     events_per_lap_median: float | None
     per_user: dict
     kart_category: str = 'mixed/unspecified'   # D4 labels-only
+    minor_zones: list = field(default_factory=list)
+    #                                   # Phase 8 (plan 20.4): recurrence
+    #                                   # in [minor_zone_recurrence,
+    #                                   # zone_recurrence) — evidence only
 
     def summary(self):
         """JSON-serialisable summary (runner output, Phase 7 input)."""
@@ -135,14 +148,18 @@ class TrackBraking:
         def _r(value, nd=2):
             return None if value is None else round(float(value), nd)
 
-        zones = [{
-            's_peak': _r(z.s_peak), 's_trough': _r(z.s_trough),
-            'reduction_pct': _r(100.0 * z.reduction_median, 1),
-            'n_laps': int(z.n_laps), 'recurrence': _r(z.recurrence, 3),
-            'member_events': int(z.member_events),
-            'support_by_user': {int(u): _r(v, 3)
-                                for u, v in sorted(z.support_by_user.items())},
-        } for z in self.zones]
+        def _zone_list(zone_list):
+            return [{
+                's_peak': _r(z.s_peak), 's_trough': _r(z.s_trough),
+                'reduction_pct': _r(100.0 * z.reduction_median, 1),
+                'n_laps': int(z.n_laps), 'recurrence': _r(z.recurrence, 3),
+                'member_events': int(z.member_events),
+                'support_by_user': {int(u): _r(v, 3)
+                                    for u, v in sorted(
+                                        z.support_by_user.items())},
+            } for z in zone_list]
+
+        zones = _zone_list(self.zones)
         per_user = {
             metric: {int(u): {'n_laps': stats['n_laps'],
                               'median': _r(stats['median'], 3),
@@ -168,6 +185,7 @@ class TrackBraking:
                 },
             },
             'zones': zones,
+            'minor_zones': _zone_list(self.minor_zones),
             'evidence': {
                 'reduction_percentiles': self.reduction_percentiles,
                 'events_per_lap_median': _r(self.events_per_lap_median, 2),
@@ -286,6 +304,29 @@ def analyze_braking(consensus, params=DEFAULT_BRAKING_PARAMS):
     for lap in laps_speed:
         n_speed_by_user[lap.user_id] += 1
 
+    def _zone_from_cluster(cluster):
+        member_laps = {mapped[j][0] for j in cluster}
+        support_by_user = {}
+        for uid, total in n_speed_by_user.items():
+            hits = len({mapped[j][0] for j in cluster
+                        if laps[mapped[j][0]].user_id == uid})
+            support_by_user[uid] = hits / total
+        return BrakingZone(
+            s_peak=_circular_median([mapped[j][2] for j in cluster],
+                                    length_c),
+            s_trough=_circular_median([mapped[j][3] for j in cluster],
+                                      length_c),
+            reduction_median=float(np.median(
+                [mapped[j][1].reduction for j in cluster])),
+            n_laps=len(member_laps),
+            recurrence=len(member_laps) / n_speed,
+            member_events=len(cluster),
+            support_by_user=support_by_user)
+
+    def _circ_dist(a, b):
+        d = abs(a - b) % length_c
+        return min(d, length_c - d)
+
     zones = []
     if n_speed and mapped:
         min_laps = params.zone_recurrence * n_speed
@@ -297,23 +338,35 @@ def analyze_braking(consensus, params=DEFAULT_BRAKING_PARAMS):
             member_laps = {mapped[j][0] for j in cluster}
             if len(member_laps) < min_laps:
                 continue
-            support_by_user = {}
-            for uid, total in n_speed_by_user.items():
-                hits = len({mapped[j][0] for j in cluster
-                            if laps[mapped[j][0]].user_id == uid})
-                support_by_user[uid] = hits / total
-            zones.append(BrakingZone(
-                s_peak=_circular_median([mapped[j][2] for j in cluster],
-                                        length_c),
-                s_trough=_circular_median([mapped[j][3] for j in cluster],
-                                          length_c),
-                reduction_median=float(np.median(
-                    [mapped[j][1].reduction for j in cluster])),
-                n_laps=len(member_laps),
-                recurrence=len(member_laps) / n_speed,
-                member_events=len(cluster),
-                support_by_user=support_by_user))
+            zones.append(_zone_from_cluster(cluster))
         zones.sort(key=lambda z: z.s_trough)
+
+    # Phase 8 minor-zone tier (plan 20.4): a second, lower-gate pass
+    # surfaces clusters in [minor_zone_recurrence, zone_recurrence) as
+    # evidence. The zone pass above is untouched, so the delivered zone
+    # set stays byte-identical; minor candidates at or above the zone
+    # gate, or within a cluster tolerance of a reported zone, are
+    # skipped (the two clusterings can land a few metres apart).
+    minor_zones = []
+    if (n_speed and mapped
+            and params.minor_zone_recurrence < params.zone_recurrence):
+        minor_min = params.minor_zone_recurrence * n_speed
+        minor_clusters = _recurrence_clusters(
+            [m[3] for m in mapped], [m[0] for m in mapped],
+            params.zone_cluster_m, length_c, minor_min,
+            params.zone_valley_min_m)
+        for cluster in minor_clusters:
+            member_laps = {mapped[j][0] for j in cluster}
+            if len(member_laps) < minor_min:
+                continue
+            zone = _zone_from_cluster(cluster)
+            if zone.recurrence >= params.zone_recurrence:
+                continue
+            if any(_circ_dist(zone.s_trough, z.s_trough)
+                   <= params.zone_cluster_m for z in zones):
+                continue
+            minor_zones.append(zone)
+        minor_zones.sort(key=lambda z: z.s_trough)
 
     # dimension 9: heavy events/km, hierarchical over speed-covered laps
     thresholds = (params.heavy_threshold,) + tuple(params.sensitivity)
@@ -363,4 +416,5 @@ def analyze_braking(consensus, params=DEFAULT_BRAKING_PARAMS):
         reduction_percentiles=percentiles,
         events_per_lap_median=events_per_lap_median,
         per_user=per_user,
+        minor_zones=minor_zones,
     )

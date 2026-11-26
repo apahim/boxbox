@@ -372,6 +372,7 @@ def compute_track_dna(track_id, condition, all_configs):
                 score = ('—' if dim['score'] is None
                          else f"{dim['score']}/10")
                 click.echo(f'    {dim["display"]:<20} {value:>12}  '
-                           f'{str(dim["class"] or "—"):<14} {score}')
+                           f'{str(dim["class"] or "—"):<14} {score:<8} '
+                           f'{dim.get("quality", "—")}')
     click.echo(f'\n{n_cards} scorecard(s) stored in '
                f'{time.time() - started:.1f}s.')

@@ -212,6 +212,57 @@ def test_zone_recurrence_threshold():
     assert zones[1].n_laps == 2
     assert zones[1].recurrence == pytest.approx(0.2)
     assert zones[1].support_by_user == {1: pytest.approx(0.2)}
+    # Phase 8 minor-zone tier (plan 20.4): the 1/10 region (exactly at
+    # the 10% minor gate) surfaces as a minor zone, not a zone — the
+    # zone set above is byte-identical to the pre-Phase-8 behaviour.
+    assert len(braking.minor_zones) == 1
+    minor = braking.minor_zones[0]
+    assert minor.s_trough == pytest.approx(80.0, abs=5.0)
+    assert minor.n_laps == 1
+    assert minor.recurrence == pytest.approx(0.1)
+    summary = braking.summary()
+    assert summary['minor_zones'][0]['recurrence'] == pytest.approx(0.1)
+    assert summary['minor_zones'][0]['n_laps'] == 1
+
+
+def test_minor_zone_tier_bounds():
+    """Phase 8 (plan 20.4): recurrence in [10%, 20%) -> minor zone;
+    below 10% -> neither; at/above 20% -> zone (reported by the zone
+    pass, never duplicated as minor). Dimension 9 is untouched by the
+    tier."""
+    from dataclasses import replace
+
+    from scripts.analysis.track_dna_braking import DEFAULT_BRAKING_PARAMS
+
+    pts = fixture_oval()
+    n = len(pts)
+    laps = []
+    for i in range(1, 21):
+        windows = [(200.0, 20.0)]           # 20/20 -> zone
+        if i <= 4:
+            windows.append((330.0, 20.0))   # 4/20 = 20% -> zone
+        if i <= 3:
+            windows.append((80.0, 20.0))    # 3/20 = 15% -> minor zone
+        if i == 5:
+            windows.append((380.0, 20.0))   # 1/20 = 5% -> neither
+        laps.append(braking_lap(1, 1, pts, speed_profile(n, windows), i))
+    braking = analyze_braking(build_consensus(laps))
+    assert len(braking.zones) == 2
+    assert {z.n_laps for z in braking.zones} == {20, 4}
+    assert len(braking.minor_zones) == 1
+    assert braking.minor_zones[0].s_trough == pytest.approx(80.0, abs=5.0)
+    assert braking.minor_zones[0].recurrence == pytest.approx(0.15)
+    troughs = [z.s_trough for z in braking.minor_zones]
+    assert all(abs(t - 380.0) > 20.0 for t in troughs)   # 5% excluded
+
+    # disabling the tier (minor gate == zone gate) changes nothing else
+    disabled = analyze_braking(
+        build_consensus(laps),
+        params=replace(DEFAULT_BRAKING_PARAMS, minor_zone_recurrence=0.20))
+    assert disabled.minor_zones == []
+    assert disabled.zones == braking.zones
+    assert disabled.heavy_freq_per_km == braking.heavy_freq_per_km
+    assert disabled.sensitivity == braking.sensitivity
 
 
 def test_zone_reduction_threshold_30_percent():

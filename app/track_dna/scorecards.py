@@ -16,6 +16,7 @@ from app.models import Track, TrackConfig, TrackDnaScorecard
 from app.track_dna.consensus import compute_config
 from scripts.analysis.track_dna import DEFAULT_PARAMS
 from scripts.analysis.track_dna_braking import DEFAULT_BRAKING_PARAMS
+from scripts.analysis.track_dna_confidence import assign_confidence
 from scripts.analysis.track_dna_consensus import DEFAULT_CONSENSUS_PARAMS
 from scripts.analysis.track_dna_elevation import DEFAULT_ELEVATION_PARAMS
 from scripts.analysis.track_dna_score import (
@@ -77,10 +78,24 @@ def build_scorecard(track_config_id, condition='dry',
                     elevation['elevation_gain'].get('window_by_device'),
             }
 
+    # Phase 8 (plan 20): per-dimension quality classes + provenance +
+    # counts + warnings, and the card-level evidence block
+    dim_conf, card_conf = assign_confidence(result['consensus'],
+                                            result['braking'],
+                                            result['elevation'],
+                                            result['dataset'])
+    for dim in dimensions:
+        conf = dim_conf[dim['key']]
+        dim['quality'] = conf['quality']
+        dim['provenance'] = conf['provenance']
+        dim['counts'] = conf['counts']
+        dim['warnings'] = conf['warnings']
+
     dataset = dict(result['dataset'])
     dataset['condition'] = condition
     dataset['session_fingerprint'] = session_fingerprint(
         dataset.get('session_ids') or [])
+    dataset['confidence'] = card_conf
 
     card = db.session.query(TrackDnaScorecard).filter_by(
         track_config_id=track_config_id, condition=condition,
