@@ -304,3 +304,74 @@ def _echo_dna_dataset(ds):
         click.echo(f'  date range: {date_range[0]} -> {date_range[1]}')
 
     click.echo()
+
+
+@click.command('compute-track-dna')
+@click.argument('track_id', required=False, type=int)
+@click.option('--condition', 'condition', default='all',
+              type=click.Choice(['dry', 'wet', 'all']),
+              help='Condition bucket to compute (default: both, computed '
+                   'separately — never mixed)')
+@click.option('--all', 'all_configs', is_flag=True,
+              help='Compute scorecards for every track configuration')
+@with_appcontext
+def compute_track_dna(track_id, condition, all_configs):
+    """Compute and store Track DNA scorecards (Phase 7).
+
+    Builds scorecards for one track's configurations (TRACK_ID) or
+    every configuration (--all), one row per (config, condition,
+    methodology version) — recomputation upserts. No hooks call this
+    (D7 revised); this is the Phase 9 admin trigger's engine.
+    """
+    import time
+
+    from app.models import TrackConfig
+    from app.track_dna.scorecards import (
+        CONDITIONS, build_scorecard, card_payload,
+    )
+
+    if track_id is not None:
+        track = db.session.get(Track, track_id)
+        if track is None:
+            click.echo(f'Error: track {track_id} not found.')
+            raise SystemExit(1)
+        configs = TrackConfig.query.filter_by(track_id=track_id).order_by(
+            TrackConfig.id).all()
+        if not configs:
+            click.echo(f'Error: track {track_id} has no configurations.')
+            raise SystemExit(1)
+    elif all_configs:
+        configs = TrackConfig.query.order_by(TrackConfig.id).all()
+        if not configs:
+            click.echo('Error: no track configurations exist.')
+            raise SystemExit(1)
+    else:
+        click.echo('Error: pass a TRACK_ID or --all.')
+        raise SystemExit(1)
+
+    conditions = CONDITIONS if condition == 'all' else (condition,)
+    started = time.time()
+    n_cards = 0
+    for config in configs:
+        track = db.session.get(Track, config.track_id)
+        for cond in conditions:
+            click.echo(f'{track.name} — {config.name} ({cond}) ...',
+                       nl=False)
+            t0 = time.time()
+            card, result = build_scorecard(config.id, cond)
+            if card is None:
+                click.echo(f' skipped ({result.get("error")})')
+                continue
+            n_cards += 1
+            payload = card_payload(card)
+            click.echo(f' {time.time() - t0:.1f}s — overall '
+                       f'{card.overall_score}/10')
+            for dim in payload['dimensions']:
+                value = ('—' if dim['value'] is None
+                         else f"{dim['value']}{dim['unit']}")
+                score = ('—' if dim['score'] is None
+                         else f"{dim['score']}/10")
+                click.echo(f'    {dim["display"]:<20} {value:>12}  '
+                           f'{str(dim["class"] or "—"):<14} {score}')
+    click.echo(f'\n{n_cards} scorecard(s) stored in '
+               f'{time.time() - started:.1f}s.')

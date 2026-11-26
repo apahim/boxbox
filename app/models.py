@@ -76,6 +76,45 @@ class TrackConfig(db.Model):
     sessions = db.relationship('Session', backref='track_config', lazy='dynamic')
 
 
+class TrackDnaScorecard(db.Model):
+    """A computed Track DNA scorecard for one track configuration and
+    condition (plan Phase 7, spec Section 19).
+
+    One row per (track_config_id, condition, methodology_version);
+    recomputation upserts. No hooks ever write here (D7 revised): rows
+    are created by the CLI now and the admin-page trigger in Phase 9.
+    The stored session fingerprint makes drift from the live dataset
+    visible on demand; ``stale`` defaults to False and nothing sets it
+    automatically.
+    """
+
+    __tablename__ = 'track_dna_scorecards'
+
+    id = db.Column(db.Integer, primary_key=True)
+    track_config_id = db.Column(
+        db.Integer, db.ForeignKey('track_configs.id'), nullable=False,
+        index=True)
+    methodology_version = db.Column(db.String(10), nullable=False)
+    condition = db.Column(db.String(4), nullable=False)   # 'dry' | 'wet'
+    params_json = db.Column(db.JSON, nullable=False)
+    dimensions_json = db.Column(db.JSON, nullable=False)
+    overall_score = db.Column(db.Float, nullable=True)
+    dataset_json = db.Column(db.JSON, nullable=False)
+    support_json = db.Column(db.JSON, nullable=False)
+    computed_at = db.Column(db.DateTime,
+                            default=lambda: datetime.now(timezone.utc))
+    stale = db.Column(db.Boolean, default=False, nullable=False,
+                      server_default='false')
+
+    __table_args__ = (
+        db.UniqueConstraint('track_config_id', 'condition',
+                            'methodology_version',
+                            name='uq_scorecard_config_condition_version'),
+    )
+
+    config = db.relationship('TrackConfig', backref='dna_scorecards')
+
+
 class TrackCorner(db.Model):
     __tablename__ = 'track_corners'
 

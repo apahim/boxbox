@@ -195,13 +195,15 @@ def create_app(config_name=None):
 
     # CLI commands
     from app.cli import (seed_tracks, import_session, reingest_session,
-                         seed_demo, set_admin, dna_inventory)
+                         seed_demo, set_admin, dna_inventory,
+                         compute_track_dna)
     app.cli.add_command(seed_tracks)
     app.cli.add_command(import_session)
     app.cli.add_command(reingest_session)
     app.cli.add_command(seed_demo)
     app.cli.add_command(set_admin)
     app.cli.add_command(dna_inventory)
+    app.cli.add_command(compute_track_dna)
 
     _register_error_handlers(app)
     _add_security_headers(app)
