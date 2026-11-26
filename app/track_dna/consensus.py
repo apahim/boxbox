@@ -30,15 +30,21 @@ from scripts.analysis.track_dna_consensus import (
     ConsensusLap,
     build_consensus,
 )
+from scripts.analysis.track_dna_elevation import (
+    DEFAULT_ELEVATION_PARAMS,
+    analyze_elevation,
+)
 
 
 def compute_config(track_config_id, condition='dry',
                    params=DEFAULT_CONSENSUS_PARAMS,
                    engine_params=DEFAULT_PARAMS,
-                   braking_params=DEFAULT_BRAKING_PARAMS):
-    """Compute the Phase 4 consensus, dimensions 1-8 and the Phase 5
-    braking section (dimension 9 + zones) for one track configuration
-    and condition. Returns a JSON-serialisable dict."""
+                   braking_params=DEFAULT_BRAKING_PARAMS,
+                   elevation_params=DEFAULT_ELEVATION_PARAMS):
+    """Compute the Phase 4 consensus, dimensions 1-8, the Phase 5
+    braking section (dimension 9 + zones) and the Phase 6 elevation
+    section (dimension 10 + profile) for one track configuration and
+    condition. Returns a JSON-serialisable dict."""
     config = db.session.get(TrackConfig, track_config_id)
     if config is None:
         return {'error': f'no track config {track_config_id!r}'}
@@ -70,6 +76,7 @@ def compute_config(track_config_id, condition='dry',
             record = ConsensusLap(user_id=entry['user_id'],
                                   session_id=entry['session_id'],
                                   lap_number=geo.lap_number,
+                                  device=entry['device'] or 'unknown',
                                   geometry=geo)
             if geo.spun:
                 spun.append(record)
@@ -98,6 +105,8 @@ def compute_config(track_config_id, condition='dry',
     result['consensus'] = consensus.summary()
     braking = analyze_braking(consensus, params=braking_params)
     result['braking'] = braking.summary()
+    elevation = analyze_elevation(consensus, params=elevation_params)
+    result['elevation'] = elevation.summary()
     return result
 
 

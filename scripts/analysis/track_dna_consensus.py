@@ -130,6 +130,7 @@ class ConsensusLap:
     session_id: int
     geometry: LapGeometry
     lap_number: int | None = None
+    device: str = 'unknown'    # session data_source (Phase 6, additive)
 
 
 @dataclass
