@@ -9,16 +9,22 @@ Design (owner-approved 2026-11-26, plan Sections 4.5/5/15.6):
 
 - **Corner set — recurrence clustering is canonical** (decision D6's
   "recurrence-qualified consensus objects"): per-lap corner apexes are
-  mapped into the consensus frame and clustered circularly with
-  single-linkage chaining (30 m link tolerance — the validated Phase-3
-  holdout recipe; a real corner's apexes can spread well beyond 30 m
-  across driving lines, and a diameter-capped variant splits such
-  corners into sub-threshold pieces); clusters supported by >= 50% of
-  laps become consensus corners. The consensus trajectory is the
-  geometric frame, and re-running the frozen engine on it is recorded
-  as a *cross-check*, satisfying both plan readings (Section 4.5
-  recurrence objects and Section 5.3 "consensus feeds corner
-  set/straights/DCs").
+  mapped into the consensus frame and clustered circularly in two
+  stages. Single-linkage chains (30 m link distance) keep wide corners
+  whole — a real corner's apexes can spread well beyond 30 m across
+  driving lines, and a diameter-capped clusterer splits such corners
+  into sub-threshold pieces. Recurrence-qualified valley splitting
+  then separates corners that chaining bridges: a chain splits at its
+  widest internal gap only when the gap is at least the engine's own
+  corner-merge distance (10 m — below that two consensus corners have
+  no per-lap meaning, and alignment jitter can never fragment
+  coincident apexes) AND both pieces are independently supported by
+  >= 50% of laps — so bridged 100%-support corner pairs split, while
+  a wide corner held by less than 2x the threshold cannot. The
+  consensus trajectory is the geometric frame, and re-running the
+  frozen engine on it is recorded as a *cross-check*, satisfying both
+  plan readings (Section 4.5 recurrence objects and Section 5.3
+  "consensus feeds corner set/straights/DCs").
 - **Dimension sourcing**: dimensions 1/2/3/8 (length, straight%,
   longest straight, DC frequency) are equal-user-weighted hierarchical
   medians — lap -> session -> user -> circuit (D6: no per-lap pooling;
@@ -415,6 +421,79 @@ def _circular_clusters(positions, tolerance, circumference):
     return [[int(idx[i]) for i in c] for c in clusters]
 
 
+def _split_chain(members, positions, lap_ids, min_laps, min_gap,
+                 circumference):
+    """Recursively split one single-linkage chain at its widest valley.
+
+    The chain is traversed starting after its own largest circular gap
+    (the gap facing the rest of the circle, so seam-wrapping chains
+    unwrap correctly). It splits at the widest INTERNAL gap when that
+    gap is at least ``min_gap`` — the engine's own within-lap corner
+    merge distance, below which two consensus corners have no per-lap
+    meaning, and which stops alignment-quantisation jitter from ever
+    fragmenting coincident apexes — AND both pieces are independently
+    supported by >= ``min_laps`` distinct laps. The recurrence test
+    itself thus decides whether a valley separates two real corners
+    (both sides pass) or runs through one wide corner (a corner
+    supported by less than 2x the threshold can never split). Only
+    the widest gap is ever tried, so dense apex masses never fragment.
+    """
+    if len(members) < 2:
+        return [list(members)]
+    order = sorted(members, key=lambda j: positions[j])
+    ps = [positions[j] for j in order]
+    m = len(order)
+    gaps = [ps[i + 1] - ps[i] for i in range(m - 1)]
+    gaps.append(circumference - (ps[-1] - ps[0]))
+    boundary = int(np.argmax(gaps))            # gap after `boundary`
+    rot = (boundary + 1) % m
+    order = order[rot:] + order[:rot]
+    ps = [positions[j] for j in order]
+    widest = 0.0
+    cut = -1
+    for i in range(m - 1):
+        d = ps[i + 1] - ps[i]
+        if d < 0.0:
+            d += circumference
+        if d > widest:
+            widest = d
+            cut = i
+    if (cut >= 0 and widest >= min_gap
+            and len({lap_ids[j] for j in order[:cut + 1]}) >= min_laps
+            and len({lap_ids[j] for j in order[cut + 1:]}) >= min_laps):
+        return (_split_chain(order[:cut + 1], positions, lap_ids,
+                             min_laps, min_gap, circumference)
+                + _split_chain(order[cut + 1:], positions, lap_ids,
+                               min_laps, min_gap, circumference))
+    return [order]
+
+
+def _recurrence_clusters(positions, lap_ids, tolerance, circumference,
+                         min_laps, min_gap):
+    """Recurrence-qualified corner clusters on a circle (two stages).
+
+    1. Single-linkage chains with ``tolerance`` link distance keep
+       wide corners whole: a real corner's apexes can spread well
+       beyond the tolerance across driving lines (Kiltorcan's s~160
+       corner spans 43 m p10-p90 in <= 8 m steps), and a
+       diameter-capped clusterer splits such corners into
+       sub-threshold pieces, dropping real corners.
+    2. Recurrence-qualified valley splitting (``_split_chain``)
+       separates corners that chaining bridges: Kiltorcan's s~695 and
+       s~739 corners, each run by ~100% of laps, chain together
+       through scattered line-variation apexes and only split because
+       both sides independently pass the recurrence threshold.
+
+    ``lap_ids[j]`` is the lap that contributed ``positions[j]``;
+    ``min_laps`` is the recurrence threshold in distinct laps.
+    """
+    clusters = []
+    for chain in _circular_clusters(positions, tolerance, circumference):
+        clusters.extend(_split_chain(chain, positions, lap_ids, min_laps,
+                                     min_gap, circumference))
+    return clusters
+
+
 def _circular_median(values, circumference):
     """Median of positions on a circle (clusters are tolerance-wide)."""
     if not values:
@@ -611,13 +690,16 @@ def _pipeline(laps, params, engine_params):
             m_apex, d_start, d_end = _map_corner(
                 lap.geometry, corner, float(fracs[i]), length_m)
             mapped.append((i, corner, m_apex, d_start, d_end))
-    clusters = _circular_clusters([m[2] for m in mapped],
-                                  params.corner_cluster_m, length_m)
+    min_laps = params.corner_recurrence * n
+    clusters = _recurrence_clusters(
+        [m[2] for m in mapped], [m[0] for m in mapped],
+        params.corner_cluster_m, length_m, min_laps,
+        engine_params.corner_gap_merge_m)
     corners = []
     mixed_sign = 0
     for cluster in clusters:
         member_laps = {mapped[j][0] for j in cluster}
-        if len(member_laps) < params.corner_recurrence * n:
+        if len(member_laps) < min_laps:
             continue
         signs = {mapped[j][1].sign for j in cluster}
         if len(signs) > 1:

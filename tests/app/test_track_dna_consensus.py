@@ -20,6 +20,7 @@ from scripts.analysis.track_dna_consensus import (
     _circular_median,
     _curvature_profile,
     _map_corner,
+    _recurrence_clusters,
     _sample_positions,
     build_consensus,
 )
@@ -120,6 +121,71 @@ def test_circular_median_wraps():
     assert _circular_median([998, 1, 2], 1000.0) == pytest.approx(1.0,
                                                                  abs=0.1)
     assert _circular_median([10, 20, 30], 1000.0) == pytest.approx(20.0)
+
+
+def test_recurrence_clusters_split_bridged_pair():
+    """Two real corners chained together by bridge apexes split apart
+    because both sides independently pass recurrence (Kiltorcan's
+    s~695/s~739 failure mode of pure single linkage)."""
+    positions, lap_ids = [], []
+    for lap in range(10):
+        positions += [100.0, 144.0]
+        lap_ids += [lap, lap]
+    positions += [118.0, 126.0]              # bridge apexes (2 of 10 laps)
+    lap_ids += [0, 1]
+    clusters = _recurrence_clusters(positions, lap_ids, 30.0, 1000.0,
+                                    5.0, 10.0)
+    assert len(clusters) == 2
+    assert sorted(len(c) for c in clusters) == [10, 12]
+    medians = sorted(float(np.median([positions[j] for j in c]))
+                     for c in clusters)
+    assert medians == [pytest.approx(100.0), pytest.approx(144.0)]
+    # without both-side lap support the bridge keeps them chained
+    clusters = _recurrence_clusters([100.0, 118.0, 126.0, 144.0],
+                                    [0, 0, 0, 0], 30.0, 1000.0, 2.0, 10.0)
+    assert [sorted(c) for c in clusters] == [[0, 1, 2, 3]]
+
+
+def test_recurrence_clusters_wide_corner_stays_whole():
+    """A wide corner supported by fewer than 2x threshold laps cannot
+    split into two qualifying pieces (Kiltorcan's s~160 corner: 83%
+    support, 43 m apex spread — the diameter-cap failure mode)."""
+    positions, lap_ids = [], []
+    for lap in range(83):
+        positions.append(140.0 + (lap * 7.9) % 45.0)
+        lap_ids.append(lap)
+    clusters = _recurrence_clusters(positions, lap_ids, 30.0, 1000.0,
+                                    50.0, 10.0)
+    assert len(clusters) == 1
+    assert len(clusters[0]) == 83
+
+
+def test_recurrence_clusters_seam_wrapping_chain():
+    """A chain wrapping the s=0 seam splits at its internal valley, not
+    at the seam: the traversal starts after the chain's own largest
+    circular gap."""
+    positions, lap_ids = [], []
+    for lap in range(10):
+        positions += [990.0, 34.0]           # 44 m apart across the seam
+        lap_ids += [lap, lap]
+    positions += [8.0, 8.0]                  # bridge apexes in the valley
+    lap_ids += [0, 1]
+    clusters = _recurrence_clusters(positions, lap_ids, 30.0, 1000.0,
+                                    5.0, 10.0)
+    assert sorted(len(c) for c in clusters) == [10, 12]
+    medians = sorted(float(np.median([positions[j] for j in c]))
+                     for c in clusters)
+    assert medians == [pytest.approx(34.0), pytest.approx(990.0)]
+
+
+def test_recurrence_clusters_coincident_apexes_never_split():
+    """Sub-metre alignment jitter between coincident apexes must not
+    fragment a corner even when the lap counts on both sides of the
+    jitter gap would qualify (the min-gap floor)."""
+    clusters = _recurrence_clusters(
+        [185.0, 185.0, 185.3, 185.3], [0, 1, 2, 3], 30.0, 1000.0, 2.0,
+        10.0)
+    assert [sorted(c) for c in clusters] == [[0, 1, 2, 3]]
 
 
 def test_map_corner_unwraps_seam_wrapping_run():
