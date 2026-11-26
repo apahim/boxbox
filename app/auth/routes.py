@@ -5,7 +5,7 @@ from app import db, limiter, oauth
 from app.auth import bp
 from app.models import (User, Session, Track, TrackCorner, Telemetry, Lap,
                         CornerRecord, CornerSummary, SectorTime, ChartData,
-                        SessionUpload, Leaderboard, LeaderboardShare)
+                        SessionUpload)
 
 
 @bp.route('/login')
@@ -92,10 +92,6 @@ def delete_account():
         ChartData.query.filter_by(session_id=s.id).delete()
         SessionUpload.query.filter_by(session_id=s.id).delete()
         db.session.delete(s)
-
-    # Delete leaderboard shares for this user, then leaderboards they created
-    LeaderboardShare.query.filter_by(user_id=user.id).delete()
-    Leaderboard.query.filter_by(created_by=user.id).delete()
 
     # Delete all tracks created by user
     tracks = Track.query.filter_by(created_by=user.id).all()

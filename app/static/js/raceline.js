@@ -8,7 +8,6 @@ window.Raceline = (function() {
     var rlData = null;
     var fetchRaceline = null;
     var sessionCache = {};
-    var leaderboardMode = false, lbLapA = null, lbLapB = null, lbNameA = "", lbNameB = "";
 
     function interpPos(lap, t) {
         if (!lap.t || lap.t.length === 0) return null;
@@ -155,14 +154,8 @@ window.Raceline = (function() {
         if (rlMap) rlMap.removeOverlays(rlOverlays);
         rlOverlays = [];
 
-        var lapA, lapB;
-        if (leaderboardMode) {
-            lapA = lbLapA;
-            lapB = lbLapB;
-        } else {
-            lapA = parseLapRef(document.getElementById("rlSelectA").value);
-            lapB = parseLapRef(document.getElementById("rlSelectB").value);
-        }
+        var lapA = parseLapRef(document.getElementById("rlSelectA").value);
+        var lapB = parseLapRef(document.getElementById("rlSelectB").value);
         if (!lapA) return;
 
         var allLat = [].concat(lapA.lat), allLon = [].concat(lapA.lon);
@@ -189,8 +182,8 @@ window.Raceline = (function() {
         // Legend
         var legendEl = document.getElementById("racelineLegend");
         legendEl.innerHTML = "";
-        var labelA = leaderboardMode && lbNameA ? lbNameA : "Lap A";
-        var labelB = leaderboardMode && lbNameB ? lbNameB : "Lap B";
+        var labelA = "Lap A";
+        var labelB = "Lap B";
         [{label: labelA, lap: lapA, color: rlColorA}, {label: labelB, lap: lapB, color: rlColorB}].forEach(function(entry) {
             if (!entry.lap) return;
             var item = document.createElement("span");
@@ -330,90 +323,5 @@ window.Raceline = (function() {
         renderRaceline();
     }
 
-    function findBestLap(laps) {
-        for (var i = 0; i < laps.length; i++) {
-            if (laps[i].is_best && !laps[i].is_outlier) return laps[i];
-        }
-        return null;
-    }
-
-    function initLeaderboard(config) {
-        leaderboardMode = true;
-        lbLapA = null; lbLapB = null; lbNameA = ""; lbNameB = "";
-        rlData = { sessions: [], sessionMeta: [] };
-        fetchRaceline = config.fetchRacelineFn || null;
-        sessionCache = {};
-        rlMap = null;
-
-        var entries = config.entries || [];
-        if (entries.length < 2) return;
-
-        var selA = document.getElementById("rlSelectA");
-        var selB = document.getElementById("rlSelectB");
-
-        function populateSelect(sel) {
-            sel.innerHTML = '<option value="">&mdash; Select &mdash;</option>';
-            entries.forEach(function(e) {
-                var opt = document.createElement("option");
-                opt.value = e.session_id;
-                opt.textContent = "#" + e.position + " " + e.name + " — " + e.best_time_fmt;
-                opt.dataset.name = e.name;
-                sel.appendChild(opt);
-            });
-        }
-        populateSelect(selA);
-        populateSelect(selB);
-
-        function resolveLap(sel, side) {
-            var sessionId = sel.value;
-            var name = sel.selectedOptions[0] ? sel.selectedOptions[0].dataset.name || "" : "";
-            if (!sessionId) {
-                if (side === "A") { lbLapA = null; lbNameA = ""; }
-                else { lbLapB = null; lbNameB = ""; }
-                renderRaceline();
-                return;
-            }
-            sessionId = parseInt(sessionId);
-
-            if (sessionCache[sessionId]) {
-                var lap = findBestLap(sessionCache[sessionId].laps);
-                if (side === "A") { lbLapA = lap; lbNameA = name; }
-                else { lbLapB = lap; lbNameB = name; }
-                renderRaceline();
-                return;
-            }
-
-            if (!fetchRaceline) return;
-            fetchRaceline(sessionId).then(function(rData) {
-                if (parseInt(sel.value) !== sessionId) return;
-                if (!rData || !rData.laps) { renderRaceline(); return; }
-                sessionCache[sessionId] = { laps: rData.laps, session_id: sessionId };
-                var lap = findBestLap(rData.laps);
-                if (side === "A") { lbLapA = lap; lbNameA = name; }
-                else { lbLapB = lap; lbNameB = name; }
-                renderRaceline();
-            });
-        }
-
-        selA.addEventListener("change", function() { resolveLap(selA, "A"); });
-        selB.addEventListener("change", function() { resolveLap(selB, "B"); });
-
-        document.getElementById("rlPlayBtn").addEventListener("click", function() {
-            if (animPlaying) stopAnim();
-            else { if (animTime >= animMaxTime) animTime = 0; startAnim(); }
-        });
-        document.getElementById("rlTimeline").addEventListener("input", function() {
-            animTime = parseFloat(this.value); if (animPlaying) stopAnim(); updateMarkers();
-        });
-        document.getElementById("rlSpeedSelect").addEventListener("change", function() {
-            animSpeed = parseFloat(this.value);
-        });
-
-        selA.value = String(entries[0].session_id);
-        resolveLap(selA, "A");
-        selB.value = String(entries[1].session_id);
-        resolveLap(selB, "B");
-    }
-
-    return { init: init, initLeaderboard: initLeaderboard };
+    return { init: init };
 })();

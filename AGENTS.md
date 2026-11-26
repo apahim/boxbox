@@ -25,7 +25,7 @@ venv/bin/podman-compose exec web python -m pytest tests/ -x -q # run tests in co
 
 ## Project Layout
 
-- `app/` — Flask application (auth, sessions, tracks, api, dashboard, leaderboard, admin, legal blueprints)
+- `app/` — Flask application (auth, sessions, tracks, api, dashboard, admin, legal blueprints)
 - `app/sessions/ingest.py` — CSV upload → analysis → DB insert pipeline
 - `app/cli.py` — CLI commands (seed-tracks, import-session, reingest-session, seed-demo, set-admin)
 - `app/api/routes.py` — JSON API endpoints for dashboard data
@@ -45,7 +45,7 @@ venv/bin/podman-compose exec web python -m pytest tests/ -x -q # run tests in co
 
 ## Code Conventions
 
-- Flask with Blueprints (auth, sessions, tracks, api, dashboard, leaderboard, admin, legal)
+- Flask with Blueprints (auth, sessions, tracks, api, dashboard, admin, legal)
 - SQLAlchemy ORM with Flask-Migrate for schema management
 - Plotly for all charts (rendered client-side via Plotly.react())
 - Apple MapKit JS for all maps
