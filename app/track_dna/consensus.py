@@ -21,6 +21,10 @@ from app import db
 from app.models import TrackConfig
 from app.track_dna.loader import load_track_laps
 from scripts.analysis.track_dna import DEFAULT_PARAMS, analyze_session
+from scripts.analysis.track_dna_braking import (
+    DEFAULT_BRAKING_PARAMS,
+    analyze_braking,
+)
 from scripts.analysis.track_dna_consensus import (
     DEFAULT_CONSENSUS_PARAMS,
     ConsensusLap,
@@ -30,9 +34,11 @@ from scripts.analysis.track_dna_consensus import (
 
 def compute_config(track_config_id, condition='dry',
                    params=DEFAULT_CONSENSUS_PARAMS,
-                   engine_params=DEFAULT_PARAMS):
-    """Compute the Phase 4 consensus and dimensions 1-8 for one track
-    configuration and condition. Returns a JSON-serialisable dict."""
+                   engine_params=DEFAULT_PARAMS,
+                   braking_params=DEFAULT_BRAKING_PARAMS):
+    """Compute the Phase 4 consensus, dimensions 1-8 and the Phase 5
+    braking section (dimension 9 + zones) for one track configuration
+    and condition. Returns a JSON-serialisable dict."""
     config = db.session.get(TrackConfig, track_config_id)
     if config is None:
         return {'error': f'no track config {track_config_id!r}'}
@@ -90,6 +96,8 @@ def compute_config(track_config_id, condition='dry',
                                 engine_params=engine_params,
                                 condition=condition)
     result['consensus'] = consensus.summary()
+    braking = analyze_braking(consensus, params=braking_params)
+    result['braking'] = braking.summary()
     return result
 
 
