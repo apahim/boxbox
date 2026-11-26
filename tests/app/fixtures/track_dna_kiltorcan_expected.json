@@ -1,0 +1,406 @@
+{
+  "params": {
+    "res_m": 1.0,
+    "static_step_m": 0.05,
+    "pos_smooth_m": 10.0,
+    "kappa_filter_m": 5.0,
+    "r_min_m": 200.0,
+    "corner_gap_merge_m": 10.0,
+    "corner_min_dtheta_deg": 30.0,
+    "spin_cap_deg": 300.0,
+    "radius_filter_m": 10.0,
+    "straight_window_m": 20.0,
+    "straight_min_m": 20.0,
+    "straight_gap_merge_m": 10.0,
+    "dc_gap_m": 30.0
+  },
+  "laps": [
+    {
+      "session_id": 24,
+      "lap_number": 1,
+      "summary": {
+        "length_m": 991.723,
+        "n_samples": 3192,
+        "spun": false,
+        "heading_total_deg": -360.0,
+        "heading_budget": {
+          "corners_deg": -405.722,
+          "straights_deg": -2.687,
+          "subthreshold_deg": 47.326,
+          "spin_dropped_deg": 0.0,
+          "residue_deg": 1.083
+        },
+        "corners": [
+          {
+            "s_start": 26.0,
+            "s_end": 76.0,
+            "s_apex": 54.0,
+            "delta_theta_deg": -132.163,
+            "sign": -1,
+            "radius_m": 15.14
+          },
+          {
+            "s_start": 119.0,
+            "s_end": 213.0,
+            "s_apex": 149.0,
+            "delta_theta_deg": -131.214,
+            "sign": -1,
+            "radius_m": 31.57
+          },
+          {
+            "s_start": 233.0,
+            "s_end": 299.0,
+            "s_apex": 270.0,
+            "delta_theta_deg": -196.682,
+            "sign": -1,
+            "radius_m": 12.56
+          },
+          {
+            "s_start": 303.0,
+            "s_end": 413.0,
+            "s_apex": 333.0,
+            "delta_theta_deg": 235.483,
+            "sign": 1,
+            "radius_m": 20.65
+          },
+          {
+            "s_start": 443.0,
+            "s_end": 516.0,
+            "s_apex": 490.0,
+            "delta_theta_deg": 150.603,
+            "sign": 1,
+            "radius_m": 23.05
+          },
+          {
+            "s_start": 518.0,
+            "s_end": 612.0,
+            "s_apex": 537.0,
+            "delta_theta_deg": -245.725,
+            "sign": -1,
+            "radius_m": 12.15
+          },
+          {
+            "s_start": 615.0,
+            "s_end": 711.0,
+            "s_apex": 693.0,
+            "delta_theta_deg": 263.933,
+            "sign": 1,
+            "radius_m": 9.57
+          },
+          {
+            "s_start": 713.0,
+            "s_end": 756.0,
+            "s_apex": 727.0,
+            "delta_theta_deg": -175.333,
+            "sign": -1,
+            "radius_m": 12.13
+          },
+          {
+            "s_start": 756.0,
+            "s_end": 861.0,
+            "s_apex": 756.0,
+            "delta_theta_deg": -174.623,
+            "sign": -1,
+            "radius_m": 16.87
+          }
+        ],
+        "straights": [
+          {
+            "s_start": 96.0,
+            "length_m": 31.0,
+            "delta_theta_deg": -0.238
+          },
+          {
+            "s_start": 207.0,
+            "length_m": 33.0,
+            "delta_theta_deg": 1.063
+          },
+          {
+            "s_start": 407.0,
+            "length_m": 43.0,
+            "delta_theta_deg": -2.719
+          },
+          {
+            "s_start": 855.0,
+            "length_m": 28.0,
+            "delta_theta_deg": -1.063
+          },
+          {
+            "s_start": 916.0,
+            "length_m": 79.0,
+            "delta_theta_deg": 0.269
+          }
+        ],
+        "direction_changes": [
+          301.5,
+          517.5,
+          614.0,
+          712.5
+        ],
+        "straight_total_m": 214.0,
+        "straight_fraction": 0.2158,
+        "longest_straight_m": 79.0,
+        "corner_density_per_km": 9.075,
+        "dc_per_km": 4.033
+      }
+    },
+    {
+      "session_id": 52,
+      "lap_number": 1,
+      "summary": {
+        "length_m": 999.945,
+        "n_samples": 1305,
+        "spun": false,
+        "heading_total_deg": -360.0,
+        "heading_budget": {
+          "corners_deg": -408.965,
+          "straights_deg": 2.141,
+          "subthreshold_deg": 47.59,
+          "spin_dropped_deg": 0.0,
+          "residue_deg": -0.765
+        },
+        "corners": [
+          {
+            "s_start": 24.0,
+            "s_end": 77.0,
+            "s_apex": 48.0,
+            "delta_theta_deg": -123.214,
+            "sign": -1,
+            "radius_m": 16.35
+          },
+          {
+            "s_start": 115.0,
+            "s_end": 217.0,
+            "s_apex": 164.0,
+            "delta_theta_deg": -135.49,
+            "sign": -1,
+            "radius_m": 35.97
+          },
+          {
+            "s_start": 235.0,
+            "s_end": 304.0,
+            "s_apex": 265.0,
+            "delta_theta_deg": -193.669,
+            "sign": -1,
+            "radius_m": 13.39
+          },
+          {
+            "s_start": 308.0,
+            "s_end": 417.0,
+            "s_apex": 336.0,
+            "delta_theta_deg": 236.609,
+            "sign": 1,
+            "radius_m": 19.08
+          },
+          {
+            "s_start": 448.0,
+            "s_end": 520.0,
+            "s_apex": 495.0,
+            "delta_theta_deg": 144.934,
+            "sign": 1,
+            "radius_m": 17.81
+          },
+          {
+            "s_start": 522.0,
+            "s_end": 618.0,
+            "s_apex": 551.0,
+            "delta_theta_deg": -239.196,
+            "sign": -1,
+            "radius_m": 13.69
+          },
+          {
+            "s_start": 622.0,
+            "s_end": 720.0,
+            "s_apex": 704.0,
+            "delta_theta_deg": 264.41,
+            "sign": 1,
+            "radius_m": 11.38
+          },
+          {
+            "s_start": 722.0,
+            "s_end": 767.0,
+            "s_apex": 745.0,
+            "delta_theta_deg": -184.089,
+            "sign": -1,
+            "radius_m": 12.26
+          },
+          {
+            "s_start": 767.0,
+            "s_end": 894.0,
+            "s_apex": 767.0,
+            "delta_theta_deg": -179.261,
+            "sign": -1,
+            "radius_m": 20.89
+          }
+        ],
+        "straights": [
+          {
+            "s_start": 89.0,
+            "length_m": 33.0,
+            "delta_theta_deg": 1.97
+          },
+          {
+            "s_start": 210.0,
+            "length_m": 32.0,
+            "delta_theta_deg": 0.195
+          },
+          {
+            "s_start": 411.0,
+            "length_m": 45.0,
+            "delta_theta_deg": 0.642
+          },
+          {
+            "s_start": 883.0,
+            "length_m": 25.0,
+            "delta_theta_deg": -1.174
+          },
+          {
+            "s_start": 922.0,
+            "length_m": 67.0,
+            "delta_theta_deg": 0.508
+          }
+        ],
+        "direction_changes": [
+          306.5,
+          521.5,
+          620.5,
+          721.5
+        ],
+        "straight_total_m": 202.0,
+        "straight_fraction": 0.202,
+        "longest_straight_m": 67.0,
+        "corner_density_per_km": 9.0,
+        "dc_per_km": 4.0
+      }
+    },
+    {
+      "session_id": 53,
+      "lap_number": 1,
+      "summary": {
+        "length_m": 1005.609,
+        "n_samples": 3227,
+        "spun": false,
+        "heading_total_deg": -360.0,
+        "heading_budget": {
+          "corners_deg": -411.257,
+          "straights_deg": 0.589,
+          "subthreshold_deg": 50.12,
+          "spin_dropped_deg": 0.0,
+          "residue_deg": 0.548
+        },
+        "corners": [
+          {
+            "s_start": 23.0,
+            "s_end": 75.0,
+            "s_apex": 53.0,
+            "delta_theta_deg": -133.901,
+            "sign": -1,
+            "radius_m": 15.64
+          },
+          {
+            "s_start": 117.0,
+            "s_end": 213.0,
+            "s_apex": 133.0,
+            "delta_theta_deg": -133.347,
+            "sign": -1,
+            "radius_m": 28.73
+          },
+          {
+            "s_start": 230.0,
+            "s_end": 298.0,
+            "s_apex": 271.0,
+            "delta_theta_deg": -200.541,
+            "sign": -1,
+            "radius_m": 14.7
+          },
+          {
+            "s_start": 302.0,
+            "s_end": 411.0,
+            "s_apex": 335.0,
+            "delta_theta_deg": 237.466,
+            "sign": 1,
+            "radius_m": 19.29
+          },
+          {
+            "s_start": 442.0,
+            "s_end": 515.0,
+            "s_apex": 487.0,
+            "delta_theta_deg": 149.571,
+            "sign": 1,
+            "radius_m": 22.6
+          },
+          {
+            "s_start": 518.0,
+            "s_end": 614.0,
+            "s_apex": 540.0,
+            "delta_theta_deg": -248.506,
+            "sign": -1,
+            "radius_m": 12.94
+          },
+          {
+            "s_start": 617.0,
+            "s_end": 719.0,
+            "s_apex": 700.0,
+            "delta_theta_deg": 266.261,
+            "sign": 1,
+            "radius_m": 10.58
+          },
+          {
+            "s_start": 721.0,
+            "s_end": 794.0,
+            "s_apex": 753.0,
+            "delta_theta_deg": -212.796,
+            "sign": -1,
+            "radius_m": 11.73
+          },
+          {
+            "s_start": 807.0,
+            "s_end": 866.0,
+            "s_apex": 832.0,
+            "delta_theta_deg": -135.465,
+            "sign": -1,
+            "radius_m": 17.66
+          }
+        ],
+        "straights": [
+          {
+            "s_start": 96.0,
+            "length_m": 29.0,
+            "delta_theta_deg": 0.42
+          },
+          {
+            "s_start": 205.0,
+            "length_m": 32.0,
+            "delta_theta_deg": 0.176
+          },
+          {
+            "s_start": 405.0,
+            "length_m": 45.0,
+            "delta_theta_deg": -1.137
+          },
+          {
+            "s_start": 861.0,
+            "length_m": 29.0,
+            "delta_theta_deg": -1.836
+          },
+          {
+            "s_start": 925.0,
+            "length_m": 72.0,
+            "delta_theta_deg": 2.966
+          }
+        ],
+        "direction_changes": [
+          300.5,
+          517.0,
+          616.0,
+          720.5
+        ],
+        "straight_total_m": 207.0,
+        "straight_fraction": 0.2058,
+        "longest_straight_m": 72.0,
+        "corner_density_per_km": 8.95,
+        "dc_per_km": 3.978
+      }
+    }
+  ]
+}
