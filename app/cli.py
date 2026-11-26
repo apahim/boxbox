@@ -1,3 +1,4 @@
+import json
 import os
 
 import click
@@ -226,3 +227,80 @@ def reingest_session(session_id):
         click.echo(f'Error: no stored CSV for session {session_id}.')
         raise SystemExit(1)
     click.echo(f'Session {session_id} reingested successfully.')
+
+
+@click.command('dna-inventory')
+@click.argument('track_id', required=False, type=int)
+@click.option('--json', 'as_json', is_flag=True,
+              help='Emit machine-readable JSON instead of a report')
+@with_appcontext
+def dna_inventory(track_id, as_json):
+    """Report the Track DNA data-hygiene inventory for each track.
+
+    Lists the clean dataset per track after the deterministic exclusion
+    rules (demo-labelled sessions, exact duplicates) and the dry/wet
+    condition split, with a provisional lap-validity count per session.
+    """
+    from app.track_dna.hygiene import classify_track_sessions
+
+    if track_id is not None:
+        track = db.session.get(Track, track_id)
+        if track is None:
+            click.echo(f'Error: track {track_id} not found.')
+            raise SystemExit(1)
+        tracks = [track]
+    else:
+        tracks = Track.query.order_by(Track.id).all()
+
+    datasets = [ds for ds in (classify_track_sessions(t.id) for t in tracks)
+                if ds is not None]
+
+    if as_json:
+        click.echo(json.dumps([ds.to_dict() for ds in datasets], indent=2))
+        return
+
+    for ds in datasets:
+        _echo_dna_dataset(ds)
+
+
+def _echo_dna_dataset(ds):
+    verdict, reason = ds.verdict
+    suffix = f' ({reason})' if reason else ''
+    click.echo(f'{ds.track_name} (id {ds.track_id}) — {verdict}{suffix}')
+
+    n_dry = len(ds.sessions_for('dry'))
+    n_wet = len(ds.sessions_for('wet'))
+    click.echo(f'  sessions: {len(ds.included)} clean ({n_dry} dry, {n_wet} wet) '
+               f'of {len(ds.verdicts)} total, {len(ds.excluded)} excluded')
+
+    demo_ids = [str(v.session_id) for v in ds.excluded
+                if v.exclusion_reason == 'demo_label']
+    if demo_ids:
+        click.echo(f'    demo ({len(demo_ids)}): {", ".join(demo_ids)}')
+
+    dupes = [v for v in ds.excluded if v.exclusion_reason == 'duplicate']
+    if dupes:
+        dupe_strs = [f'{v.session_id} (of {v.duplicate_of})' for v in dupes]
+        click.echo(f'    duplicate ({len(dupes)}): {", ".join(dupe_strs)}')
+
+    wet_ids = [str(v.session_id) for v in ds.sessions_for('wet')]
+    if wet_ids:
+        click.echo(f'    wet sessions: {", ".join(wet_ids)}')
+
+    if ds.included:
+        users = ', '.join(f'{u}: {n} sessions'
+                          for u, n in ds.user_counts.items())
+        click.echo(f'  users: {len(ds.user_counts)} ({users})')
+
+    click.echo(f'  provisional laps: {ds.provisional_laps()} '
+               f'(dry {ds.provisional_laps("dry")}, '
+               f'wet {ds.provisional_laps("wet")})')
+
+    if ds.devices:
+        click.echo(f'  devices: {", ".join(ds.devices)}')
+
+    date_range = ds.date_range
+    if date_range:
+        click.echo(f'  date range: {date_range[0]} -> {date_range[1]}')
+
+    click.echo()
