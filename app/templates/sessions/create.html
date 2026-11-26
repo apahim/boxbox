@@ -58,8 +58,8 @@
                         <!-- RaceChrono file input -->
                         <div id="racechrono-input" style="display:none;">
                             <label class="form-label">Telemetry CSV</label>
-                            {{ form.csv_file(class="form-control", id="csv-file") }}
-                            <div class="form-text">RaceChrono v3 CSV export</div>
+                            {{ form.csv_file(class="form-control", id="csv-file", accept=".csv,text/csv") }}
+                            <div class="form-text">RaceChrono v3 CSV export. On Android, save the export to Downloads (or share it to Files) before picking it here.</div>
                             <div id="rc-file-info" class="mt-2" style="display:none;">
                                 <span class="badge bg-info"><i class="bi bi-file-earmark-text"></i> <span id="rc-filename"></span></span>
                             </div>
@@ -68,7 +68,7 @@
                         <!-- GoPro file input + extraction -->
                         <div id="gopro-input" style="display:none;">
                             <label class="form-label">GoPro Video</label>
-                            <input type="file" class="form-control" id="gopro-file" accept=".mp4,.MP4" multiple>
+                            <input type="file" class="form-control" id="gopro-file" accept=".mp4,video/mp4" multiple>
                             <div class="form-text">GoPro Hero with GPS enabled. Select all chapter files from the same session (e.g., GX010001.MP4, GX020001.MP4). Only telemetry is extracted — the video stays on your device.</div>
 
                             <div id="gopro-progress" class="mt-3" style="display:none;">
@@ -710,6 +710,18 @@ function buildReview() {
 }
 
 // ---- Upload ----
+function formatUploadError(err) {
+    var msg = err.error || 'Upload failed. Please try again.';
+    if (err.fields) {
+        var fieldMsgs = [];
+        for (var f in err.fields) {
+            if (err.fields[f] && err.fields[f].length) fieldMsgs.push(err.fields[f][0]);
+        }
+        if (fieldMsgs.length) msg = fieldMsgs.join(' ');
+    }
+    return msg;
+}
+
 var uploadStages = [
     { pct: 10, text: 'Uploading file\u2026' },
     { pct: 25, text: 'Parsing telemetry\u2026' },
@@ -788,7 +800,7 @@ document.getElementById('btn-upload').addEventListener('click', async function()
             progressBar.style.width = '100%';
             progressBar.classList.add('bg-danger');
             stageText.textContent = '';
-            errorDiv.textContent = err.error || 'Upload failed. Please try again.';
+            errorDiv.textContent = formatUploadError(err);
             errorDiv.style.display = '';
             retryBtn.style.display = '';
         }
