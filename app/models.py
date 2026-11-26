@@ -43,6 +43,37 @@ class Track(db.Model):
                               cascade='all, delete-orphan',
                               order_by='TrackCorner.sort_order')
     sessions = db.relationship('Session', backref='track', lazy='dynamic')
+    configs = db.relationship('TrackConfig', backref='track', lazy='dynamic',
+                              cascade='all, delete-orphan')
+
+
+class TrackConfig(db.Model):
+    """A track layout (configuration) that sessions are grouped into.
+
+    Created manually by an admin from clustering proposals (Phase 2 of
+    the Track DNA plan); membership is persistent and only ever changes
+    via admin action (decision D10).
+    """
+    __tablename__ = 'track_configs'
+
+    id = db.Column(db.Integer, primary_key=True)
+    track_id = db.Column(db.Integer, db.ForeignKey('tracks.id'),
+                         nullable=False, index=True)
+    name = db.Column(db.String(100), nullable=False)
+    direction = db.Column(db.String(3), nullable=False)  # 'cw' | 'ccw'
+    created_by = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+    confirmed = db.Column(db.Boolean, default=True, nullable=False,
+                          server_default='true')
+    created_at = db.Column(db.DateTime,
+                           default=lambda: datetime.now(timezone.utc))
+
+    __table_args__ = (
+        db.UniqueConstraint('track_id', 'name', name='uq_track_config_name'),
+    )
+
+    # No cascade: deleting a config nulls member sessions' track_config_id
+    # first (routes do this explicitly) and must never delete sessions.
+    sessions = db.relationship('Session', backref='track_config', lazy='dynamic')
 
 
 class TrackCorner(db.Model):
@@ -72,6 +103,8 @@ class Session(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
     track_id = db.Column(db.Integer, db.ForeignKey('tracks.id'), nullable=True)
+    track_config_id = db.Column(db.Integer, db.ForeignKey('track_configs.id'),
+                                nullable=True, index=True)
     date = db.Column(db.Date, nullable=False)
     session_start = db.Column(db.String(10))
 

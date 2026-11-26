@@ -8,7 +8,8 @@ from sqlalchemy import func
 from app import db
 from app.tracks import bp
 from app.tracks.forms import TrackForm
-from app.models import Track, TrackCorner, Session, Telemetry, User, visible_tracks_for_user
+from app.models import (Track, TrackConfig, TrackCorner, Session, Telemetry,
+                        User, visible_tracks_for_user)
 
 
 def _slugify(name):
@@ -303,6 +304,26 @@ def edit(track_id):
             if creator:
                 creator_name = creator.display_name
 
+    # Track DNA configurations (Phase 2)
+    config_rows = (TrackConfig.query.filter_by(track_id=track.id)
+                   .order_by(TrackConfig.id).all())
+    config_session_counts = dict(
+        db.session.query(Session.track_config_id, func.count(Session.id))
+        .filter(Session.track_id == track.id,
+                Session.track_config_id.isnot(None))
+        .group_by(Session.track_config_id)
+        .all()
+    )
+    configs_list = [
+        {
+            'id': c.id,
+            'name': c.name,
+            'direction': c.direction,
+            'session_count': config_session_counts.get(c.id, 0),
+        }
+        for c in config_rows
+    ]
+
     return render_template('tracks/edit.html',
                            track=track,
                            corners=corners_list,
@@ -315,7 +336,8 @@ def edit(track_id):
                            is_owner=is_owner,
                            is_official=is_official,
                            can_edit=can_edit,
-                           creator_name=creator_name)
+                           creator_name=creator_name,
+                           configs=configs_list)
 
 
 @bp.route('/<int:track_id>/delete', methods=['POST'])
@@ -372,6 +394,183 @@ def assign_sessions(track_id):
 
     db.session.commit()
     return jsonify(ok=True, count=count)
+
+
+# ---- Track configurations (Track DNA Phase 2) ----
+#
+# Note: unlike assign-sessions (own sessions only), these endpoints manage
+# any session on the track when the acting user can edit the track (owner,
+# or admin on an official track) — configuration membership is track
+# management, not session ownership.
+
+def _can_edit_track(track):
+    """Same edit permission as the tracks edit page."""
+    is_official = (track.created_by is None)
+    is_owner = (track.created_by == current_user.id) and not is_official
+    return is_owner or (is_official and current_user.is_admin)
+
+
+def _get_config_or_404(track, config_id):
+    config = TrackConfig.query.filter_by(id=config_id,
+                                         track_id=track.id).first()
+    if config is None:
+        abort(404)
+    return config
+
+
+@bp.route('/<int:track_id>/configs/proposals', methods=['GET'])
+@login_required
+def config_proposals(track_id):
+    """Detect proposed layout configurations from session telemetry."""
+    track = db.session.get(Track, track_id)
+    if not track:
+        abort(404)
+    if not _can_edit_track(track):
+        return jsonify(error='You do not have permission to manage this track.'), 403
+
+    from app.track_dna.configs import proposals_payload
+
+    payload = proposals_payload(track.id)
+    if payload is None:
+        abort(404)
+    return jsonify(payload)
+
+
+@bp.route('/<int:track_id>/configs/create', methods=['POST'])
+@login_required
+def create_config(track_id):
+    track = db.session.get(Track, track_id)
+    if not track:
+        abort(404)
+    if not _can_edit_track(track):
+        return jsonify(error='You do not have permission to manage this track.'), 403
+
+    data = request.get_json(silent=True) or {}
+    session_ids = data.get('session_ids')
+    name = (data.get('name') or '').strip()
+    direction = data.get('direction')
+
+    if not isinstance(session_ids, list) or not session_ids:
+        return jsonify(error='session_ids must be a non-empty list.'), 400
+    try:
+        session_ids = [int(sid) for sid in session_ids]
+    except (TypeError, ValueError):
+        return jsonify(error='session_ids must be integers.'), 400
+    if direction not in ('cw', 'ccw'):
+        return jsonify(error='direction must be "cw" or "ccw".'), 400
+    if not name:
+        name = f'{direction.upper()} layout'
+    if len(name) > 100:
+        return jsonify(error='Name must be at most 100 characters.'), 400
+
+    sessions = Session.query.filter(Session.id.in_(session_ids),
+                                    Session.track_id == track.id).all()
+    if len(sessions) != len(set(session_ids)):
+        return jsonify(error='All sessions must belong to this track.'), 400
+
+    # Auto-names collide on a second layout of the same direction —
+    # suffix numerically rather than erroring.
+    existing_names = {c.name for c in
+                      TrackConfig.query.filter_by(track_id=track.id).all()}
+    if name in existing_names:
+        suffix = 2
+        while f'{name} {suffix}' in existing_names:
+            suffix += 1
+        name = f'{name} {suffix}'
+
+    config = TrackConfig(track_id=track.id, name=name, direction=direction,
+                         created_by=current_user.id, confirmed=True)
+    db.session.add(config)
+    db.session.flush()
+    for session in sessions:
+        session.track_config_id = config.id
+    db.session.commit()
+
+    return jsonify(ok=True, config_id=config.id, name=name,
+                   count=len(sessions))
+
+
+@bp.route('/<int:track_id>/configs/<int:config_id>/rename', methods=['POST'])
+@login_required
+def rename_config(track_id, config_id):
+    track = db.session.get(Track, track_id)
+    if not track:
+        abort(404)
+    if not _can_edit_track(track):
+        return jsonify(error='You do not have permission to manage this track.'), 403
+
+    config = _get_config_or_404(track, config_id)
+    data = request.get_json(silent=True) or {}
+    name = (data.get('name') or '').strip()
+
+    if not name:
+        return jsonify(error='Name is required.'), 400
+    if len(name) > 100:
+        return jsonify(error='Name must be at most 100 characters.'), 400
+    clash = TrackConfig.query.filter(TrackConfig.track_id == track.id,
+                                     TrackConfig.name == name,
+                                     TrackConfig.id != config.id).first()
+    if clash:
+        return jsonify(error='A configuration with that name already exists.'), 409
+
+    config.name = name
+    db.session.commit()
+    return jsonify(ok=True)
+
+
+@bp.route('/<int:track_id>/configs/<int:config_id>/delete', methods=['POST'])
+@login_required
+def delete_config(track_id, config_id):
+    track = db.session.get(Track, track_id)
+    if not track:
+        abort(404)
+    if not _can_edit_track(track):
+        return jsonify(error='You do not have permission to manage this track.'), 403
+
+    config = _get_config_or_404(track, config_id)
+
+    # Null membership first: deleting a configuration must never delete
+    # the sessions themselves.
+    Session.query.filter_by(track_config_id=config.id).update(
+        {'track_config_id': None},
+    )
+    db.session.delete(config)
+    db.session.commit()
+    return jsonify(ok=True)
+
+
+@bp.route('/<int:track_id>/configs/assign', methods=['POST'])
+@login_required
+def assign_config(track_id):
+    """Move sessions between configurations (or to none with config_id null)."""
+    track = db.session.get(Track, track_id)
+    if not track:
+        abort(404)
+    if not _can_edit_track(track):
+        return jsonify(error='You do not have permission to manage this track.'), 403
+
+    data = request.get_json(silent=True) or {}
+    session_ids = data.get('session_ids')
+    config_id = data.get('config_id')
+
+    if not isinstance(session_ids, list) or not session_ids:
+        return jsonify(error='session_ids must be a non-empty list.'), 400
+    try:
+        session_ids = [int(sid) for sid in session_ids]
+    except (TypeError, ValueError):
+        return jsonify(error='session_ids must be integers.'), 400
+    if config_id is not None:
+        _get_config_or_404(track, config_id)
+
+    sessions = Session.query.filter(Session.id.in_(session_ids),
+                                    Session.track_id == track.id).all()
+    if len(sessions) != len(set(session_ids)):
+        return jsonify(error='All sessions must belong to this track.'), 400
+
+    for session in sessions:
+        session.track_config_id = config_id
+    db.session.commit()
+    return jsonify(ok=True, count=len(sessions))
 
 
 @bp.route('/<int:track_id>/make-official', methods=['POST'])
