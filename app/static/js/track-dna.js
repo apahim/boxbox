@@ -22,7 +22,7 @@ window.TrackDNA = (function() {
 
     var stripCursor = null;      // lap-strip replay cursor element
     var replay = { raf: null, playing: false, speed: 1, marker: null,
-                   played: 0, t0: 0, btn: null };
+                   played: 0, t0: 0, btn: null, map: null };
 
     var PLOTLY_SRC = "https://cdn.plot.ly/plotly-3.4.0.min.js";
     var PLOTLY_INTEGRITY = "sha384-pFOQ7loGBChmUyS4Tszy+he8OWeYkwTFjc2xii4aJUWWiGwf2u2OEc04T5iDRpMp";
@@ -448,6 +448,13 @@ window.TrackDNA = (function() {
         btn.addEventListener("click", function() { toggleReplay(); });
     }
 
+    function setMapInteraction(map, enabled) {
+        if (!map) return;
+        map.isScrollEnabled = enabled;
+        map.isZoomEnabled = enabled;
+        map.isRotationEnabled = enabled;
+    }
+
     function currentReplayElapsed() {
         if (!replay.playing) return replay.played;
         return replay.played + (performance.now() - replay.t0) / 1000
@@ -459,6 +466,7 @@ window.TrackDNA = (function() {
             replay.played = currentReplayElapsed();
             replay.playing = false;
             cancelAnimationFrame(replay.raf);
+            setMapInteraction(replay.map, true);
             replay.btn.innerHTML = '<i class="bi bi-play-fill"></i>'
                 + ' Resume';
             return;
@@ -471,6 +479,8 @@ window.TrackDNA = (function() {
         var traj = card.support && card.support.trajectory;
         var L = traj.length_m;
         withTrackMap(function(tm) {
+            replay.map = tm.map;
+            setMapInteraction(tm.map, false);
             if (!replay.marker) {
                 replay.marker = new mapkit.Annotation(
                     new mapkit.Coordinate(traj.points[0][1],
@@ -504,8 +514,14 @@ window.TrackDNA = (function() {
                 }
                 var s = elapsed * L / lap;
                 var pos = trajAt(traj.points, s);
-                if (pos) replay.marker.coordinate =
-                    new mapkit.Coordinate(pos.lat, pos.lon);
+                if (pos) {
+                    replay.marker.coordinate =
+                        new mapkit.Coordinate(pos.lat, pos.lon);
+                    // keep the dot visible when zoomed in: follow it
+                    // (same as the race line comparison)
+                    tm.map.setCenterAnimated(replay.marker.coordinate,
+                                             false);
+                }
                 if (stripCursor)
                     stripCursor.style.left = (s / L * 100) + "%";
                 replay.raf = requestAnimationFrame(frame);
@@ -518,6 +534,7 @@ window.TrackDNA = (function() {
         replay.playing = false;
         cancelAnimationFrame(replay.raf);
         replay.played = 0;
+        setMapInteraction(replay.map, true);
         if (replay.marker) replay.marker.visible = false;
         if (stripCursor) stripCursor.style.display = "none";
         replay.btn.innerHTML = '<i class="bi bi-play-fill"></i>'
