@@ -404,12 +404,36 @@ def test_detail_page_has_dna_shell_official_only(app, client):
     assert 'id="track-dna"' in body
     assert 'track-dna.js' in body
     assert f'data-track-id="{track_id}"' in body
+    # you-vs-reference hook + no badge without a card
+    assert 'data-user-best-lap=' in body
+    assert 'class="track-badge"' not in body
 
     # personal tracks carry no DNA section at all
     resp = client.get(f'/tracks/{personal_id}')
     assert resp.status_code == 200
     body = resp.get_data(as_text=True)
     assert 'id="track-dna"' not in body
+
+
+def test_detail_page_badge_with_card(app, client):
+    """With a computed card the header carries the generated circuit
+    badge (server-side, from the stored trajectory)."""
+    with app.app_context():
+        admin, track, session = _seed_official()
+        _set_reference(track, session)
+        from app.track_dna.cards import build_card
+
+        assert build_card(track.id)[0] is not None
+        db.session.commit()
+        track_id, admin_id = track.id, admin.id
+
+    _login(client, admin_id)
+    resp = client.get(f'/tracks/{track_id}')
+    assert resp.status_code == 200
+    body = resp.get_data(as_text=True)
+    assert 'class="track-badge"' in body
+    assert 'track-badge-svg' in body
+    assert '<path d="M ' in body
 
 
 def test_edit_page_shows_picker_for_admin(app, client):

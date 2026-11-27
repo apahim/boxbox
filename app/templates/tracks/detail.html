@@ -21,6 +21,44 @@
     @media (max-width: 576px) { #map-container { height: 280px; } }
     .section-heading { font-size: 0.95rem; font-weight: 600; margin: 1.5rem 0 0.75rem; display: flex; align-items: center; gap: 6px; }
     .dna-elevation { width: 100%; height: 240px; }
+    .track-badge { display: inline-flex; color: var(--bb-text-muted); }
+    .track-badge svg { width: 42px; height: 42px; }
+
+    /* lap strip: the circuit unrolled, 0 -> lap length */
+    .dna-strip { position: relative; height: 88px; margin-top: 4px;
+        user-select: none; }
+    .dna-strip svg { position: absolute; inset: 0; width: 100%; height: 60px; }
+    .dna-strip .strip-label { position: absolute; transform: translateX(-50%);
+        font-size: 0.62rem; font-weight: 600; color: var(--bb-text-muted);
+        pointer-events: none; white-space: nowrap; }
+    .dna-strip .strip-label.zone { color: #e74c3c; top: 0; }
+    .dna-strip .strip-label.corner { bottom: 0; }
+    .dna-strip .strip-seg { cursor: pointer; }
+    .dna-strip .strip-seg:hover { opacity: 1 !important; }
+    .dna-strip-cursor { position: absolute; top: -4px; bottom: 18px; width: 2px;
+        background: #f59e0b; border-radius: 1px; box-shadow: 0 0 6px rgba(245,158,11,0.8);
+        pointer-events: none; display: none; }
+
+    /* DNA card loading skeleton */
+    .dna-skel .dna-skel-bar { height: 12px; border-radius: 6px;
+        background: var(--bb-surface-alt); margin-bottom: 10px;
+        animation: dna-skel-pulse 1.4s ease-in-out infinite; }
+    .dna-skel .dna-skel-bar:nth-child(2) { width: 75%; animation-delay: .15s; }
+    .dna-skel .dna-skel-bar:nth-child(3) { width: 55%; animation-delay: .3s; }
+    @keyframes dna-skel-pulse { 0%, 100% { opacity: .45; } 50% { opacity: 1; } }
+    @media (prefers-reduced-motion: reduce) {
+        .dna-skel .dna-skel-bar { animation: none; } }
+
+    /* replay marker on the map */
+    .dna-replay-marker { width: 14px; height: 14px; border-radius: 50%;
+        background: #f59e0b; border: 2px solid #fff;
+        box-shadow: 0 0 10px rgba(245,158,11,0.95); }
+
+    /* stat-box entrance: the hide state is JS-applied (.stat-anim)
+     * so boxes stay visible when scripts fail or are disabled */
+    .stat-box.stat-anim { opacity: 0; transform: translateY(6px);
+        transition: opacity .5s ease, transform .5s ease; }
+    .stat-box.stat-anim.stat-in { opacity: 1; transform: none; }
     .dna-summary { background: var(--bb-surface-alt); border: 1px solid var(--bb-border);
         border-radius: 8px; padding: 12px 14px; }
     .dna-headline { font-size: 0.95rem; font-weight: 600; }
@@ -58,6 +96,7 @@
 
 <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
     <h2 class="mb-0 d-flex align-items-center gap-2">
+        {% if dna_badge %}<span class="track-badge" title="Circuit outline">{{ dna_badge | safe }}</span>{% endif %}
         {{ track.name }}
         {% if is_official %}
         <span class="badge bg-success" style="font-size:0.65rem; font-weight:500;">Official</span>
@@ -115,7 +154,7 @@
 </div>
 
 {% if is_official %}
-<div id="track-dna" data-track-id="{{ track.id }}" hidden>
+<div id="track-dna" data-track-id="{{ track.id }}" data-user-best-lap="{{ best_lap if best_lap is not none else '' }}" hidden>
     <h5 class="section-heading"><i class="bi bi-fingerprint" style="color:var(--bb-blue)"></i> Track DNA</h5>
     <p class="text-muted" style="font-size:0.82rem;">
         Track character from the admin-selected reference lap — what the
@@ -260,6 +299,16 @@
                 map.addOverlay(new mapkit.PolylineOverlay(coords,
                     { style: new mapkit.Style(style) }));
             },
+            pulse: function(lat, lon) {
+                var ring = new mapkit.CircleOverlay(
+                    new mapkit.Coordinate(lat, lon), 18);
+                ring.style = new mapkit.Style({
+                    lineWidth: 2, strokeColor: '#f59e0b',
+                    strokeOpacity: 0.9, fillColor: '#f59e0b',
+                    fillOpacity: 0.15 });
+                map.addOverlay(ring);
+                setTimeout(function() { map.removeOverlay(ring); }, 1200);
+            },
             refit: function(points) {
                 if (!points || !points.length) return;
                 var rl = points.map(function(p) { return p.lat; });
@@ -283,5 +332,47 @@
 
 </script>
 {% endif %}
+<script>
+(function() {
+    // stat-box entrance: count up plain numbers, fade in the rest —
+    // once, when the boxes first enter the viewport
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    var boxes = document.querySelectorAll('.stat-box');
+    boxes.forEach(function(b) { b.classList.add('stat-anim'); });
+    // safety: never leave boxes hidden if something goes wrong
+    setTimeout(function() {
+        boxes.forEach(function(b) { b.classList.add('stat-in'); });
+    }, 1500);
+    var seen = new WeakSet();
+    var io = new IntersectionObserver(function(entries) {
+        entries.forEach(function(entry) {
+            if (!entry.isIntersecting || seen.has(entry.target)) return;
+            seen.add(entry.target);
+            var box = entry.target;
+            var value = box.querySelector('.stat-value');
+            var text = (value.textContent || '').trim();
+            var match = text.match(/^[\d.,]+$/);
+            if (match) {
+                var target = parseFloat(text.replace(',', '.'));
+                var t0 = null;
+                var step = function(ts) {
+                    if (t0 === null) t0 = ts;
+                    var k = Math.min(1, (ts - t0) / 600);
+                    var eased = 1 - Math.pow(1 - k, 3);
+                    value.textContent = (target >= 100)
+                        ? Math.round(target * eased)
+                        : (target * eased).toFixed(
+                            text.indexOf('.') >= 0 ? 1 : 0);
+                    if (k < 1) requestAnimationFrame(step);
+                    else value.textContent = text;
+                };
+                requestAnimationFrame(step);
+            }
+            box.classList.add('stat-in');
+        });
+    }, { threshold: 0.4 });
+    boxes.forEach(function(b) { io.observe(b); });
+})();
+</script>
 <script src="{{ url_for('static', filename='js/track-dna.js') }}"></script>
 {% endblock %}

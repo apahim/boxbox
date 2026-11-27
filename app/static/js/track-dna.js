@@ -1,20 +1,35 @@
 /* Track DNA card section (reference-lap methodology).
  *
- * Fetches /api/tracks/<id>/dna and renders the card: the
- * interpretation block (headline, chips, blurb), dimension table,
- * DNA corner table, braking zones on the page's single MapKit map
- * (overlays added through the BBTrackMap handshake in detail.html)
- * and the elevation profile (Plotly, loaded on demand).
- * Tracks without a card show nothing — the section starts hidden and
- * is only revealed when a card exists.
+ * Fetches /api/tracks/<id>/dna and renders the card as an instrument
+ * panel: the interpretation block (headline, chips, blurb), the lap
+ * strip (the circuit unrolled: corners, braking zones, S/F), the DNA
+ * fingerprint radar (Plotly), the full dimension table (collapsed),
+ * the corner table, and the elevation profile. The reference lap is
+ * replayable on the page's single MapKit map (marker animated at
+ * lap-time pace, synced to a cursor on the lap strip).
+ *
+ * Cross-linking: hovering a lap-strip segment or a corner-table row
+ * pulses the matching point on the map.
+ *
+ * Tracks without a card show nothing — the section reveals a loading
+ * skeleton after 200ms and is removed again if no card exists.
  */
 window.TrackDNA = (function() {
     var container = null;
     var trackId = null;
     var card = null;
+    var userBestLap = null;
+
+    var stripCursor = null;      // lap-strip replay cursor element
+    var replay = { raf: null, playing: false, speed: 1, marker: null,
+                   played: 0, t0: 0, btn: null };
 
     var PLOTLY_SRC = "https://cdn.plot.ly/plotly-3.4.0.min.js";
     var PLOTLY_INTEGRITY = "sha384-pFOQ7loGBChmUyS4Tszy+he8OWeYkwTFjc2xii4aJUWWiGwf2u2OEc04T5iDRpMp";
+
+    var STRIP_W = 1000;          // strip viewBox width
+    var CORNER_COLORS = { slow: "#e74c3c", medium: "#f39c12",
+                          fast: "#2ecc71" };
 
     function api(path) {
         return fetch("/api/tracks/" + trackId + path,
@@ -29,6 +44,13 @@ window.TrackDNA = (function() {
         return node;
     }
 
+    function svgEl(tag, attrs) {
+        var node = document.createElementNS(
+            "http://www.w3.org/2000/svg", tag);
+        for (var k in attrs) node.setAttribute(k, attrs[k]);
+        return node;
+    }
+
     function hint(parent, text) {
         parent.appendChild(el("div", "text-muted", text));
     }
@@ -37,6 +59,13 @@ window.TrackDNA = (function() {
         if (value === null || value === undefined) return "—";
         return (typeof value === "number" ? +value.toFixed(2) : value)
             + (unit || "");
+    }
+
+    function fmtLap(t) {
+        if (t === null || t === undefined) return "—";
+        var m = Math.floor(t / 60);
+        var s = t - 60 * m;
+        return m + ":" + (s < 10 ? "0" : "") + s.toFixed(3);
     }
 
     /* s -> {lat, lon} by linear interpolation on the stored trajectory
@@ -58,9 +87,225 @@ window.TrackDNA = (function() {
                  lon: a[2] + frac * (b[2] - a[2]) };
     }
 
-    // ---- dimension table --------------------------------------------------------
+    function withTrackMap(fn) {
+        if (!window.BBTrackMapPromise) return;
+        window.BBTrackMapPromise.then(function(tm) { fn(tm); });
+    }
 
-    function renderDimensions(holder, card) {
+    function pulseAt(pos) {
+        if (!pos) return;
+        withTrackMap(function(tm) {
+            if (tm.pulse) tm.pulse(pos.lat, pos.lon);
+        });
+    }
+
+    // ---- interpretation block ------------------------------------------------------
+
+    function renderSummary(body, card) {
+        var sum = card.summary;
+        if (!sum) return;
+        var block = el("div", "dna-summary mb-3");
+        if (sum.headline) {
+            block.appendChild(el("div", "dna-headline", sum.headline));
+        }
+        if (sum.chips && sum.chips.length) {
+            var chips = el("div", "d-flex flex-wrap gap-1 mt-2");
+            sum.chips.forEach(function(text) {
+                chips.appendChild(el("span",
+                    "badge bg-secondary-subtle text-secondary-emphasis "
+                    + "border border-secondary-subtle dna-chip", text));
+            });
+            block.appendChild(chips);
+        }
+        if (sum.blurb) {
+            block.appendChild(el("div", "dna-blurb mt-2", sum.blurb));
+        }
+        body.appendChild(block);
+    }
+
+    // ---- you vs the reference lap --------------------------------------------------
+
+    function renderComparison(meta, card) {
+        var lap = card.dataset && card.dataset.lap_time_s;
+        if (!lap || !userBestLap) return;
+        var deltaPct = (userBestLap - lap) / lap * 100.0;
+        var line = el("div",
+            deltaPct <= 0 ? "text-success" : "text-warning");
+        line.textContent = "Reference " + lap.toFixed(2) + "s · your best "
+            + fmtLap(userBestLap) + " ("
+            + (deltaPct <= 0 ? "" : "+") + deltaPct.toFixed(1) + "%)";
+        meta.appendChild(line);
+    }
+
+    // ---- lap strip: the circuit unrolled --------------------------------------------
+
+    function stripX(s, lengthM) {
+        var wrapped = ((s % lengthM) + lengthM) % lengthM;
+        return wrapped / lengthM * STRIP_W;
+    }
+
+    function stripRect(svg, x1, x2, y, h, fill, opacity, data) {
+        // a segment may wrap s=0: split into [x1, W] and [0, x2]
+        var spans = x2 > x1 ? [[x1, x2]] : [[x1, STRIP_W], [0, x2]];
+        var rects = [];
+        spans.forEach(function(span) {
+            if (span[1] - span[0] < 0.5) return;
+            var rect = svgEl("rect", {
+                x: span[0].toFixed(1), y: y,
+                width: (span[1] - span[0]).toFixed(1),
+                height: h, rx: 2, fill: fill, opacity: opacity,
+                "class": "strip-seg" });
+            for (var k in data) rect.dataset[k] = data[k];
+            svg.appendChild(rect);
+            rects.push(rect);
+        });
+        return rects;
+    }
+
+    function renderLapStrip(body, card) {
+        var traj = card.support && card.support.trajectory;
+        var corners = (card.support.consensus
+            && card.support.consensus.corners) || [];
+        var braking = card.support.braking || {};
+        var zones = braking.zones || [];
+        var minors = braking.minor_zones || [];
+        if (!traj || !traj.points || !traj.points.length
+            || !(traj.length_m > 0)) return;
+        var L = traj.length_m;
+
+        var holder = el("div");
+        body.appendChild(holder);
+        holder.appendChild(el("h6", "mt-3 mb-2", "Lap"));
+
+        var strip = el("div", "dna-strip");
+        holder.appendChild(strip);
+
+        var svg = svgEl("svg", { viewBox: "0 0 " + STRIP_W + " 60",
+            preserveAspectRatio: "none" });
+        strip.appendChild(svg);
+
+        // base band: the straights
+        svg.appendChild(svgEl("rect", {
+            x: 0, y: 24, width: STRIP_W, height: 12, rx: 3,
+            fill: "rgba(128,128,128,0.22)" }));
+
+        // S/F line at s=0
+        svg.appendChild(svgEl("line", {
+            x1: 0.5, y1: 12, x2: 0.5, y2: 48,
+            stroke: "#2ecc71", "stroke-width": 2, "stroke-dasharray": "4 3",
+            "vector-effect": "non-scaling-stroke" }));
+
+        var labels = el("div");
+        labels.style.position = "absolute";
+        labels.style.inset = "0";
+        strip.appendChild(labels);
+
+        function label(text, s, cls) {
+            var node = el("span", "strip-label " + cls, text);
+            node.style.left = (stripX(s, L) / STRIP_W * 100) + "%";
+            labels.appendChild(node);
+        }
+
+        function wireHover(node, type, idx, pos) {
+            node.addEventListener("mouseenter", function() {
+                pulseAt(pos);
+                var row = document.getElementById("dna-corner-" + idx);
+                if (type === "corner" && row) row.classList.add("table-active");
+            });
+            node.addEventListener("mouseleave", function() {
+                var row = document.getElementById("dna-corner-" + idx);
+                if (type === "corner" && row)
+                    row.classList.remove("table-active");
+            });
+        }
+
+        // corner blocks, colored by class
+        corners.forEach(function(c, i) {
+            var color = CORNER_COLORS[c.class] || "#f39c12";
+            var x1 = stripX(c.s_start, L), x2 = stripX(c.s_end, L);
+            var apex = trajAt(traj.points, c.s_apex);
+            var blocks = stripRect(svg, x1, x2, 20, 20, color, 0.8,
+                { type: "corner", index: i + 1 });
+            blocks.forEach(function(node) {
+                wireHover(node, "corner", i + 1, apex);
+            });
+            label("C" + (i + 1), c.s_apex, "corner d-none d-sm-block");
+        });
+
+        // braking zones: intensity markers at s_trough
+        function zoneMarker(z, i, minor) {
+            var x = stripX(z.s_trough, L);
+            var w = Math.max(5, (z.reduction_pct || 30) / 100 * 22);
+            var pos = trajAt(traj.points, z.s_trough);
+            var rect = svgEl("rect", {
+                x: (x - w / 2).toFixed(1), y: 8, width: w.toFixed(1),
+                height: 44, rx: 3,
+                fill: minor ? "#e67e22" : "#e74c3c",
+                opacity: minor ? 0.35 : 0.55,
+                "class": "strip-seg" });
+            rect.dataset.type = "zone";
+            svg.appendChild(rect);
+            wireHover(rect, "zone", 0, pos);
+            if (!minor) label("B" + (i + 1), z.s_trough, "zone");
+        }
+        zones.forEach(function(z, i) { zoneMarker(z, i, false); });
+        minors.forEach(function(z) { zoneMarker(z, -1, true); });
+
+        // replay cursor (positioned by the replay loop)
+        stripCursor = el("div", "dna-strip-cursor");
+        strip.appendChild(stripCursor);
+    }
+
+    // ---- DNA fingerprint radar -------------------------------------------------------
+
+    function renderRadar(body, card) {
+        var dims = (card.dimensions || []).filter(function(d) {
+            return d.score !== null && d.score !== undefined;
+        });
+        if (dims.length < 3) return;      // not enough axes to read
+        var chartDiv = el("div", "dna-radar");
+        chartDiv.style.height = "300px";
+        body.appendChild(chartDiv);
+        var r = dims.map(function(d) { return d.score; });
+        var theta = dims.map(function(d) { return d.display; });
+        r.push(r[0]); theta.push(theta[0]);
+        Plotly.react(chartDiv, [{
+            type: "scatterpolar", r: r, theta: theta, fill: "toself",
+            line: { color: "#3b82f6", width: 2 },
+            marker: { size: 4, color: "#3b82f6" },
+            hovertemplate: "%{theta}: %{r:.1f}/10<extra></extra>"
+        }], {
+            polar: {
+                bgcolor: "transparent",
+                radialaxis: { range: [0, 10], showticklabels: false,
+                              gridcolor: "rgba(128,128,128,0.15)" },
+                angularaxis: { direction: "clockwise", rotation: 90,
+                               gridcolor: "rgba(128,128,128,0.15)",
+                               tickfont: { size: 9 } }
+            },
+            margin: { l: 70, r: 70, t: 30, b: 30 },
+            paper_bgcolor: "transparent",
+            font: { size: 10, color: "#adb5bd" },
+            showlegend: false
+        }, { displayModeBar: false, responsive: true });
+    }
+
+    // ---- dimension table (collapsed) --------------------------------------------------
+
+    function renderDimensions(body, card) {
+        var toggle = el("button",
+            "btn btn-sm btn-outline-secondary mt-3 mb-2");
+        toggle.type = "button";
+        toggle.setAttribute("data-bs-toggle", "collapse");
+        toggle.setAttribute("data-bs-target", "#dna-dims");
+        toggle.setAttribute("aria-expanded", "false");
+        toggle.innerHTML = '<i class="bi bi-table"></i> All dimensions';
+        body.appendChild(toggle);
+
+        var col = el("div", "collapse");
+        col.id = "dna-dims";
+        body.appendChild(col);
+
         var wrap = el("div", "table-responsive");
         var table = el("table", "table table-hover table-sm mb-0");
         var thead = el("thead");
@@ -80,15 +325,18 @@ window.TrackDNA = (function() {
         });
         table.appendChild(tbody);
         wrap.appendChild(table);
-        holder.appendChild(wrap);
+        col.appendChild(wrap);
     }
 
-    // ---- corner table -----------------------------------------------------------
+    // ---- corner table -----------------------------------------------------------------
 
-    function renderCorners(holder, card) {
+    function renderCorners(body, card) {
+        var traj = card.support && card.support.trajectory;
         var corners = card.support && card.support.consensus
             && card.support.consensus.corners;
         if (!corners || !corners.length) return;
+        var holder = el("div");
+        body.appendChild(holder);
         holder.appendChild(el("h6", "mt-3 mb-2", "Corners"));
         var wrap = el("div", "table-responsive");
         var table = el("table", "table table-hover table-sm mb-0");
@@ -100,6 +348,7 @@ window.TrackDNA = (function() {
         var tbody = el("tbody");
         corners.forEach(function(c, i) {
             var tr = el("tr");
+            tr.id = "dna-corner-" + (i + 1);
             tr.appendChild(el("td", null, "C" + (i + 1)));
             tr.appendChild(el("td", null, c.class || "—"));
             tr.appendChild(el("td", null, c.radius_m === null
@@ -108,6 +357,10 @@ window.TrackDNA = (function() {
             tr.appendChild(el("td", null, c.sign < 0 ? "Right" : "Left"));
             tr.appendChild(el("td", "d-none d-md-table-cell",
                 c.s_start + "–" + c.s_end + " m"));
+            // hovering the row pulses the apex on the map
+            tr.addEventListener("mouseenter", function() {
+                pulseAt(trajAt(traj.points, c.s_apex));
+            });
             tbody.appendChild(tr);
         });
         table.appendChild(tbody);
@@ -116,17 +369,11 @@ window.TrackDNA = (function() {
     }
 
     // ---- map overlays: trajectory + braking zones on the page map -----------------
-    //
-    // The page has ONE map (detail.html's #map-container, showing the
-    // S/F gate and corner trap lines). The DNA card adds its overlays
-    // to it through the BBTrackMap handshake; without a map (no MapKit
-    // token) the card renders fine, just without map layers.
 
     function addDnaOverlays(card) {
         var traj = card.support && card.support.trajectory;
         if (!traj || !traj.points || !traj.points.length) return;
-        if (!window.BBTrackMapPromise) return;
-        window.BBTrackMapPromise.then(function(tm) {
+        withTrackMap(function(tm) {
             // trajectory (the reference lap's line), loop closed
             // implicitly
             var coords = traj.points.map(function(p) {
@@ -161,6 +408,128 @@ window.TrackDNA = (function() {
         });
     }
 
+    // ---- reference-lap replay ---------------------------------------------------------
+
+    function renderReplayControls(body, card) {
+        var lap = card.dataset && card.dataset.lap_time_s;
+        var traj = card.support && card.support.trajectory;
+        var canReplay = !!(lap && traj && traj.points.length
+            && window.BBTrackMapPromise);
+
+        var wrap = el("div", "d-flex align-items-center gap-2 mb-3");
+        var btn = el("button", "btn btn-sm "
+            + (canReplay ? "btn-outline-warning" : "btn-outline-secondary"));
+        btn.type = "button";
+        btn.disabled = !canReplay;
+        btn.innerHTML = '<i class="bi bi-play-fill"></i> Replay reference lap';
+        if (!canReplay) btn.title = "Needs a map and a stored lap time";
+        wrap.appendChild(btn);
+        replay.btn = btn;
+
+        var speed = el("select", "form-select form-select-sm");
+        speed.style.width = "auto";
+        [[1, "1×"], [2, "2×"], [4, "4×"]].forEach(function(opt) {
+            var o = el("option", null, opt[1]);
+            o.value = String(opt[0]);
+            speed.appendChild(o);
+        });
+        speed.addEventListener("change", function() {
+            // restart the elapsed clock at the current position
+            if (replay.playing) {
+                replay.played = currentReplayElapsed();
+                replay.t0 = performance.now();
+            }
+            replay.speed = parseInt(speed.value, 10);
+        });
+        wrap.appendChild(speed);
+        if (!canReplay) speed.disabled = true;
+        body.appendChild(wrap);
+
+        btn.addEventListener("click", function() { toggleReplay(); });
+    }
+
+    function currentReplayElapsed() {
+        if (!replay.playing) return replay.played;
+        return replay.played + (performance.now() - replay.t0) / 1000
+            * replay.speed;
+    }
+
+    function toggleReplay() {
+        if (replay.playing) {
+            replay.played = currentReplayElapsed();
+            replay.playing = false;
+            cancelAnimationFrame(replay.raf);
+            replay.btn.innerHTML = '<i class="bi bi-play-fill"></i>'
+                + ' Resume';
+            return;
+        }
+        startReplay();
+    }
+
+    function startReplay() {
+        var lap = card.dataset && card.dataset.lap_time_s;
+        var traj = card.support && card.support.trajectory;
+        var L = traj.length_m;
+        withTrackMap(function(tm) {
+            if (!replay.marker) {
+                replay.marker = new mapkit.Annotation(
+                    new mapkit.Coordinate(traj.points[0][1],
+                                          traj.points[0][2]),
+                    function() {
+                        var node = document.createElement("div");
+                        node.className = "dna-replay-marker";
+                        return node;
+                    },
+                    { draggable: false, enabled: false,
+                      displayPriority:
+                          mapkit.Annotation.DisplayPriority.Required });
+                tm.map.addAnnotation(replay.marker);
+            }
+            replay.marker.visible = true;
+            replay.playing = true;
+            replay.t0 = performance.now();
+            replay.btn.innerHTML = '<i class="bi bi-pause-fill"></i>'
+                + ' Pause';
+            if (stripCursor) stripCursor.style.display = "block";
+            pulseAt({ lat: traj.points[0][1],        // S/F flash
+                      lon: traj.points[0][2] });
+
+            function frame(now) {
+                if (!replay.playing) return;
+                var elapsed = replay.played
+                    + (now - replay.t0) / 1000 * replay.speed;
+                if (elapsed >= lap) {
+                    stopReplay(true);
+                    return;
+                }
+                var s = elapsed * L / lap;
+                var pos = trajAt(traj.points, s);
+                if (pos) replay.marker.coordinate =
+                    new mapkit.Coordinate(pos.lat, pos.lon);
+                if (stripCursor)
+                    stripCursor.style.left = (s / L * 100) + "%";
+                replay.raf = requestAnimationFrame(frame);
+            }
+            replay.raf = requestAnimationFrame(frame);
+        });
+    }
+
+    function stopReplay(finished) {
+        replay.playing = false;
+        cancelAnimationFrame(replay.raf);
+        replay.played = 0;
+        if (replay.marker) replay.marker.visible = false;
+        if (stripCursor) stripCursor.style.display = "none";
+        replay.btn.innerHTML = '<i class="bi bi-play-fill"></i>'
+            + ' Replay reference lap';
+        if (finished) {
+            var traj = card.support && card.support.trajectory;
+            if (traj && traj.points.length)
+                pulseAt({ lat: traj.points[0][1],
+                          lon: traj.points[0][2] });
+        }
+    }
+
     // ---- elevation profile --------------------------------------------------------
 
     function loadPlotly(cb, holder) {
@@ -171,7 +540,7 @@ window.TrackDNA = (function() {
         script.crossOrigin = "anonymous";
         script.onload = cb;
         script.onerror = function() {
-            if (holder) hint(holder, "Elevation chart unavailable "
+            if (holder) hint(holder, "Charts unavailable "
                 + "(Plotly failed to load).");
         };
         document.head.appendChild(script);
@@ -184,49 +553,23 @@ window.TrackDNA = (function() {
         holder.appendChild(el("h6", "mt-3 mb-2", "Elevation Profile"));
         var chartDiv = el("div", "dna-elevation");
         holder.appendChild(chartDiv);
-        loadPlotly(function() {
-            var xs = profile.points.map(function(p) { return p[0]; });
-            var ys = profile.points.map(function(p) { return p[1]; });
-            Plotly.react(chartDiv, [{
-                x: xs, y: ys, mode: "lines",
-                line: { color: "#3b82f6", width: 2, shape: "spline" },
-                fill: "tozeroy", fillcolor: "rgba(59,130,246,0.08)"
-            }], {
-                margin: { l: 45, r: 10, t: 10, b: 32 },
-                xaxis: { title: { text: "Distance (m)" },
-                         gridcolor: "rgba(128,128,128,0.15)" },
-                yaxis: { title: { text: "Elevation (m)" },
-                         gridcolor: "rgba(128,128,128,0.15)" },
-                paper_bgcolor: "transparent",
-                plot_bgcolor: "transparent",
-                font: { size: 11 },
-                showlegend: false
-            }, { displayModeBar: false, responsive: true });
-        }, holder);
-    }
-
-    // ---- interpretation block ------------------------------------------------------
-
-    function renderSummary(body, card) {
-        var sum = card.summary;
-        if (!sum) return;
-        var block = el("div", "dna-summary mb-3");
-        if (sum.headline) {
-            block.appendChild(el("div", "dna-headline", sum.headline));
-        }
-        if (sum.chips && sum.chips.length) {
-            var chips = el("div", "d-flex flex-wrap gap-1 mt-2");
-            sum.chips.forEach(function(text) {
-                chips.appendChild(el("span",
-                    "badge bg-secondary-subtle text-secondary-emphasis "
-                    + "border border-secondary-subtle dna-chip", text));
-            });
-            block.appendChild(chips);
-        }
-        if (sum.blurb) {
-            block.appendChild(el("div", "dna-blurb mt-2", sum.blurb));
-        }
-        body.appendChild(block);
+        var xs = profile.points.map(function(p) { return p[0]; });
+        var ys = profile.points.map(function(p) { return p[1]; });
+        Plotly.react(chartDiv, [{
+            x: xs, y: ys, mode: "lines",
+            line: { color: "#3b82f6", width: 2, shape: "spline" },
+            fill: "tozeroy", fillcolor: "rgba(59,130,246,0.08)"
+        }], {
+            margin: { l: 45, r: 10, t: 10, b: 32 },
+            xaxis: { title: { text: "Distance (m)" },
+                     gridcolor: "rgba(128,128,128,0.15)" },
+            yaxis: { title: { text: "Elevation (m)" },
+                     gridcolor: "rgba(128,128,128,0.15)" },
+            paper_bgcolor: "transparent",
+            plot_bgcolor: "transparent",
+            font: { size: 11 },
+            showlegend: false
+        }, { displayModeBar: false, responsive: true });
     }
 
     // ---- card rendering ---------------------------------------------------------
@@ -264,6 +607,7 @@ window.TrackDNA = (function() {
                 + (card.reference_error || "it will be re-picked");
             meta.appendChild(broken);
         }
+        renderComparison(meta, card);
         if (card.computed_at)
             meta.appendChild(el("div", null,
                 "computed " + card.computed_at.slice(0, 10)
@@ -271,10 +615,18 @@ window.TrackDNA = (function() {
         header.appendChild(meta);
         body.appendChild(header);
 
+        renderReplayControls(body, card);
         renderSummary(body, card);
+        renderLapStrip(body, card);
         renderDimensions(body, card);
         renderCorners(body, card);
-        renderElevation(body, card);
+
+        // radar + elevation share one Plotly load
+        loadPlotly(function() {
+            renderRadar(body, card);
+            renderElevation(body, card);
+        }, body);
+
         addDnaOverlays(card);
     }
 
@@ -300,12 +652,39 @@ window.TrackDNA = (function() {
         container.appendChild(block);
     }
 
+    // ---- skeleton while loading ----------------------------------------------------
+
+    function showSkeleton() {
+        var block = el("div", "card mb-3 dna-skel");
+        var body = el("div", "card-body");
+        for (var i = 0; i < 3; i++) {
+            body.appendChild(el("div", "dna-skel-bar"));
+        }
+        block.appendChild(body);
+        container.appendChild(block);
+        return block;
+    }
+
     function init() {
         container = document.getElementById("track-dna");
         if (!container) return;
         trackId = parseInt(container.dataset.trackId, 10);
+        var best = parseFloat(container.dataset.userBestLap);
+        userBestLap = isFinite(best) ? best : null;
+
+        var skel = null;
+        var timer = setTimeout(function() {
+            container.hidden = false;
+            skel = showSkeleton();
+        }, 200);
+
         api("/dna").then(function(payload) {
-            if (!payload || !payload.card) return;  // stays hidden
+            clearTimeout(timer);
+            if (skel) skel.remove();
+            if (!payload || !payload.card) {
+                container.hidden = true;      // no card: back to hidden
+                return;
+            }
             card = payload.card;
             container.hidden = false;
             render();

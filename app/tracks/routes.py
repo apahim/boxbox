@@ -114,8 +114,20 @@ def detail(track_id):
 
     mapkit_token = current_app.config.get('MAPKIT_TOKEN', '')
 
+    # circuit badge (official tracks with a DNA card): a stylised
+    # outline generated server-side from the stored trajectory
+    dna_badge = None
+    if is_official:
+        from app.track_dna.badges import badge_svg
+        card = (TrackDnaCard.query.filter_by(track_id=track.id)
+                .order_by(TrackDnaCard.methodology_version.desc()).first())
+        if card is not None:
+            dna_badge = badge_svg(
+                (card.support_json or {}).get('trajectory'))
+
     return render_template('tracks/detail.html',
                            track=track,
+                           dna_badge=dna_badge,
                            corners=corners_list,
                            corners_json=json.dumps(corners_list),
                            sf_gate_json=json.dumps(sf_gate),
