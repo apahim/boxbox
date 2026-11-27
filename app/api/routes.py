@@ -337,47 +337,38 @@ def api_tracks():
 
 @bp.route('/tracks/<int:track_id>/dna')
 def track_dna(track_id):
-    """Track DNA scorecards for a track's configurations (Phase 7)."""
+    """The track's Track DNA card (official tracks only — cards are
+    public-catalog statements, and official tracks are visible to
+    every authenticated user, so no further scoping applies)."""
     if not current_user.is_authenticated:
         return jsonify(error='Authentication required'), 401
 
-    track = visible_tracks_for_user(current_user.id).filter(
-        Track.id == track_id).first()
-    if not track:
+    track = db.session.get(Track, track_id)
+    if track is None or track.created_by is not None:
         return jsonify(error='Track not found'), 404
 
-    from app.track_dna.scorecards import card_payload, scorecards_for_track
+    from app.track_dna.cards import card_payload, latest_card
 
-    cards = scorecards_for_track(track_id)
-    return jsonify(track_id=track_id,
-                   scorecards=[card_payload(c) for c in cards])
+    card = latest_card(track_id)
+    if card is None:
+        return jsonify(track_id=track_id, card=None)
+    return jsonify(track_id=track_id, card=card_payload(card, track=track))
 
 
 @bp.route('/tracks/<int:track_id>/dna/similar')
 def track_dna_similar(track_id):
-    """On-the-fly weighted-Manhattan similarity for a track's scorecard
-    against every other configuration (Phase 7)."""
+    """On-the-fly weighted-Manhattan similarity for the track's card
+    against every other track's card of the same methodology version."""
     if not current_user.is_authenticated:
         return jsonify(error='Authentication required'), 401
 
-    track = visible_tracks_for_user(current_user.id).filter(
-        Track.id == track_id).first()
-    if not track:
+    track = db.session.get(Track, track_id)
+    if track is None or track.created_by is not None:
         return jsonify(error='Track not found'), 404
 
-    condition = request.args.get('condition', 'dry')
-    if condition not in ('dry', 'wet'):
-        return jsonify(error="condition must be 'dry' or 'wet'"), 400
+    from app.track_dna.cards import similar_payload
 
-    from app.track_dna.scorecards import similar_payload
-
-    # Phase 9 (plan 21.6, owner-confirmed): comparisons limited to the
-    # viewer's visible tracks — the payload names other tracks
-    visible_ids = {t.id for t
-                   in visible_tracks_for_user(current_user.id).all()}
-    payload = similar_payload(track_id, condition,
-                              visible_track_ids=visible_ids)
+    payload = similar_payload(track_id)
     if payload is None:
-        return jsonify(error='No scorecard computed for this condition'), 404
+        return jsonify(error='No Track DNA card computed for this track'), 404
     return jsonify(payload)
-

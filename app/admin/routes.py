@@ -8,7 +8,7 @@ from sqlalchemy import func
 from app import db, _mapkit_token_exp
 from app.admin import bp
 from app.models import User, Session, Lap, Track, SessionUpload, \
-    TrackConfig, TrackDnaScorecard
+    TrackDnaCard
 
 
 def _require_admin():
@@ -17,47 +17,39 @@ def _require_admin():
 
 
 def _dna_health():
-    """Track DNA rows for the admin dashboard (plan 21.4): one row per
-    (track, config) — tracks without configurations don't appear — with
-    the latest card per condition (overall score, quality summary,
-    computed date) and the staleness verdict from fingerprint drift
-    (display-only: nothing recomputes automatically, D7 revised)."""
+    """Track DNA rows for the admin dashboard: one row per official
+    track — the selected reference lap, the latest card, and the live
+    validity verdict (a re-ingested or deleted reference shows here as
+    broken; nothing recomputes automatically)."""
 
-    from app.track_dna.scorecards import current_fingerprint
+    from app.track_dna.reference import reference_verdict
 
     rows = []
-    configs = (TrackConfig.query.join(Track)
-               .order_by(Track.name, TrackConfig.id).all())
-    for config in configs:
-        conditions = []
-        cards = TrackDnaScorecard.query.filter_by(
-            track_config_id=config.id).all()
-        by_condition = {}
-        for card in cards:
-            best = by_condition.get(card.condition)
-            if best is None or card.methodology_version > \
-                    best.methodology_version:
-                by_condition[card.condition] = card
-        for condition in ('dry', 'wet'):
-            card = by_condition.get(condition)
-            if card is None:
-                conditions.append({'condition': condition, 'card': None})
-                continue
-            counts = {}
-            for dim in card.dimensions_json:
-                quality = dim.get('quality')
-                counts[quality] = counts.get(quality, 0) + 1
-            stored = (card.dataset_json or {}).get('session_fingerprint')
-            conditions.append({
-                'condition': condition,
-                'card': card,
-                'quality_counts': counts,
-                'stale': (stored is not None
-                          and stored != current_fingerprint(
-                              config.id, condition)),
-            })
-        rows.append({'track': config.track, 'config': config,
-                     'conditions': conditions})
+    tracks = (Track.query.filter(Track.created_by.is_(None))
+              .order_by(Track.name).all())
+    for track in tracks:
+        reference = None
+        reference_ok = None
+        reference_error = None
+        if track.reference_session_id is not None:
+            session = db.session.get(Session, track.reference_session_id)
+            if session is not None:
+                reference = {
+                    'session_id': session.id,
+                    'lap_number': track.reference_lap_number,
+                    'date': (session.date.isoformat()
+                             if session.date else None),
+                    'device': session.data_source,
+                }
+                verdict = reference_verdict(track)
+                reference_ok = verdict['ok']
+                reference_error = verdict.get('error')
+        card = (TrackDnaCard.query.filter_by(track_id=track.id)
+                .order_by(TrackDnaCard.methodology_version.desc()).first())
+        rows.append({'track': track, 'card': card,
+                     'reference': reference,
+                     'reference_ok': reference_ok,
+                     'reference_error': reference_error})
     return rows
 
 
@@ -84,36 +76,23 @@ def _mapkit_token_status():
 @bp.route('/tracks/<int:track_id>/compute-dna', methods=['POST'])
 @login_required
 def compute_track_dna(track_id):
-    """Phase 9 (plan 21.4): the manual scorecard trigger — every
-    configuration x both conditions for one track, the same scope as
+    """The manual card trigger — the same scope as
     ``flask compute-track-dna TRACK_ID``. Synchronous by design
-    (gunicorn timeout 600 s; measured prod worst case ~19 s). D7
-    revised: this and the CLI are the only callers of the builder."""
+    (single-lap compute is fast). Admin + official tracks only."""
     _require_admin()
     track = db.session.get(Track, track_id)
     if track is None:
         abort(404)
 
-    from app.track_dna.scorecards import CONDITIONS, build_scorecard
+    from app.track_dna.cards import build_card
 
-    configs = track.configs.order_by(TrackConfig.id).all()
-    if not configs:
-        flash(f'Track "{track.name}" has no configurations — create one '
-              f'on its detail page first.', 'warning')
-        return redirect(url_for('admin.dashboard'))
-
-    summary = []
-    for config in configs:
-        for condition in CONDITIONS:
-            card, result = build_scorecard(config.id, condition)
-            if card is None:
-                summary.append(f'{config.name} {condition}: '
-                               f'{result.get("error", "failed")}')
-            else:
-                summary.append(f'{config.name} {condition}: '
-                               f'{card.overall_score:.2f}')
-    flash('Track DNA — ' + track.name + ': ' + '; '.join(summary),
-          'success')
+    card, result = build_card(track.id)
+    if card is None:
+        flash(f'Track DNA — {track.name}: '
+              f'{result.get("error", "failed")}', 'warning')
+    else:
+        flash(f'Track DNA — {track.name}: '
+              f'overall {card.overall_score:.2f}/10', 'success')
     return redirect(url_for('admin.dashboard'))
 
 

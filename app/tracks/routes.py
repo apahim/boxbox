@@ -8,8 +8,8 @@ from sqlalchemy import func
 from app import db
 from app.tracks import bp
 from app.tracks.forms import TrackForm
-from app.models import (Track, TrackConfig, TrackCorner, Session, Telemetry,
-                        User, visible_tracks_for_user)
+from app.models import (Track, TrackDnaCard, TrackCorner, Session, Lap,
+                        Telemetry, User, visible_tracks_for_user)
 
 
 def _slugify(name):
@@ -304,25 +304,52 @@ def edit(track_id):
             if creator:
                 creator_name = creator.display_name
 
-    # Track DNA configurations (Phase 2)
-    config_rows = (TrackConfig.query.filter_by(track_id=track.id)
-                   .order_by(TrackConfig.id).all())
-    config_session_counts = dict(
-        db.session.query(Session.track_config_id, func.count(Session.id))
-        .filter(Session.track_id == track.id,
-                Session.track_config_id.isnot(None))
-        .group_by(Session.track_config_id)
-        .all()
-    )
-    configs_list = [
-        {
-            'id': c.id,
-            'name': c.name,
-            'direction': c.direction,
-            'session_count': config_session_counts.get(c.id, 0),
-        }
-        for c in config_rows
-    ]
+    # Track DNA (reference-lap): admin picker context. Official tracks
+    # only — personal tracks render the section disabled.
+    dna = {'official': is_official, 'is_admin': current_user.is_admin,
+           'reference': None, 'reference_ok': None,
+           'reference_error': None, 'card': None}
+    if is_official:
+        if track.reference_session_id is not None:
+            ref_session = db.session.get(Session, track.reference_session_id)
+            if ref_session is not None:
+                ref_lap = Lap.query.filter_by(
+                    session_id=ref_session.id,
+                    lap_number=track.reference_lap_number).first()
+                dna['reference'] = {
+                    'session_id': ref_session.id,
+                    'lap_number': track.reference_lap_number,
+                    'date': (ref_session.date.isoformat()
+                             if ref_session.date else None),
+                    'device': ref_session.data_source,
+                    'lap_time_s': (round(ref_lap.seconds, 3)
+                                   if ref_lap else None),
+                }
+                from app.track_dna.reference import reference_verdict
+                verdict = reference_verdict(track)
+                dna['reference_ok'] = verdict['ok']
+                dna['reference_error'] = verdict.get('error')
+        card = (TrackDnaCard.query.filter_by(track_id=track.id)
+                .order_by(TrackDnaCard.methodology_version.desc()).first())
+        if card is not None:
+            dna['card'] = {
+                'overall_score': card.overall_score,
+                'computed_at': (card.computed_at.isoformat()
+                                if card.computed_at else None),
+                'methodology_version': card.methodology_version,
+            }
+    dna_sessions = []
+    if is_official and current_user.is_admin:
+        for sess in (Session.query.filter_by(track_id=track.id)
+                     .order_by(Session.date.desc(), Session.id.desc())
+                     .all()):
+            dna_sessions.append({
+                'id': sess.id,
+                'date': (sess.date.isoformat() if sess.date else None),
+                'device': sess.data_source,
+                'total_laps': sess.total_laps,
+                'best_lap_time': sess.best_lap_time,
+            })
 
     return render_template('tracks/edit.html',
                            track=track,
@@ -337,7 +364,8 @@ def edit(track_id):
                            is_official=is_official,
                            can_edit=can_edit,
                            creator_name=creator_name,
-                           configs=configs_list)
+                           dna=dna,
+                           dna_sessions=dna_sessions)
 
 
 @bp.route('/<int:track_id>/delete', methods=['POST'])
@@ -396,181 +424,92 @@ def assign_sessions(track_id):
     return jsonify(ok=True, count=count)
 
 
-# ---- Track configurations (Track DNA Phase 2) ----
+# ---- Track DNA reference lap (admin, official tracks) ----
 #
-# Note: unlike assign-sessions (own sessions only), these endpoints manage
-# any session on the track when the acting user can edit the track (owner,
-# or admin on an official track) — configuration membership is track
-# management, not session ownership.
-
-def _can_edit_track(track):
-    """Same edit permission as the tracks edit page."""
-    is_official = (track.created_by is None)
-    is_owner = (track.created_by == current_user.id) and not is_official
-    return is_owner or (is_official and current_user.is_admin)
+# Track DNA is admin-only and official-tracks-only: the card is a
+# statement about a track in the public catalog, computed from the
+# lap the admin selects.
 
 
-def _get_config_or_404(track, config_id):
-    config = TrackConfig.query.filter_by(id=config_id,
-                                         track_id=track.id).first()
-    if config is None:
-        abort(404)
-    return config
-
-
-@bp.route('/<int:track_id>/configs/proposals', methods=['GET'])
-@login_required
-def config_proposals(track_id):
-    """Detect proposed layout configurations from session telemetry."""
+def _official_track_or_404(track_id):
     track = db.session.get(Track, track_id)
     if not track:
         abort(404)
-    if not _can_edit_track(track):
-        return jsonify(error='You do not have permission to manage this track.'), 403
-
-    from app.track_dna.configs import proposals_payload
-
-    payload = proposals_payload(track.id)
-    if payload is None:
-        abort(404)
-    return jsonify(payload)
+    if track.created_by is not None:
+        abort(404)          # DNA exists on official tracks only
+    return track
 
 
-@bp.route('/<int:track_id>/configs/create', methods=['POST'])
+def _require_admin():
+    if not current_user.is_admin:
+        abort(403)
+
+
+@bp.route('/<int:track_id>/reference-lap/laps')
 @login_required
-def create_config(track_id):
-    track = db.session.get(Track, track_id)
-    if not track:
-        abort(404)
-    if not _can_edit_track(track):
-        return jsonify(error='You do not have permission to manage this track.'), 403
+def reference_lap_laps(track_id):
+    """Clean laps of one session on the track, for the admin picker."""
+    _require_admin()
+    track = _official_track_or_404(track_id)
+
+    session_id = request.args.get('session_id', type=int)
+    if session_id is None:
+        return jsonify(error='session_id is required.'), 400
+    session = db.session.get(Session, session_id)
+    if session is None or session.track_id != track.id:
+        return jsonify(error='Session not found on this track.'), 404
+
+    laps = (Lap.query.filter_by(session_id=session.id, is_outlier=False)
+            .order_by(Lap.lap_number).all())
+    best = min((lap.seconds for lap in laps), default=None)
+    return jsonify(laps=[{
+        'lap': lap.lap_number,
+        'seconds': round(lap.seconds, 3),
+        'is_best': best is not None and lap.seconds == best,
+    } for lap in laps])
+
+
+@bp.route('/<int:track_id>/reference-lap', methods=['POST'])
+@login_required
+def set_reference_lap(track_id):
+    """Set the track's DNA reference lap and compute its card.
+
+    The lap is validated with the engine before anything is persisted:
+    an unusable lap is rejected with its reason, never stored.
+    """
+    _require_admin()
+    track = _official_track_or_404(track_id)
+
+    from app.track_dna.cards import build_card
+    from app.track_dna.reference import load_reference
 
     data = request.get_json(silent=True) or {}
-    session_ids = data.get('session_ids')
-    name = (data.get('name') or '').strip()
-    direction = data.get('direction')
+    session_id = data.get('session_id')
+    lap_number = data.get('lap_number')
+    if not isinstance(session_id, int) or not isinstance(lap_number, int) \
+            or lap_number < 1:
+        return jsonify(error='session_id and lap_number are required.'), 400
 
-    if not isinstance(session_ids, list) or not session_ids:
-        return jsonify(error='session_ids must be a non-empty list.'), 400
-    try:
-        session_ids = [int(sid) for sid in session_ids]
-    except (TypeError, ValueError):
-        return jsonify(error='session_ids must be integers.'), 400
-    if direction not in ('cw', 'ccw'):
-        return jsonify(error='direction must be "cw" or "ccw".'), 400
-    if not name:
-        name = f'{direction.upper()} layout'
-    if len(name) > 100:
-        return jsonify(error='Name must be at most 100 characters.'), 400
+    session = db.session.get(Session, session_id)
+    if session is None or session.track_id != track.id:
+        return jsonify(error='Session not found on this track.'), 404
 
-    sessions = Session.query.filter(Session.id.in_(session_ids),
-                                    Session.track_id == track.id).all()
-    if len(sessions) != len(set(session_ids)):
-        return jsonify(error='All sessions must belong to this track.'), 400
-
-    # Auto-names collide on a second layout of the same direction —
-    # suffix numerically rather than erroring.
-    existing_names = {c.name for c in
-                      TrackConfig.query.filter_by(track_id=track.id).all()}
-    if name in existing_names:
-        suffix = 2
-        while f'{name} {suffix}' in existing_names:
-            suffix += 1
-        name = f'{name} {suffix}'
-
-    config = TrackConfig(track_id=track.id, name=name, direction=direction,
-                         created_by=current_user.id, confirmed=True)
-    db.session.add(config)
-    db.session.flush()
-    for session in sessions:
-        session.track_config_id = config.id
+    # Validate before committing: run the engine with the prospective
+    # reference in place, then persist only when the lap is usable.
+    track.reference_session_id = session.id
+    track.reference_lap_number = lap_number
+    ref = load_reference(track)
+    if not ref['ok']:
+        db.session.rollback()
+        return jsonify(error=ref['error']), 400
     db.session.commit()
 
-    return jsonify(ok=True, config_id=config.id, name=name,
-                   count=len(sessions))
-
-
-@bp.route('/<int:track_id>/configs/<int:config_id>/rename', methods=['POST'])
-@login_required
-def rename_config(track_id, config_id):
-    track = db.session.get(Track, track_id)
-    if not track:
-        abort(404)
-    if not _can_edit_track(track):
-        return jsonify(error='You do not have permission to manage this track.'), 403
-
-    config = _get_config_or_404(track, config_id)
-    data = request.get_json(silent=True) or {}
-    name = (data.get('name') or '').strip()
-
-    if not name:
-        return jsonify(error='Name is required.'), 400
-    if len(name) > 100:
-        return jsonify(error='Name must be at most 100 characters.'), 400
-    clash = TrackConfig.query.filter(TrackConfig.track_id == track.id,
-                                     TrackConfig.name == name,
-                                     TrackConfig.id != config.id).first()
-    if clash:
-        return jsonify(error='A configuration with that name already exists.'), 409
-
-    config.name = name
-    db.session.commit()
-    return jsonify(ok=True)
-
-
-@bp.route('/<int:track_id>/configs/<int:config_id>/delete', methods=['POST'])
-@login_required
-def delete_config(track_id, config_id):
-    track = db.session.get(Track, track_id)
-    if not track:
-        abort(404)
-    if not _can_edit_track(track):
-        return jsonify(error='You do not have permission to manage this track.'), 403
-
-    config = _get_config_or_404(track, config_id)
-
-    # Null membership first: deleting a configuration must never delete
-    # the sessions themselves.
-    Session.query.filter_by(track_config_id=config.id).update(
-        {'track_config_id': None},
-    )
-    db.session.delete(config)
-    db.session.commit()
-    return jsonify(ok=True)
-
-
-@bp.route('/<int:track_id>/configs/assign', methods=['POST'])
-@login_required
-def assign_config(track_id):
-    """Move sessions between configurations (or to none with config_id null)."""
-    track = db.session.get(Track, track_id)
-    if not track:
-        abort(404)
-    if not _can_edit_track(track):
-        return jsonify(error='You do not have permission to manage this track.'), 403
-
-    data = request.get_json(silent=True) or {}
-    session_ids = data.get('session_ids')
-    config_id = data.get('config_id')
-
-    if not isinstance(session_ids, list) or not session_ids:
-        return jsonify(error='session_ids must be a non-empty list.'), 400
-    try:
-        session_ids = [int(sid) for sid in session_ids]
-    except (TypeError, ValueError):
-        return jsonify(error='session_ids must be integers.'), 400
-    if config_id is not None:
-        _get_config_or_404(track, config_id)
-
-    sessions = Session.query.filter(Session.id.in_(session_ids),
-                                    Session.track_id == track.id).all()
-    if len(sessions) != len(set(session_ids)):
-        return jsonify(error='All sessions must belong to this track.'), 400
-
-    for session in sessions:
-        session.track_config_id = config_id
-    db.session.commit()
-    return jsonify(ok=True, count=len(sessions))
+    card, result = build_card(track.id)
+    if card is None:
+        return jsonify(error=result.get('error', 'compute failed')), 500
+    return jsonify(ok=True,
+                   overall_score=card.overall_score,
+                   lap_time_s=(card.dataset_json or {}).get('lap_time_s'))
 
 
 @bp.route('/<int:track_id>/make-official', methods=['POST'])

@@ -42,60 +42,38 @@ class Track(db.Model):
     corners = db.relationship('TrackCorner', backref='track', lazy='dynamic',
                               cascade='all, delete-orphan',
                               order_by='TrackCorner.sort_order')
-    sessions = db.relationship('Session', backref='track', lazy='dynamic')
-    configs = db.relationship('TrackConfig', backref='track', lazy='dynamic',
-                              cascade='all, delete-orphan')
+    sessions = db.relationship('Session', backref='track', lazy='dynamic',
+                               foreign_keys='Session.track_id')
+
+    # Track DNA reference lap (admin-selected on official tracks): the
+    # one lap the DNA card is computed from. use_alter breaks the
+    # tracks<->sessions FK cycle for create_all/drop_all.
+    reference_session_id = db.Column(
+        db.Integer,
+        db.ForeignKey('sessions.id', ondelete='SET NULL',
+                      use_alter=True, name='fk_tracks_reference_session'),
+        nullable=True)
+    reference_lap_number = db.Column(db.Integer, nullable=True)
+    reference_session = db.relationship(
+        'Session', foreign_keys=[reference_session_id])
 
 
-class TrackConfig(db.Model):
-    """A track layout (configuration) that sessions are grouped into.
+class TrackDnaCard(db.Model):
+    """A computed Track DNA card for one official track.
 
-    Created manually by an admin from clustering proposals (Phase 2 of
-    the Track DNA plan); membership is persistent and only ever changes
-    via admin action (decision D10).
+    One row per (track_id, methodology_version); recomputation upserts.
+    Built from the admin-selected reference lap (``source:
+    'reference-lap'`` provenance in ``dataset_json``) - not a
+    multi-driver consensus. No hooks ever write here: rows are created
+    by the admin-page trigger and the CLI only.
     """
-    __tablename__ = 'track_configs'
+
+    __tablename__ = 'track_dna_cards'
 
     id = db.Column(db.Integer, primary_key=True)
     track_id = db.Column(db.Integer, db.ForeignKey('tracks.id'),
                          nullable=False, index=True)
-    name = db.Column(db.String(100), nullable=False)
-    direction = db.Column(db.String(3), nullable=False)  # 'cw' | 'ccw'
-    created_by = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
-    confirmed = db.Column(db.Boolean, default=True, nullable=False,
-                          server_default='true')
-    created_at = db.Column(db.DateTime,
-                           default=lambda: datetime.now(timezone.utc))
-
-    __table_args__ = (
-        db.UniqueConstraint('track_id', 'name', name='uq_track_config_name'),
-    )
-
-    # No cascade: deleting a config nulls member sessions' track_config_id
-    # first (routes do this explicitly) and must never delete sessions.
-    sessions = db.relationship('Session', backref='track_config', lazy='dynamic')
-
-
-class TrackDnaScorecard(db.Model):
-    """A computed Track DNA scorecard for one track configuration and
-    condition (plan Phase 7, spec Section 19).
-
-    One row per (track_config_id, condition, methodology_version);
-    recomputation upserts. No hooks ever write here (D7 revised): rows
-    are created by the CLI now and the admin-page trigger in Phase 9.
-    The stored session fingerprint makes drift from the live dataset
-    visible on demand; ``stale`` defaults to False and nothing sets it
-    automatically.
-    """
-
-    __tablename__ = 'track_dna_scorecards'
-
-    id = db.Column(db.Integer, primary_key=True)
-    track_config_id = db.Column(
-        db.Integer, db.ForeignKey('track_configs.id'), nullable=False,
-        index=True)
     methodology_version = db.Column(db.String(10), nullable=False)
-    condition = db.Column(db.String(4), nullable=False)   # 'dry' | 'wet'
     params_json = db.Column(db.JSON, nullable=False)
     dimensions_json = db.Column(db.JSON, nullable=False)
     overall_score = db.Column(db.Float, nullable=True)
@@ -103,16 +81,13 @@ class TrackDnaScorecard(db.Model):
     support_json = db.Column(db.JSON, nullable=False)
     computed_at = db.Column(db.DateTime,
                             default=lambda: datetime.now(timezone.utc))
-    stale = db.Column(db.Boolean, default=False, nullable=False,
-                      server_default='false')
 
     __table_args__ = (
-        db.UniqueConstraint('track_config_id', 'condition',
-                            'methodology_version',
-                            name='uq_scorecard_config_condition_version'),
+        db.UniqueConstraint('track_id', 'methodology_version',
+                            name='uq_dna_card_track_version'),
     )
 
-    config = db.relationship('TrackConfig', backref='dna_scorecards')
+    track = db.relationship('Track', backref='dna_cards')
 
 
 class TrackCorner(db.Model):
@@ -142,8 +117,6 @@ class Session(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
     track_id = db.Column(db.Integer, db.ForeignKey('tracks.id'), nullable=True)
-    track_config_id = db.Column(db.Integer, db.ForeignKey('track_configs.id'),
-                                nullable=True, index=True)
     date = db.Column(db.Date, nullable=False)
     session_start = db.Column(db.String(10))
 

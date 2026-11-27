@@ -46,7 +46,7 @@ import numpy as np
 from scipy.ndimage import median_filter
 from scipy.signal import find_peaks
 
-from scripts.analysis.track_dna_consensus import (
+from scripts.analysis.track_dna_reference import (
     _circular_median,
     _hierarchical,
     _recurrence_clusters,
@@ -271,8 +271,9 @@ def detect_lap_events(geo, params=DEFAULT_BRAKING_PARAMS):
 def analyze_braking(consensus, params=DEFAULT_BRAKING_PARAMS):
     """Dimension 9 + braking zones for one condition's consensus.
 
-    ``consensus`` is a Phase 4 :class:`TrackConsensus` — the alignment
-    shifts map each lap's event positions into the consensus frame.
+    ``consensus`` is a :class:`TrackConsensus` (the reference-lap
+    circuit object) — the alignment shifts map each lap's event
+    positions into the circuit frame.
     Laps without a usable speed channel are coverage, never zero: the
     dimension and zone recurrence use the speed-covered laps only.
     """

@@ -57,7 +57,7 @@ from dataclasses import dataclass, field
 import numpy as np
 from scipy.ndimage import uniform_filter1d
 
-from scripts.analysis.track_dna_consensus import _hierarchical, _user_spread
+from scripts.analysis.track_dna_reference import _hierarchical, _user_spread
 
 
 @dataclass(frozen=True)
@@ -260,9 +260,9 @@ def analyze_elevation(consensus, params=DEFAULT_ELEVATION_PARAMS):
     """Dimension 10 + elevation evidence and the consensus median
     profile for one condition's consensus.
 
-    ``consensus`` is a Phase 4 :class:`TrackConsensus`; the alignment
-    shifts map consensus-frame positions into each lap's frame (the
-    inverse of the braking event mapping). Laps without a usable
+    ``consensus`` is a :class:`TrackConsensus` (the reference-lap
+    circuit object); the alignment shifts map circuit-frame positions
+    into each lap's frame (the inverse of the braking event mapping). Laps without a usable
     altitude channel are coverage, never zero: the dimension, evidence
     and profile use the altitude-covered laps only.
     """

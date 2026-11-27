@@ -1,8 +1,8 @@
 """Tests for the Track DNA braking layer (plan Phase 5, spec Section 17).
 
 Synthetic tests for event detection (doubled-array seam handling,
-thresholds, prominence), zones and dimension 9, plus smoke tests for
-the read-only runner's braking section.
+thresholds, prominence), zones and dimension 9 on reference-lap
+(single-lap) circuits.
 """
 
 import json
@@ -11,13 +11,14 @@ import math
 import numpy as np
 import pytest
 
-from scripts.analysis.track_dna import LapInput, analyze_lap
+from scripts.analysis.track_dna import DEFAULT_PARAMS, LapInput, analyze_lap
 from scripts.analysis.track_dna_braking import (
     DEFAULT_BRAKING_PARAMS,
     analyze_braking,
     detect_lap_events,
 )
-from scripts.analysis.track_dna_consensus import ConsensusLap, build_consensus
+from scripts.analysis.track_dna_reference import ConsensusLap, \
+    reference_consensus
 from tests.app.test_track_dna import (
     fixture_oval,
     make_lap_input,
@@ -74,6 +75,11 @@ def no_speed_lap(user_id, session_id, points, lap_number=1):
     return ConsensusLap(user_id=user_id, session_id=session_id,
                         lap_number=lap_number,
                         geometry=analyze_lap(LapInput(x=x, y=y)))
+
+
+def reference_circuit(record):
+    """The single-lap circuit object (what build_card feeds the layer)."""
+    return reference_consensus(record, DEFAULT_PARAMS)
 
 
 # ---- event detection -----------------------------------------------------------
@@ -186,83 +192,25 @@ def test_peak_at_seam_kept():
     assert troughs[1] == pytest.approx(length - 100.0, abs=4.0)
 
 
-# ---- zones and dimension 9 -----------------------------------------------------
+# ---- zones and dimension 9 on the reference circuit ------------------------------
 
 
-def test_zone_recurrence_threshold():
-    """Zones need >= 20% of laps: 10/10 and 2/10 (exactly 20%) qualify,
-    1/10 does not."""
+def test_reference_lap_zones():
+    """On a single-lap circuit every >= 30% event is a zone with
+    recurrence 1.0 (the 20% recurrence gate is trivially met)."""
     pts = fixture_oval()
     n = len(pts)
-    laps = []
-    for i in range(1, 11):
-        windows = [(200.0, 20.0)]
-        if i <= 2:
-            windows.append((330.0, 20.0))
-        if i == 3:
-            windows.append((80.0, 20.0))
-        laps.append(braking_lap(1, 1, pts, speed_profile(n, windows), i))
-    braking = analyze_braking(build_consensus(laps))
+    record = braking_lap(1, 1, pts, speed_profile(
+        n, [(200.0, 20.0), (330.0, 20.0)]))
+    braking = analyze_braking(reference_circuit(record))
     assert len(braking.zones) == 2
     zones = sorted(braking.zones, key=lambda z: z.s_trough)
     assert zones[0].s_trough == pytest.approx(200.0, abs=5.0)
     assert zones[1].s_trough == pytest.approx(330.0, abs=5.0)
-    assert zones[0].n_laps == 10
+    assert zones[0].n_laps == 1
     assert zones[0].recurrence == pytest.approx(1.0)
-    assert zones[1].n_laps == 2
-    assert zones[1].recurrence == pytest.approx(0.2)
-    assert zones[1].support_by_user == {1: pytest.approx(0.2)}
-    # Phase 8 minor-zone tier (plan 20.4): the 1/10 region (exactly at
-    # the 10% minor gate) surfaces as a minor zone, not a zone — the
-    # zone set above is byte-identical to the pre-Phase-8 behaviour.
-    assert len(braking.minor_zones) == 1
-    minor = braking.minor_zones[0]
-    assert minor.s_trough == pytest.approx(80.0, abs=5.0)
-    assert minor.n_laps == 1
-    assert minor.recurrence == pytest.approx(0.1)
-    summary = braking.summary()
-    assert summary['minor_zones'][0]['recurrence'] == pytest.approx(0.1)
-    assert summary['minor_zones'][0]['n_laps'] == 1
-
-
-def test_minor_zone_tier_bounds():
-    """Phase 8 (plan 20.4): recurrence in [10%, 20%) -> minor zone;
-    below 10% -> neither; at/above 20% -> zone (reported by the zone
-    pass, never duplicated as minor). Dimension 9 is untouched by the
-    tier."""
-    from dataclasses import replace
-
-    from scripts.analysis.track_dna_braking import DEFAULT_BRAKING_PARAMS
-
-    pts = fixture_oval()
-    n = len(pts)
-    laps = []
-    for i in range(1, 21):
-        windows = [(200.0, 20.0)]           # 20/20 -> zone
-        if i <= 4:
-            windows.append((330.0, 20.0))   # 4/20 = 20% -> zone
-        if i <= 3:
-            windows.append((80.0, 20.0))    # 3/20 = 15% -> minor zone
-        if i == 5:
-            windows.append((380.0, 20.0))   # 1/20 = 5% -> neither
-        laps.append(braking_lap(1, 1, pts, speed_profile(n, windows), i))
-    braking = analyze_braking(build_consensus(laps))
-    assert len(braking.zones) == 2
-    assert {z.n_laps for z in braking.zones} == {20, 4}
-    assert len(braking.minor_zones) == 1
-    assert braking.minor_zones[0].s_trough == pytest.approx(80.0, abs=5.0)
-    assert braking.minor_zones[0].recurrence == pytest.approx(0.15)
-    troughs = [z.s_trough for z in braking.minor_zones]
-    assert all(abs(t - 380.0) > 20.0 for t in troughs)   # 5% excluded
-
-    # disabling the tier (minor gate == zone gate) changes nothing else
-    disabled = analyze_braking(
-        build_consensus(laps),
-        params=replace(DEFAULT_BRAKING_PARAMS, minor_zone_recurrence=0.20))
-    assert disabled.minor_zones == []
-    assert disabled.zones == braking.zones
-    assert disabled.heavy_freq_per_km == braking.heavy_freq_per_km
-    assert disabled.sensitivity == braking.sensitivity
+    assert zones[0].support_by_user == {1: pytest.approx(1.0)}
+    assert braking.minor_zones == []
 
 
 def test_zone_reduction_threshold_30_percent():
@@ -270,17 +218,15 @@ def test_zone_reduction_threshold_30_percent():
     (the PoC zone recipe — Section 17.1)."""
     pts = fixture_oval()
     n = len(pts)
-    laps = [braking_lap(1, 1, pts, speed_profile(n, [(200.0, 20.0)],
-                                                 slow=14.2), i)
-            for i in (1, 2)]
-    braking = analyze_braking(build_consensus(laps))
+    record = braking_lap(1, 1, pts, speed_profile(
+        n, [(200.0, 20.0)], slow=14.2))
+    braking = analyze_braking(reference_circuit(record))
     assert all(len(events) == 1 for events in braking.events_by_lap)
     assert braking.zones == []
     # exactly 30% qualifies
-    laps = [braking_lap(1, 1, pts, speed_profile(n, [(200.0, 20.0)],
-                                                 slow=14.0), i)
-            for i in (1, 2)]
-    braking = analyze_braking(build_consensus(laps))
+    record = braking_lap(1, 1, pts, speed_profile(
+        n, [(200.0, 20.0)], slow=14.0))
+    braking = analyze_braking(reference_circuit(record))
     assert len(braking.zones) == 1
     assert braking.zones[0].reduction_median == pytest.approx(0.30,
                                                               abs=0.005)
@@ -289,11 +235,10 @@ def test_zone_reduction_threshold_30_percent():
 def test_dimension_9_and_sensitivity():
     pts = fixture_oval()
     n = len(pts)
-    laps = [braking_lap(1, 1, pts, speed_profile(n, [(200.0, 20.0)]), i)
-            for i in range(1, 5)]
-    consensus = build_consensus(laps)
-    braking = analyze_braking(consensus)
-    per_km = 1000.0 / consensus.length_m
+    record = braking_lap(1, 1, pts, speed_profile(n, [(200.0, 20.0)]))
+    circuit = reference_circuit(record)
+    braking = analyze_braking(circuit)
+    per_km = 1000.0 / circuit.length_m
     assert braking.heavy_freq_per_km == pytest.approx(per_km, rel=0.01)
     assert braking.sensitivity[0.35] == pytest.approx(per_km, rel=0.01)
     assert braking.sensitivity[0.45] == 0.0
@@ -309,128 +254,29 @@ def test_dimension_9_and_sensitivity():
     assert len(summary['zones']) == 1
     assert summary['zones'][0]['reduction_pct'] == pytest.approx(40.0,
                                                                  abs=1.0)
-    assert summary['per_user']['heavy_braking_freq'][1]['n_laps'] == 4
+    assert summary['per_user']['heavy_braking_freq'][1]['n_laps'] == 1
     assert json.dumps(summary)
 
 
-def test_missing_speed_laps_are_coverage():
-    """Laps without a speed channel never dilute dimension 9 (missing
-    is coverage, not zero)."""
+def test_missing_speed_lap_is_coverage():
+    """A reference lap without a speed channel yields no dimension 9
+    (missing is coverage, never zero)."""
     pts = fixture_oval()
-    n = len(pts)
-    with_speed = [braking_lap(1, 1, pts, speed_profile(n, [(200.0, 20.0)]),
-                              i) for i in (1, 2)]
-    without = [no_speed_lap(1, 1, pts, i) for i in (3, 4)]
-    consensus = build_consensus(with_speed + without)
-    braking = analyze_braking(consensus)
-    assert braking.n_laps == 4
-    assert braking.n_laps_with_speed == 2
-    assert braking.heavy_freq_per_km == pytest.approx(
-        1000.0 / consensus.length_m, rel=0.01)
+    record = no_speed_lap(1, 1, pts)
+    braking = analyze_braking(reference_circuit(record))
+    assert braking.n_laps == 1
+    assert braking.n_laps_with_speed == 0
+    assert braking.heavy_freq_per_km is None
     summary = braking.summary()
-    assert summary['speed_coverage'] == 0.5
-    # the flat-with-zeros median would read half of this
-    assert summary['dimensions']['heavy_braking_freq']['value'] == (
-        pytest.approx(1000.0 / consensus.length_m, rel=0.01))
+    assert summary['speed_coverage'] == 0.0
+    assert summary['dimensions']['heavy_braking_freq']['value'] is None
 
 
 def test_braking_reproducible():
     pts = fixture_oval()
     n = len(pts)
-    laps = [braking_lap(1, 1, pts, speed_profile(n, [(200.0, 20.0),
-                                                     (330.0, 20.0)]), i)
-            for i in (1, 2)]
-    a = analyze_braking(build_consensus(laps))
-    b = analyze_braking(build_consensus(laps))
+    record = braking_lap(1, 1, pts, speed_profile(n, [(200.0, 20.0),
+                                                      (330.0, 20.0)]))
+    a = analyze_braking(reference_circuit(record))
+    b = analyze_braking(reference_circuit(record))
     assert a.summary() == b.summary()
-
-
-# ---- runner smoke tests (database) ----------------------------------------------
-
-from datetime import date  # noqa: E402
-
-from app import db  # noqa: E402
-from app.models import Session, Telemetry  # noqa: E402
-from app.track_dna.consensus import compute_config, run  # noqa: E402
-from tests.app.test_track_dna_calibration import (  # noqa: E402
-    capsule_points,
-    make_track,
-    make_user,
-    m_to_latlon,
-)
-from tests.app.test_track_dna_consensus import make_config  # noqa: E402
-
-
-def seed_braking_laps(track, config, user, laps=2, labels=None, day=1,
-                      windows=((100.0, 20.0),), cruise=20.0, slow=12.0):
-    session = Session(user_id=user.id, track_id=track.id,
-                      track_config_id=config.id if config else None,
-                      labels=labels, data_source='racechrono',
-                      date=date(2026, 1, day))
-    db.session.add(session)
-    db.session.flush()
-    pts = capsule_points(80.0, 40.0)          # 0.5 m spacing
-    speeds = speed_profile(len(pts), list(windows), cruise=cruise,
-                           slow=slow, spacing=0.5)
-    for lap_number in range(1, laps + 1):
-        for i, (px, py) in enumerate(pts):
-            lat, lon = m_to_latlon(px, py)
-            db.session.add(Telemetry(
-                session_id=session.id,
-                lap_number=lap_number,
-                elapsed_time=0.05 * i,
-                distance_traveled=(len(pts) * 0.5 * (lap_number - 1)
-                                   + 0.5 * i),
-                latitude=lat, longitude=lon, altitude=10.0,
-                speed_gps=float(speeds[i])))
-    db.session.flush()
-    return session
-
-
-def test_compute_config_braking_section(app):
-    owner = make_user()
-    track = make_track(created_by=owner.id)
-    config = make_config(track, owner)
-    u1 = make_user(email='brake1@test.com')
-    seed_braking_laps(track, config, u1, laps=2, day=1)
-    seed_braking_laps(track, config, u1, laps=2, day=2)
-
-    result = compute_config(config.id, 'dry')
-    braking = result['braking']
-    assert braking['n_laps'] == 4
-    assert braking['n_laps_with_speed'] == 4
-    length_m = result['consensus']['dimensions']['track_length_m']['value']
-    dims = braking['dimensions']['heavy_braking_freq']
-    assert dims['value'] == pytest.approx(1000.0 / length_m, rel=0.02)
-    assert dims['sensitivity']['0.35'] == pytest.approx(1000.0 / length_m,
-                                                        rel=0.02)
-    assert dims['sensitivity']['0.45'] == 0.0
-    assert len(braking['zones']) == 1
-    zone = braking['zones'][0]
-    assert zone['recurrence'] == 1.0
-    assert zone['reduction_pct'] == pytest.approx(40.0, abs=1.0)
-    assert zone['support_by_user'] == {u1.id: 1.0}
-    assert braking['evidence']['events_per_lap_median'] == 1.0
-
-    # wet is a separate bucket with its own braking section (D1/D6)
-    seed_braking_laps(track, config, u1, laps=2, labels=['Wet'], day=3,
-                      windows=((100.0, 20.0), (300.0, 20.0)))
-    wet = compute_config(config.id, 'wet')
-    assert wet['braking']['n_laps'] == 2
-    assert len(wet['braking']['zones']) == 2
-    assert wet['braking']['dimensions']['heavy_braking_freq'][
-        'value'] == pytest.approx(2 * 1000.0 / length_m, rel=0.02)
-
-
-def test_run_prints_braking_section(app, capsys):
-    owner = make_user()
-    track = make_track(created_by=owner.id)
-    config = make_config(track, owner)
-    seed_braking_laps(track, config, owner, laps=2)
-
-    result = run(config.id, 'dry')
-    assert 'braking' in result
-    printed = capsys.readouterr().out
-    assert 'heavy_braking_freq' in printed
-    parsed = json.loads(printed)
-    assert len(parsed['braking']['zones']) == 1

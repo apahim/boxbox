@@ -73,46 +73,19 @@
     .panel-actions { display: flex; gap: 4px; }
     .panel-actions .btn { font-size: 0.7rem; padding: 2px 8px; }
 
-    /* Configurations (Track DNA) */
-    .config-row { display: flex; align-items: center; gap: 6px; margin-bottom: 4px;
-        padding: 6px 8px; background: var(--bb-surface-alt); border-radius: 6px;
-        font-size: 0.8rem; }
-    .config-row .config-name { flex: 1; min-width: 40px; font-weight: 600;
-        white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .config-row .config-count { font-size: 0.7rem; color: var(--bb-text-muted); flex-shrink: 0; }
-    .config-row .btn { flex-shrink: 0; padding: 0 4px; font-size: 0.75rem; }
-    .dir-badge { font-size: 0.62rem; padding: 1px 6px; border-radius: 4px;
-        font-weight: 700; flex-shrink: 0; letter-spacing: 0.3px; }
-    .dir-cw { background: rgba(59, 130, 246, 0.15); color: #3b82f6; }
-    .dir-ccw { background: rgba(139, 92, 246, 0.15); color: #8b5cf6; }
-    .configs-empty { padding: 8px; text-align: center; font-size: 0.8rem;
+    /* Track DNA reference-lap picker */
+    .dna-ref { padding: 6px 8px; background: var(--bb-surface-alt);
+        border-radius: 6px; font-size: 0.8rem; margin-bottom: 6px; }
+    .dna-ref .dna-ref-meta { font-size: 0.7rem; color: var(--bb-text-muted);
+        margin-top: 2px; }
+    .dna-ref .warn { color: var(--bb-amber); font-weight: 600; }
+    .dna-empty { padding: 8px; text-align: center; font-size: 0.8rem;
         color: var(--bb-text-muted); }
-    .cluster-block { margin-bottom: 8px; padding: 6px 8px; border: 1px solid var(--bb-border);
-        border-radius: 6px; background: rgba(139, 92, 246, 0.04); }
-    .cluster-evidence { font-size: 0.7rem; color: var(--bb-text-muted); margin-bottom: 5px;
-        line-height: 1.35; }
-    .cluster-evidence .warn { color: var(--bb-amber); font-weight: 600; }
-    .session-chip { display: flex; align-items: center; gap: 4px; padding: 3px 6px;
-        margin-bottom: 2px; background: var(--bb-surface-alt); border-radius: 4px;
-        font-size: 0.72rem; }
-    .session-chip .chip-main { flex: 1; min-width: 0; white-space: nowrap;
-        overflow: hidden; text-overflow: ellipsis; }
-    .session-chip select { font-size: 0.68rem; padding: 0 2px; max-width: 84px;
-        flex-shrink: 0; }
-    .badge-mini { font-size: 0.58rem; padding: 0 4px; border-radius: 3px;
-        font-weight: 600; flex-shrink: 0; text-transform: uppercase; }
-    .bm-wet { background: rgba(59, 130, 246, 0.15); color: #3b82f6; }
-    .bm-demo, .bm-dup { background: rgba(139, 148, 158, 0.2); color: #8b949e; }
-    .bm-reingest { background: rgba(245, 158, 11, 0.15); color: #f59e0b; }
-    .cluster-create { display: flex; gap: 4px; margin-top: 6px; }
-    .cluster-create input { flex: 1; min-width: 50px; font-size: 0.75rem; padding: 2px 6px; }
-    .cluster-create .btn { font-size: 0.7rem; padding: 2px 8px; flex-shrink: 0; }
-    .cluster-assign { display: flex; gap: 4px; margin-top: 4px; align-items: center; }
-    .cluster-assign select { flex: 1; min-width: 0; font-size: 0.7rem; padding: 1px 2px; }
-    .cluster-assign .btn { font-size: 0.68rem; padding: 2px 6px; flex-shrink: 0; }
-    .unclustered-note { font-size: 0.7rem; color: var(--bb-text-muted); padding: 3px 6px; }
-    .configs-proposals-header { font-size: 0.72rem; font-weight: 600;
-        color: var(--bb-text-muted); margin: 8px 0 4px; }
+    .dna-picker select { width: 100%; font-size: 0.78rem;
+        padding: 3px 6px; margin-bottom: 4px; }
+    .dna-picker .btn { font-size: 0.72rem; padding: 2px 8px; width: 100%; }
+    .dna-status { font-size: 0.7rem; color: var(--bb-text-muted);
+        margin-top: 4px; }
 
     @media (max-width: 768px) {
         .corner-panel { position: relative; top: auto; right: auto; width: 100%; max-height: 300px; margin-top: 8px; }
@@ -217,39 +190,58 @@
                 <div id="corners-list-content"></div>
             </div>
             <div class="panel-section-divider"></div>
-            <!-- Configurations Section (Track DNA Phase 2) -->
+            <!-- Track DNA Section (reference lap) -->
+            {% if is_official and current_user.is_admin %}
             <div class="panel-section">
                 <div class="panel-section-header">
-                    <span class="section-title"><i class="bi bi-signpost-2" style="color:#8b5cf6"></i> Configurations</span>
-                    {% if not readonly %}
-                    <div class="panel-actions">
-                        <button type="button" class="btn btn-outline-secondary" id="detect-configs-btn"
-                                onclick="detectConfigs(this)" title="Detect layout configurations from session telemetry">
-                            <i class="bi bi-search"></i> Detect</button>
-                    </div>
-                    {% endif %}
+                    <span class="section-title"><i class="bi bi-fingerprint" style="color:#8b5cf6"></i> Track DNA</span>
                 </div>
-                <div id="configs-content">
-                    {% if configs %}
-                    {% for c in configs %}
-                    <div class="config-row" data-config-id="{{ c.id }}">
-                        <span class="dir-badge dir-{{ c.direction }}">{{ c.direction|upper }}</span>
-                        <span class="config-name">{{ c.name }}</span>
-                        <span class="config-count">{{ c.session_count }} sess.</span>
-                        {% if not readonly %}
-                        <button type="button" class="btn btn-sm btn-outline-secondary" onclick="renameConfig({{ c.id }})"
-                                title="Rename"><i class="bi bi-pencil"></i></button>
-                        <button type="button" class="btn btn-sm btn-outline-danger" onclick="deleteConfig({{ c.id }}, {{ c.session_count }})"
-                                title="Delete"><i class="bi bi-trash"></i></button>
+                <div id="dna-content">
+                    {% if dna.reference %}
+                    <div class="dna-ref">
+                        <div><strong>Reference: lap {{ dna.reference.lap_number }}</strong>
+                            of session #{{ dna.reference.session_id }}</div>
+                        <div class="dna-ref-meta">
+                            {{ dna.reference.date or '&mdash;' }} &middot; {{ dna.reference.device or 'unknown' }}
+                            {% if dna.reference.lap_time_s %} &middot; {{ dna.reference.lap_time_s }}s{% endif %}
+                        </div>
+                        {% if dna.reference_ok == false %}
+                        <div class="warn">&#9888; {{ dna.reference_error or 'reference lap is not usable' }}</div>
+                        {% endif %}
+                        {% if dna.card %}
+                        <div class="dna-ref-meta">
+                            card {{ dna.card.overall_score }}/10 &middot;
+                            computed {{ dna.card.computed_at[:10] if dna.card.computed_at else '&mdash;' }} &middot;
+                            v{{ dna.card.methodology_version }}
+                        </div>
+                        {% else %}
+                        <div class="dna-ref-meta">no card computed</div>
                         {% endif %}
                     </div>
-                    {% endfor %}
+                    {% elif dna_sessions %}
+                    <div class="dna-empty">No reference lap selected</div>
                     {% else %}
-                    <div class="configs-empty">No configurations{% if not readonly %} &mdash; use Detect to propose layouts from telemetry{% endif %}</div>
+                    <div class="dna-empty">No sessions on this track yet</div>
                     {% endif %}
                 </div>
-                <div id="configs-proposals" style="display:none"></div>
+                {% if dna_sessions %}
+                <div class="dna-picker" id="dna-picker"
+                     data-track-id="{{ track.id }}"
+                     data-reference="{{ dna.reference | tojson }}">
+                    <select id="dna-session-select">
+                        <option value="">session&hellip;</option>
+                    </select>
+                    <select id="dna-lap-select" disabled>
+                        <option value="">lap&hellip;</option>
+                    </select>
+                    <button type="button" class="btn btn-success" id="dna-set-btn"
+                            onclick="setReferenceLap(this)" disabled>
+                        Set reference &amp; compute</button>
+                    <div class="dna-status" id="dna-status"></div>
+                </div>
+                {% endif %}
             </div>
+            {% endif %}
         </div>
         {% if not readonly %}
         <div class="corner-panel-footer">
@@ -848,191 +840,114 @@ window.reingestSession = function(sessionId, btn) {
 {% if not readonly %}
 <script>
 (function() {
-    // Track DNA configurations (Phase 2)
-    var csrf = {{ csrf_token() | tojson }};
-    var trackId = {{ track.id }};
-    var existingConfigs = {{ configs | tojson }};
-    var lastProposals = null;
+    // Track DNA reference-lap picker (admin, official tracks)
+    var picker = document.getElementById('dna-picker');
+    if (!picker) return;
 
-    function post(url, body) {
-        return fetch(url, {
+    var trackId = parseInt(picker.dataset.trackId, 10);
+    var currentRef = JSON.parse(picker.dataset.reference || 'null');
+    var csrf = {{ csrf_token() | tojson }};
+    var sessions = {{ dna_sessions | tojson }};
+
+    var sessionSelect = document.getElementById('dna-session-select');
+    var lapSelect = document.getElementById('dna-lap-select');
+    var setBtn = document.getElementById('dna-set-btn');
+    var status = document.getElementById('dna-status');
+
+    sessions.forEach(function(sess) {
+        var opt = document.createElement('option');
+        opt.value = sess.id;
+        var label = '#' + sess.id;
+        if (sess.date) label += ' \u00b7 ' + sess.date;
+        if (sess.device) label += ' \u00b7 ' + sess.device;
+        if (sess.best_lap_time) label += ' \u00b7 best ' + sess.best_lap_time.toFixed(3) + 's';
+        opt.textContent = label;
+        sessionSelect.appendChild(opt);
+    });
+
+    if (currentRef) {
+        sessionSelect.value = String(currentRef.session_id);
+        loadLaps(currentRef.session_id, currentRef.lap_number);
+    }
+
+    sessionSelect.addEventListener('change', function() {
+        lapSelect.innerHTML = '';
+        lapSelect.disabled = true;
+        setBtn.disabled = true;
+        if (sessionSelect.value) loadLaps(parseInt(sessionSelect.value, 10), null);
+    });
+
+    lapSelect.addEventListener('change', function() {
+        setBtn.disabled = !lapSelect.value;
+    });
+
+    function loadLaps(sessionId, preselect) {
+        lapSelect.innerHTML = '<option value="">loading\u2026</option>';
+        fetch('/tracks/' + trackId + '/reference-lap/laps?session_id=' + sessionId,
+              { headers: { 'X-Requested-With': 'fetch' },
+                credentials: 'same-origin' })
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                if (data.error) throw new Error(data.error);
+                lapSelect.innerHTML = '';
+                var best = null;
+                (data.laps || []).forEach(function(lap) {
+                    if (best === null || lap.seconds < best.seconds) best = lap;
+                });
+                data.laps.forEach(function(lap) {
+                    var opt = document.createElement('option');
+                    opt.value = lap.lap;
+                    opt.textContent = 'Lap ' + lap.lap + ' \u2014 '
+                        + lap.seconds.toFixed(3) + 's'
+                        + (lap.is_best ? ' (best)' : '');
+                    lapSelect.appendChild(opt);
+                });
+                lapSelect.disabled = !data.laps.length;
+                if (preselect !== null && preselect !== undefined) {
+                    lapSelect.value = String(preselect);
+                } else if (best) {
+                    lapSelect.value = String(best.lap);
+                }
+                setBtn.disabled = !lapSelect.value;
+                if (!data.laps.length) {
+                    status.textContent = 'No clean laps in this session.';
+                }
+            })
+            .catch(function(e) {
+                lapSelect.innerHTML = '';
+                lapSelect.disabled = true;
+                status.textContent = e.message || 'Failed to load laps.';
+            });
+    }
+
+    window.setReferenceLap = function(btn) {
+        var sessionId = parseInt(sessionSelect.value, 10);
+        var lapNumber = parseInt(lapSelect.value, 10);
+        if (!sessionId || !lapNumber) return;
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Computing\u2026';
+        status.textContent = '';
+        fetch('/tracks/' + trackId + '/reference-lap', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json',
                        'X-Requested-With': 'fetch', 'X-CSRFToken': csrf },
-            body: JSON.stringify(body),
+            body: JSON.stringify({ session_id: sessionId, lap_number: lapNumber }),
             credentials: 'same-origin',
         }).then(function(r) {
             return r.json().then(function(data) {
                 if (!r.ok) throw new Error(data.error || 'Request failed');
                 return data;
             });
-        });
-    }
-
-    function esc(s) {
-        return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;')
-            .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-    }
-
-    function chipHtml(entry) {
-        var badges = '';
-        if (entry.condition === 'wet') badges += '<span class="badge-mini bm-wet">wet</span>';
-        if (entry.exclusion_reason === 'demo_label') badges += '<span class="badge-mini bm-demo">demo</span>';
-        if (entry.exclusion_reason === 'duplicate') badges += '<span class="badge-mini bm-dup">dup</span>';
-        if (entry.needs_reingest) badges += '<span class="badge-mini bm-reingest">reingest</span>';
-        var dateStr = entry.date ? entry.date.slice(8, 10) + '/' + entry.date.slice(5, 7) + '/'
-            + entry.date.slice(2, 4) : '';
-        var device = entry.data_source || '';
-        var main = '#' + entry.session_id + (dateStr ? ' \u00b7 ' + dateStr : '')
-            + (device ? ' \u00b7 ' + device : '');
-        var moveSelect = '';
-        if (existingConfigs.length) {
-            moveSelect = '<select onchange="moveSession(' + entry.session_id + ', this)" title="Move to configuration">'
-                + '<option value="">move\u2026</option>'
-                + existingConfigs.map(function(c) {
-                    return '<option value="' + c.id + '">' + esc(c.name) + '</option>';
-                }).join('')
-                + '<option value="none">no config</option></select>';
-        }
-        return '<div class="session-chip"><span class="chip-main">' + esc(main) + '</span>'
-            + badges + moveSelect + '</div>';
-    }
-
-    function clusterHtml(cluster, idx, byId) {
-        var spreadNote = cluster.length.spread_pct.toFixed(1) + '% spread'
-            + (cluster.length_warning
-                ? ' <span class="warn">\u26a0 verify same layout</span>' : '');
-        var evidence = cluster.direction.toUpperCase() + ' \u00b7 '
-            + cluster.session_ids.length + ' session' + (cluster.session_ids.length != 1 ? 's' : '')
-            + ' \u00b7 ' + Math.round(cluster.length.min) + '\u2013' + Math.round(cluster.length.max)
-            + ' m (' + spreadNote + ')'
-            + ' \u00b7 ' + Math.round(cluster.footprint_m[0]) + '\u00d7' + Math.round(cluster.footprint_m[1]) + ' m'
-            + ' \u00b7 S/F \u2264 ' + Math.round(cluster.sf_spread_m) + ' m';
-        var chips = cluster.session_ids.map(function(sid) {
-            return byId[sid] ? chipHtml(byId[sid]) : '';
-        }).join('');
-        var suggested = cluster.direction.toUpperCase() + ' layout';
-        var create = '<div class="cluster-create">'
-            + '<input type="text" id="cluster-name-' + idx + '" value="' + esc(suggested) + '" maxlength="100">'
-            + '<button type="button" class="btn btn-success" onclick="createConfig(' + idx + ')">Create</button></div>';
-        var assign = '';
-        if (existingConfigs.length) {
-            assign = '<div class="cluster-assign">'
-                + '<select id="cluster-target-' + idx + '">'
-                + existingConfigs.map(function(c) {
-                    return '<option value="' + c.id + '">' + esc(c.name) + '</option>';
-                }).join('')
-                + '</select>'
-                + '<button type="button" class="btn btn-outline-secondary" onclick="assignCluster(' + idx + ')">Assign all</button>'
-                + '</div>';
-        }
-        return '<div class="cluster-block"><div class="cluster-evidence">' + evidence + '</div>'
-            + chips + create + assign + '</div>';
-    }
-
-    function renderProposals(data) {
-        var container = document.getElementById('configs-proposals');
-        container.style.display = '';
-        var byId = {};
-        (data.sessions || []).forEach(function(s) { byId[s.session_id] = s; });
-
-        var html = '';
-        if (data.clusters.length) {
-            html += '<div class="configs-proposals-header">Proposed configurations</div>';
-            html += data.clusters.map(function(c, i) { return clusterHtml(c, i, byId); }).join('');
-        } else {
-            html += '<div class="unclustered-note">No clusters found</div>';
-        }
-        if (data.unclustered && data.unclustered.length) {
-            html += '<div class="configs-proposals-header">Unclustered</div>';
-            html += data.unclustered.map(function(u) {
-                return '<div class="unclustered-note">#' + u.session_id + ' \u2014 ' + esc(u.reason) + '</div>';
-            }).join('');
-        }
-        container.innerHTML = html;
-    }
-
-    window.detectConfigs = function(btn) {
-        var original = btn.innerHTML;
-        btn.disabled = true;
-        btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
-        var container = document.getElementById('configs-proposals');
-        container.style.display = '';
-        container.innerHTML = '<div class="unclustered-note">Analyzing telemetry&hellip;</div>';
-
-        var reset = function() { btn.disabled = false; btn.innerHTML = original; };
-
-        fetch('/tracks/' + trackId + '/configs/proposals', {
-            headers: { 'X-Requested-With': 'fetch' },
-            credentials: 'same-origin',
-        }).then(function(r) { return r.json(); })
-        .then(function(data) {
-            if (data.error) throw new Error(data.error);
-            lastProposals = data;
-            renderProposals(data);
-            reset();
+        }).then(function(data) {
+            status.textContent = 'Card computed \u2014 overall '
+                + data.overall_score + '/10. Reloading\u2026';
+            setTimeout(function() { location.reload(); }, 600);
         }).catch(function(e) {
-            container.innerHTML = '<div class="unclustered-note" style="color:#e74c3c">'
-                + esc(e.message || 'Detection failed') + '</div>';
-            reset();
+            btn.disabled = false;
+            btn.innerHTML = 'Set reference & compute';
+            status.style.color = '#e74c3c';
+            status.textContent = e.message || 'Failed.';
         });
-    };
-
-    window.createConfig = function(idx) {
-        var cluster = lastProposals.clusters[idx];
-        var name = (document.getElementById('cluster-name-' + idx).value || '').trim();
-        post('/tracks/' + trackId + '/configs/create', {
-            session_ids: cluster.session_ids,
-            name: name,
-            direction: cluster.direction,
-        }).then(function() { location.reload(); })
-          .catch(function(e) { alert(e.message); });
-    };
-
-    window.renameConfig = function(configId) {
-        var row = document.querySelector('.config-row[data-config-id="' + configId + '"]');
-        var current = row ? row.querySelector('.config-name').textContent : '';
-        var name = prompt('Configuration name:', current);
-        if (name === null) return;
-        name = name.trim();
-        if (!name) return;
-        post('/tracks/' + trackId + '/configs/' + configId + '/rename', { name: name })
-            .then(function() { location.reload(); })
-            .catch(function(e) { alert(e.message); });
-    };
-
-    window.deleteConfig = function(configId, sessionCount) {
-        var msg = 'Delete this configuration?';
-        if (sessionCount > 0) {
-            msg += ' Its ' + sessionCount + ' session' + (sessionCount != 1 ? 's' : '')
-                + ' will become unassigned (the sessions themselves are kept).';
-        }
-        if (!confirm(msg)) return;
-        post('/tracks/' + trackId + '/configs/' + configId + '/delete', {})
-            .then(function() { location.reload(); })
-            .catch(function(e) { alert(e.message); });
-    };
-
-    window.moveSession = function(sessionId, select) {
-        if (select.value === '') return;  // placeholder option
-        var configId = select.value === 'none' ? null : parseInt(select.value, 10);
-        post('/tracks/' + trackId + '/configs/assign', {
-            session_ids: [sessionId],
-            config_id: configId,
-        }).then(function() { location.reload(); })
-          .catch(function(e) { alert(e.message); select.value = ''; });
-    };
-
-    window.assignCluster = function(idx) {
-        var cluster = lastProposals.clusters[idx];
-        var select = document.getElementById('cluster-target-' + idx);
-        var configId = parseInt(select.value, 10);
-        if (!configId) return;
-        post('/tracks/' + trackId + '/configs/assign', {
-            session_ids: cluster.session_ids,
-            config_id: configId,
-        }).then(function() { location.reload(); })
-          .catch(function(e) { alert(e.message); });
     };
 })();
 </script>

@@ -257,9 +257,8 @@
         <thead>
             <tr>
                 <th>Track</th>
-                <th>Configuration</th>
-                <th>Dry</th>
-                <th>Wet</th>
+                <th>Reference lap</th>
+                <th>Card</th>
                 <th></th>
             </tr>
         </thead>
@@ -268,39 +267,34 @@
             <tr>
                 <td>
                     <a href="{{ url_for('tracks.detail', track_id=row.track.id) }}">{{ row.track.name }}</a>
-                    {% if row.track.created_by is none %}
-                    <span class="badge bg-success" style="font-size:0.65rem;">Official</span>
+                </td>
+                <td class="align-top">
+                    {% if row.reference %}
+                    <div>#{{ row.reference.session_id }} · lap {{ row.reference.lap_number }}
+                        <span class="text-muted" style="font-size:0.75rem;">{{ row.reference.date or '' }} · {{ row.reference.device or '' }}</span>
+                    </div>
+                    {% if row.reference_ok %}
+                    <span class="badge bg-success" style="font-size:0.65rem;">valid</span>
+                    {% else %}
+                    <span class="badge bg-warning text-dark" title="{{ row.reference_error or 'reference lap is not usable' }}">broken — re-pick</span>
+                    {% endif %}
+                    {% else %}
+                    <span class="text-muted" style="font-size:0.8rem;">none — pick on the track page</span>
                     {% endif %}
                 </td>
-                <td>{{ row.config.name }} <span class="badge bg-secondary" style="font-size:0.6rem;">{{ row.config.direction }}</span></td>
-                {% for cond in row.conditions %}
                 <td class="align-top">
-                    {% if cond.card %}
-                    <div>{% if cond.card.overall_score is not none %}<strong>{{ '%.2f'|format(cond.card.overall_score) }}</strong>/10{% else %}<strong>—</strong>{% endif %}
-                        <span class="text-muted" style="font-size:0.75rem;">{{ cond.card.computed_at.strftime('%d %b %Y') if cond.card.computed_at else '—' }}</span>
+                    {% if row.card %}
+                    <div>{% if row.card.overall_score is not none %}<strong>{{ '%.2f'|format(row.card.overall_score) }}</strong>/10{% else %}<strong>—</strong>{% endif %}
+                        <span class="text-muted" style="font-size:0.75rem;">{{ row.card.computed_at.strftime('%d %b %Y') if row.card.computed_at else '—' }} · v{{ row.card.methodology_version }}</span>
                     </div>
-                    <div style="font-size:0.75rem;">
-                        {%- set m = cond.quality_counts.get('Measured', 0) -%}
-                        {%- set e = cond.quality_counts.get('Estimated', 0) -%}
-                        {%- set u = cond.quality_counts.get('Unavailable', 0) -%}
-                        {%- if m %}<span class="text-success">{{ m }} measured</span>{% endif -%}
-                        {%- if e %}{% if m %} · {% endif %}<span class="text-warning-emphasis">{{ e }} estimated</span>{% endif -%}
-                        {%- if u %}{% if m or e %} · {% endif %}<span class="text-muted">{{ u }} unavailable</span>{% endif -%}
-                    </div>
-                    {% if cond.stale %}
-                    <span class="badge bg-warning text-dark" title="The compute input sessions changed since this card was built">inputs changed</span>
-                    {% else %}
-                    <span class="badge bg-success" style="font-size:0.65rem;">current</span>
-                    {% endif %}
                     {% else %}
                     <span class="text-muted" style="font-size:0.8rem;">no card</span>
                     {% endif %}
                 </td>
-                {% endfor %}
                 <td class="text-nowrap">
                     <form method="post" action="{{ url_for('admin.compute_track_dna', track_id=row.track.id) }}" class="d-inline js-dna-recompute">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                        <button type="submit" class="btn btn-sm btn-outline-primary" title="Compute scorecards for every configuration x condition (takes a few seconds per condition)">
+                        <button type="submit" class="btn btn-sm btn-outline-primary" title="Recompute this track's card from its reference lap">
                             <i class="bi bi-arrow-repeat"></i> Recompute
                         </button>
                     </form>
@@ -311,7 +305,7 @@
     </table>
 </div>
 <p class="text-muted" style="font-size:0.78rem;">
-    <i class="bi bi-info-circle"></i> Scorecards never recompute automatically: new sessions mark a card "inputs changed" until you recompute.
+    <i class="bi bi-info-circle"></i> Cards never recompute automatically: pick or change the reference lap on a track's edit page.
 </p>
 <script>
     document.querySelectorAll('.js-dna-recompute').forEach(function(form) {
@@ -325,7 +319,7 @@
 {% else %}
 <div class="bb-empty">
     <i class="bi bi-fingerprint"></i>
-    <p>No track configurations yet — create one from a track's detail page to build scorecards.</p>
+    <p>No official tracks yet — Track DNA lives on official tracks.</p>
 </div>
 {% endif %}
 

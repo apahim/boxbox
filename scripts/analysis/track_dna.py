@@ -88,8 +88,8 @@ def bbox_iou(a, b):
 # Phase 3 — geometry engine
 # ---------------------------------------------------------------------------
 
-# Matches app.track_dna.hygiene.MIN_SAMPLES; duplicated so the engine stays
-# free of app imports.
+# Matches the Phase-1 hygiene rule the DB loader was built on; the
+# engine stays free of app imports.
 MIN_SAMPLES = 100
 
 

@@ -113,14 +113,15 @@
     {% endif %}
 </div>
 
+{% if is_official %}
 <div id="track-dna" data-track-id="{{ track.id }}" hidden>
     <h5 class="section-heading"><i class="bi bi-fingerprint" style="color:var(--bb-blue)"></i> Track DNA</h5>
     <p class="text-muted" style="font-size:0.82rem;">
-        Consensus track character from all drivers' laps at this layout —
-        dimensions, corners, braking zones and elevation, with per-dimension
-        measurement quality.
+        Track character from the admin-selected reference lap —
+        dimensions, corners, braking zones and elevation.
     </p>
 </div>
+{% endif %}
 
 <h5 class="section-heading" id="sessions"><i class="bi bi-speedometer2" style="color:var(--bb-blue)"></i> Your Sessions Here</h5>
 

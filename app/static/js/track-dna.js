@@ -1,26 +1,19 @@
-/* Track DNA scorecard section (plan Phase 9).
+/* Track DNA card section (reference-lap methodology).
  *
- * Fetches /api/tracks/<id>/dna and renders the scorecard: dimension
- * table with quality classes, DNA corner table, braking zones + minor
- * zones + DNA corners on a MapKit map (via the stored consensus
- * trajectory), the elevation profile (Plotly, loaded on demand) and
- * the similarity section. Tracks without scorecards show nothing —
- * the section starts hidden and is only revealed when cards exist.
+ * Fetches /api/tracks/<id>/dna and renders the card: dimension table,
+ * DNA corner table, braking zones + minor zones + DNA corners on a
+ * MapKit map (via the stored reference-lap trajectory), the elevation
+ * profile (Plotly, loaded on demand) and the similarity section.
+ * Tracks without a card show nothing — the section starts hidden and
+ * is only revealed when a card exists.
  */
 window.TrackDNA = (function() {
     var container = null;
     var trackId = null;
-    var cards = null;
-    var activeCondition = {};
+    var card = null;
 
     var PLOTLY_SRC = "https://cdn.plot.ly/plotly-3.4.0.min.js";
     var PLOTLY_INTEGRITY = "sha384-pFOQ7loGBChmUyS4Tszy+he8OWeYkwTFjc2xii4aJUWWiGwf2u2OEc04T5iDRpMp";
-
-    var QUALITY_BADGE = {
-        Measured: "bg-success",
-        Estimated: "bg-warning text-dark",
-        Unavailable: "bg-secondary"
-    };
 
     function api(path) {
         return fetch("/api/tracks/" + trackId + path,
@@ -71,7 +64,7 @@ window.TrackDNA = (function() {
         var table = el("table", "table table-hover table-sm mb-0");
         var thead = el("thead");
         thead.innerHTML = "<tr><th>Dimension</th><th>Value</th>"
-            + "<th>Character</th><th>Score</th><th>Quality</th></tr>";
+            + "<th>Character</th><th>Score</th></tr>";
         table.appendChild(thead);
         var tbody = el("tbody");
         card.dimensions.forEach(function(dim) {
@@ -82,20 +75,6 @@ window.TrackDNA = (function() {
             var score = dim.score === null || dim.score === undefined
                 ? "—" : dim.score.toFixed(1) + "/10";
             tr.appendChild(el("td", null, score));
-            var badge = el("span",
-                "badge " + (QUALITY_BADGE[dim.quality] || "bg-secondary"),
-                dim.quality || "—");
-            if (dim.warnings && dim.warnings.length) {
-                badge.title = dim.warnings.join("; ");
-                var td = el("td");
-                td.appendChild(badge);
-                td.appendChild(el("span", "ms-1 text-muted", "⚠"));
-                tr.appendChild(td);
-            } else {
-                var td2 = el("td");
-                td2.appendChild(badge);
-                tr.appendChild(td2);
-            }
             tbody.appendChild(tr);
         });
         table.appendChild(tbody);
@@ -283,91 +262,62 @@ window.TrackDNA = (function() {
 
     // ---- similarity ----------------------------------------------------------------
 
-    function renderSimilarity(holder, condition) {
-        api("/dna/similar?condition=" + condition).then(function(payload) {
-            if (!payload || !payload.configs) return;
-            payload.configs.forEach(function(cfg) {
-                if (!cfg.comparisons || !cfg.comparisons.length) return;
-                var title = payload.configs.length > 1
-                    ? "Similar Tracks — " + cfg.config_name : "Similar Tracks";
-                holder.appendChild(el("h6", "mt-3 mb-2", title));
-                var wrap = el("div", "table-responsive");
-                var table = el("table",
-                    "table table-hover table-sm mb-0 dna-similarity");
-                var thead = el("thead");
-                thead.innerHTML = "<tr><th>Track</th><th>Layout</th>"
-                    + "<th>Similarity</th><th>Coverage</th></tr>";
-                table.appendChild(thead);
-                var tbody = el("tbody");
-                cfg.comparisons.forEach(function(cmp) {
-                    var tr = el("tr");
-                    var tdName = el("td");
-                    var link = el("a", null, cmp.track_name);
-                    link.href = "/tracks/" + cmp.track_id;
-                    tdName.appendChild(link);
-                    tr.appendChild(tdName);
-                    tr.appendChild(el("td", "text-muted", cmp.config_name));
-                    var tdSim = el("td");
-                    tdSim.appendChild(el("strong", null,
-                        cmp.similarity_pct.toFixed(1) + "%"));
-                    var top = Object.keys(cmp.contributions || {})
-                        .map(function(k) { return [k, cmp.contributions[k]]; })
-                        .sort(function(a, b) { return b[1] - a[1]; })
-                        .slice(0, 3)
-                        .map(function(kv) {
-                            return kv[0].replace(/_/g, " ") + " "
-                                + kv[1].toFixed(1) + " pp";
-                        }).join(", ");
-                    if (top) {
-                        tdSim.appendChild(el("div", "text-muted",
-                            "differs on: " + top));
-                    }
-                    tr.appendChild(tdSim);
-                    tr.appendChild(el("td", null,
-                        Math.round(100 * cmp.coverage) + "%"));
-                    tbody.appendChild(tr);
-                });
-                table.appendChild(tbody);
-                wrap.appendChild(table);
-                holder.appendChild(wrap);
+    function renderSimilarity(holder) {
+        api("/dna/similar").then(function(payload) {
+            if (!payload || !payload.comparisons
+                || !payload.comparisons.length) return;
+            holder.appendChild(el("h6", "mt-3 mb-2", "Similar Tracks"));
+            var wrap = el("div", "table-responsive");
+            var table = el("table",
+                "table table-hover table-sm mb-0 dna-similarity");
+            var thead = el("thead");
+            thead.innerHTML = "<tr><th>Track</th>"
+                + "<th>Similarity</th><th>Coverage</th></tr>";
+            table.appendChild(thead);
+            var tbody = el("tbody");
+            payload.comparisons.forEach(function(cmp) {
+                var tr = el("tr");
+                var tdName = el("td");
+                var link = el("a", null, cmp.track_name);
+                link.href = "/tracks/" + cmp.track_id;
+                tdName.appendChild(link);
+                tr.appendChild(tdName);
+                var tdSim = el("td");
+                tdSim.appendChild(el("strong", null,
+                    cmp.similarity_pct.toFixed(1) + "%"));
+                var top = Object.keys(cmp.contributions || {})
+                    .map(function(k) { return [k, cmp.contributions[k]]; })
+                    .sort(function(a, b) { return b[1] - a[1]; })
+                    .slice(0, 3)
+                    .map(function(kv) {
+                        return kv[0].replace(/_/g, " ") + " "
+                            + kv[1].toFixed(1) + " pp";
+                    }).join(", ");
+                if (top) {
+                    tdSim.appendChild(el("div", "text-muted",
+                        "differs on: " + top));
+                }
+                tr.appendChild(tdSim);
+                tr.appendChild(el("td", null,
+                    Math.round(100 * cmp.coverage) + "%"));
+                tbody.appendChild(tr);
             });
+            table.appendChild(tbody);
+            wrap.appendChild(table);
+            holder.appendChild(wrap);
         });
     }
 
     // ---- card rendering ---------------------------------------------------------
 
-    function qualitySummary(card) {
-        var counts = {};
-        card.dimensions.forEach(function(dim) {
-            counts[dim.quality] = (counts[dim.quality] || 0) + 1;
-        });
-        var parts = [];
-        if (counts.Measured) parts.push(counts.Measured + " measured");
-        if (counts.Estimated) parts.push(counts.Estimated + " estimated");
-        if (counts.Unavailable)
-            parts.push(counts.Unavailable + " unavailable");
-        return parts.join(" · ");
-    }
-
     function datasetLine(card) {
         var d = card.dataset || {};
-        var laps = d.laps && d.laps.valid;
-        var users = d.users ? Object.keys(d.users).length : null;
-        var devices = (d.devices || []).join(", ");
-        var parts = [];
-        if (users !== null) parts.push(users + " user"
-            + (users === 1 ? "" : "s"));
-        if (laps !== null && laps !== undefined)
-            parts.push(laps + " valid laps");
-        if (d.date_range && d.date_range[0])
-            parts.push(d.date_range[0]
-                + (d.date_range[1] && d.date_range[1] !== d.date_range[0]
-                    ? " to " + d.date_range[1] : ""));
-        if (devices) parts.push(devices);
-        var conf = d.confidence;
-        if (conf && conf.convergence && conf.convergence.demonstrated_n)
-            parts.push("convergence demonstrated at n="
-                + conf.convergence.demonstrated_n);
+        var parts = ["admin-selected reference lap"];
+        if (d.lap_number !== null && d.lap_number !== undefined)
+            parts.push("lap " + d.lap_number);
+        if (d.lap_time_s) parts.push(d.lap_time_s + "s");
+        if (d.date) parts.push(d.date);
+        if (d.device) parts.push(d.device);
         return parts.join(" · ");
     }
 
@@ -386,8 +336,13 @@ window.TrackDNA = (function() {
         header.appendChild(scoreEl);
         var meta = el("div", "text-muted");
         meta.style.fontSize = "0.8rem";
-        meta.appendChild(el("div", null, qualitySummary(card)));
         meta.appendChild(el("div", null, datasetLine(card)));
+        if (card.reference_ok === false) {
+            var broken = el("div", "text-warning");
+            broken.textContent = "⚠ reference lap is no longer usable — "
+                + (card.reference_error || "it will be re-picked");
+            meta.appendChild(broken);
+        }
         if (card.computed_at)
             meta.appendChild(el("div", null,
                 "computed " + card.computed_at.slice(0, 10)
@@ -399,71 +354,29 @@ window.TrackDNA = (function() {
         buildMap(body, card);
         renderCorners(body, card);
         renderElevation(body, card);
-        renderSimilarity(body, card.condition);
+        renderSimilarity(body);
     }
 
-    // ---- config blocks ----------------------------------------------------------
-
     function render() {
-        var groups = {};
-        var order = [];
-        cards.forEach(function(card) {
-            if (!groups[card.track_config_id]) {
-                groups[card.track_config_id] = [];
-                order.push(card.track_config_id);
-            }
-            groups[card.track_config_id].push(card);
-        });
+        var block = el("div", "card mb-3");
+        var blockBody = el("div", "card-body");
+        block.appendChild(blockBody);
 
-        order.forEach(function(configId) {
-            var configCards = groups[configId];
-            var block = el("div", "card mb-3");
-            var blockBody = el("div", "card-body");
-            block.appendChild(blockBody);
-
-            // header: config name + direction + condition pills
-            var head = el("div",
-                "d-flex flex-wrap justify-content-between "
-                + "align-items-center gap-2 mb-3");
-            var nameEl = el("h6", "mb-0 d-flex align-items-center gap-2");
-            nameEl.appendChild(el("span", null,
-                configCards[0].config_name));
+        var head = el("div",
+            "d-flex flex-wrap justify-content-between "
+            + "align-items-center gap-2 mb-3");
+        var nameEl = el("h6", "mb-0 d-flex align-items-center gap-2");
+        nameEl.appendChild(el("span", null, "Track DNA"));
+        if (card.dataset && card.dataset.direction)
             nameEl.appendChild(el("span", "badge bg-secondary",
-                configCards[0].direction));
-            head.appendChild(nameEl);
+                card.dataset.direction));
+        head.appendChild(nameEl);
+        blockBody.appendChild(head);
 
-            var conditions = configCards.map(function(c) {
-                return c.condition;
-            });
-            if (conditions.length > 1) {
-                var group = el("div", "btn-group btn-group-sm");
-                group.setAttribute("role", "group");
-                conditions.forEach(function(condition) {
-                    var btn = el("button",
-                        "btn btn-outline-secondary"
-                        + (condition === activeCondition[configId]
-                            ? " active" : ""), condition);
-                    btn.type = "button";
-                    btn.addEventListener("click", function() {
-                        activeCondition[configId] = condition;
-                        render();
-                    });
-                    group.appendChild(btn);
-                });
-                head.appendChild(group);
-            }
-            blockBody.appendChild(head);
-
-            var card = configCards.filter(function(c) {
-                return c.condition === activeCondition[configId];
-            })[0] || configCards[0];
-            activeCondition[configId] = card.condition;
-
-            var cardBody = el("div");
-            blockBody.appendChild(cardBody);
-            renderCard(cardBody, card);
-            container.appendChild(block);
-        });
+        var cardBody = el("div");
+        blockBody.appendChild(cardBody);
+        renderCard(cardBody, card);
+        container.appendChild(block);
     }
 
     function init() {
@@ -471,9 +384,8 @@ window.TrackDNA = (function() {
         if (!container) return;
         trackId = parseInt(container.dataset.trackId, 10);
         api("/dna").then(function(payload) {
-            if (!payload || !payload.scorecards
-                || !payload.scorecards.length) return;  // stays hidden
-            cards = payload.scorecards;
+            if (!payload || !payload.card) return;  // stays hidden
+            card = payload.card;
             container.hidden = false;
             render();
         });

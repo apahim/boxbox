@@ -229,19 +229,23 @@ def reingest_session(session_id):
     click.echo(f'Session {session_id} reingested successfully.')
 
 
-@click.command('dna-inventory')
+@click.command('compute-track-dna')
 @click.argument('track_id', required=False, type=int)
-@click.option('--json', 'as_json', is_flag=True,
-              help='Emit machine-readable JSON instead of a report')
+@click.option('--all', 'all_tracks', is_flag=True,
+              help='Compute cards for every official track with a '
+                   'reference lap')
 @with_appcontext
-def dna_inventory(track_id, as_json):
-    """Report the Track DNA data-hygiene inventory for each track.
+def compute_track_dna(track_id, all_tracks):
+    """Compute and store Track DNA cards (reference-lap methodology).
 
-    Lists the clean dataset per track after the deterministic exclusion
-    rules (demo-labelled sessions, exact duplicates) and the dry/wet
-    condition split, with a provisional lap-validity count per session.
+    Builds the card for one track (TRACK_ID) or every official track
+    with a reference lap (--all) — one row per (track, methodology
+    version); recomputation upserts. No hooks call this; the admin-page
+    trigger shares this path.
     """
-    from app.track_dna.hygiene import classify_track_sessions
+    import time
+
+    from app.track_dna.cards import build_card, card_payload
 
     if track_id is not None:
         track = db.session.get(Track, track_id)
@@ -249,130 +253,41 @@ def dna_inventory(track_id, as_json):
             click.echo(f'Error: track {track_id} not found.')
             raise SystemExit(1)
         tracks = [track]
-    else:
-        tracks = Track.query.order_by(Track.id).all()
-
-    datasets = [ds for ds in (classify_track_sessions(t.id) for t in tracks)
-                if ds is not None]
-
-    if as_json:
-        click.echo(json.dumps([ds.to_dict() for ds in datasets], indent=2))
-        return
-
-    for ds in datasets:
-        _echo_dna_dataset(ds)
-
-
-def _echo_dna_dataset(ds):
-    verdict, reason = ds.verdict
-    suffix = f' ({reason})' if reason else ''
-    click.echo(f'{ds.track_name} (id {ds.track_id}) — {verdict}{suffix}')
-
-    n_dry = len(ds.sessions_for('dry'))
-    n_wet = len(ds.sessions_for('wet'))
-    click.echo(f'  sessions: {len(ds.included)} clean ({n_dry} dry, {n_wet} wet) '
-               f'of {len(ds.verdicts)} total, {len(ds.excluded)} excluded')
-
-    demo_ids = [str(v.session_id) for v in ds.excluded
-                if v.exclusion_reason == 'demo_label']
-    if demo_ids:
-        click.echo(f'    demo ({len(demo_ids)}): {", ".join(demo_ids)}')
-
-    dupes = [v for v in ds.excluded if v.exclusion_reason == 'duplicate']
-    if dupes:
-        dupe_strs = [f'{v.session_id} (of {v.duplicate_of})' for v in dupes]
-        click.echo(f'    duplicate ({len(dupes)}): {", ".join(dupe_strs)}')
-
-    wet_ids = [str(v.session_id) for v in ds.sessions_for('wet')]
-    if wet_ids:
-        click.echo(f'    wet sessions: {", ".join(wet_ids)}')
-
-    if ds.included:
-        users = ', '.join(f'{u}: {n} sessions'
-                          for u, n in ds.user_counts.items())
-        click.echo(f'  users: {len(ds.user_counts)} ({users})')
-
-    click.echo(f'  provisional laps: {ds.provisional_laps()} '
-               f'(dry {ds.provisional_laps("dry")}, '
-               f'wet {ds.provisional_laps("wet")})')
-
-    if ds.devices:
-        click.echo(f'  devices: {", ".join(ds.devices)}')
-
-    date_range = ds.date_range
-    if date_range:
-        click.echo(f'  date range: {date_range[0]} -> {date_range[1]}')
-
-    click.echo()
-
-
-@click.command('compute-track-dna')
-@click.argument('track_id', required=False, type=int)
-@click.option('--condition', 'condition', default='all',
-              type=click.Choice(['dry', 'wet', 'all']),
-              help='Condition bucket to compute (default: both, computed '
-                   'separately — never mixed)')
-@click.option('--all', 'all_configs', is_flag=True,
-              help='Compute scorecards for every track configuration')
-@with_appcontext
-def compute_track_dna(track_id, condition, all_configs):
-    """Compute and store Track DNA scorecards (Phase 7).
-
-    Builds scorecards for one track's configurations (TRACK_ID) or
-    every configuration (--all), one row per (config, condition,
-    methodology version) — recomputation upserts. No hooks call this
-    (D7 revised); this is the Phase 9 admin trigger's engine.
-    """
-    import time
-
-    from app.models import TrackConfig
-    from app.track_dna.scorecards import (
-        CONDITIONS, build_scorecard, card_payload,
-    )
-
-    if track_id is not None:
-        track = db.session.get(Track, track_id)
-        if track is None:
-            click.echo(f'Error: track {track_id} not found.')
-            raise SystemExit(1)
-        configs = TrackConfig.query.filter_by(track_id=track_id).order_by(
-            TrackConfig.id).all()
-        if not configs:
-            click.echo(f'Error: track {track_id} has no configurations.')
-            raise SystemExit(1)
-    elif all_configs:
-        configs = TrackConfig.query.order_by(TrackConfig.id).all()
-        if not configs:
-            click.echo('Error: no track configurations exist.')
+    elif all_tracks:
+        tracks = (Track.query.filter(Track.created_by.is_(None))
+                  .order_by(Track.id).all())
+        if not tracks:
+            click.echo('Error: no official tracks exist.')
             raise SystemExit(1)
     else:
         click.echo('Error: pass a TRACK_ID or --all.')
         raise SystemExit(1)
 
-    conditions = CONDITIONS if condition == 'all' else (condition,)
     started = time.time()
     n_cards = 0
-    for config in configs:
-        track = db.session.get(Track, config.track_id)
-        for cond in conditions:
-            click.echo(f'{track.name} — {config.name} ({cond}) ...',
-                       nl=False)
-            t0 = time.time()
-            card, result = build_scorecard(config.id, cond)
-            if card is None:
-                click.echo(f' skipped ({result.get("error")})')
-                continue
-            n_cards += 1
-            payload = card_payload(card)
-            click.echo(f' {time.time() - t0:.1f}s — overall '
-                       f'{card.overall_score}/10')
-            for dim in payload['dimensions']:
-                value = ('—' if dim['value'] is None
-                         else f"{dim['value']}{dim['unit']}")
-                score = ('—' if dim['score'] is None
-                         else f"{dim['score']}/10")
-                click.echo(f'    {dim["display"]:<20} {value:>12}  '
-                           f'{str(dim["class"] or "—"):<14} {score:<8} '
-                           f'{dim.get("quality", "—")}')
-    click.echo(f'\n{n_cards} scorecard(s) stored in '
+    for track in tracks:
+        if track.created_by is not None:
+            click.echo(f'{track.name} — skipped (not official)')
+            continue
+        if track.reference_session_id is None:
+            click.echo(f'{track.name} — skipped (no reference lap)')
+            continue
+        click.echo(f'{track.name} ...', nl=False)
+        t0 = time.time()
+        card, result = build_card(track.id)
+        if card is None:
+            click.echo(f' skipped ({result.get("error")})')
+            continue
+        n_cards += 1
+        payload = card_payload(card, track=track)
+        click.echo(f' {time.time() - t0:.1f}s — overall '
+                   f'{card.overall_score}/10')
+        for dim in payload['dimensions']:
+            value = ('—' if dim['value'] is None
+                     else f"{dim['value']}{dim['unit']}")
+            score = ('—' if dim['score'] is None
+                     else f"{dim['score']}/10")
+            click.echo(f'    {dim["display"]:<20} {value:>12}  '
+                       f'{str(dim["class"] or "—"):<14} {score:<8}')
+    click.echo(f'\n{n_cards} card(s) stored in '
                f'{time.time() - started:.1f}s.')
