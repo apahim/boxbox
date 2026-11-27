@@ -404,15 +404,39 @@ def test_detail_page_has_dna_shell_official_only(app, client):
     assert 'id="track-dna"' in body
     assert 'track-dna.js' in body
     assert f'data-track-id="{track_id}"' in body
-    # you-vs-reference hook + no badge without a card
+    # you-vs-reference hook + no badge without a card; no sessions at
+    # the track -> no raceline compare link hook
     assert 'data-user-best-lap=' in body
     assert 'class="track-badge"' not in body
+    assert 'data-compare-session' not in body
 
     # personal tracks carry no DNA section at all
     resp = client.get(f'/tracks/{personal_id}')
     assert resp.status_code == 200
     body = resp.get_data(as_text=True)
     assert 'id="track-dna"' not in body
+
+
+def test_detail_page_compare_session_hook(app, client):
+    """A user with sessions at the track gets the raceline compare
+    hook pointing at their best session."""
+    with app.app_context():
+        admin, track, _session = _seed_official()
+        viewer = make_user(email='racer@test.com')
+        # two sessions; the slower date is later so ordering cannot
+        # mask the best-lap pick
+        fast = seed_dna_session(track, viewer, laps=2, day=5)
+        fast.best_lap_time = 55.0
+        slow = seed_dna_session(track, viewer, laps=2, day=6)
+        slow.best_lap_time = 58.0
+        db.session.commit()
+        track_id, viewer_id, fast_id = track.id, viewer.id, fast.id
+
+    _login(client, viewer_id)
+    resp = client.get(f'/tracks/{track_id}')
+    assert resp.status_code == 200
+    body = resp.get_data(as_text=True)
+    assert f'data-compare-session="{fast_id}"' in body
 
 
 def test_detail_page_badge_with_card(app, client):

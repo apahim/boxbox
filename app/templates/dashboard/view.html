@@ -385,4 +385,14 @@ function handleShare(btn) {
     });
 }
 </script>
+<script>
+(function() {
+    // deep links: #raceline opens the Racing Line tab (used by the
+    // track page's "compare to the reference" link)
+    if (location.hash === '#raceline') {
+        var tab = document.getElementById('raceline-tab');
+        if (tab) new bootstrap.Tab(tab).show();
+    }
+})();
+</script>
 {% endblock %}

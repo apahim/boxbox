@@ -1,15 +1,21 @@
 /* Track DNA card section (reference-lap methodology).
  *
- * Fetches /api/tracks/<id>/dna and renders the card as an instrument
- * panel: the interpretation block (headline, chips, blurb), the lap
- * strip (the circuit unrolled: corners, braking zones, S/F), the DNA
- * fingerprint radar (Plotly), the full dimension table (collapsed),
- * the corner table, and the elevation profile. The reference lap is
- * replayable on the page's single MapKit map (marker animated at
- * lap-time pace, synced to a cursor on the lap strip).
+ * Fetches /api/tracks/<id>/dna and renders the card for someone
+ * learning the track: the interpretation block (headline, chips,
+ * blurb), driving notes (corner-by-corner, human units), the lap
+ * strip (the circuit unrolled) and the corner table (apex speeds).
+ * The technical layers — DNA fingerprint radar and the full
+ * dimension table — live in a collapsed Details section.
  *
- * Cross-linking: hovering a lap-strip segment or a corner-table row
- * pulses the matching point on the map.
+ * The reference lap replays as a sighting lap: a marker on the
+ * page's single MapKit map at lap-time pace (camera follows when
+ * zoomed in), a synced cursor sweeping the lap strip, corner blocks
+ * lighting as they are passed, and a live callout naming the current
+ * or next turn with BRAKE flashes before braking zones.
+ *
+ * Cross-linking: hovering a driving note, lap-strip segment or
+ * corner-table row pulses the matching point on the map and
+ * highlights the same turn everywhere it appears.
  *
  * Tracks without a card show nothing — the section reveals a loading
  * skeleton after 200ms and is removed again if no card exists.
@@ -19,6 +25,7 @@ window.TrackDNA = (function() {
     var trackId = null;
     var card = null;
     var userBestLap = null;
+    var compareSessionId = null;   // user's best session here -> raceline
 
     var stripCursor = null;      // lap-strip replay cursor element
     var replay = { raf: null, playing: false, speed: 1, marker: null,
@@ -99,6 +106,20 @@ window.TrackDNA = (function() {
         });
     }
 
+    // highlight one turn everywhere it appears: corner-table row,
+    // lap-strip segment, driving note
+    function highlightTurn(turn, on) {
+        var row = document.getElementById("dna-corner-" + turn);
+        if (row) row.classList.toggle("table-active", on);
+        var note = document.getElementById("dna-note-" + turn);
+        if (note) note.classList.toggle("dna-note-active", on);
+        document.querySelectorAll(
+            '.strip-seg[data-type="corner"][data-index="' + turn + '"]')
+            .forEach(function(seg) {
+                seg.classList.toggle("strip-hi", on);
+            });
+    }
+
     // ---- interpretation block ------------------------------------------------------
 
     function renderSummary(body, card) {
@@ -135,6 +156,37 @@ window.TrackDNA = (function() {
             + fmtLap(userBestLap) + " ("
             + (deltaPct <= 0 ? "" : "+") + deltaPct.toFixed(1) + "%)";
         meta.appendChild(line);
+    }
+
+    // ---- driving notes: the track, taught corner by corner --------------------------
+
+    function renderDrivingNotes(body, card) {
+        var notes = card.driving_notes || [];
+        var traj = card.support && card.support.trajectory;
+        if (!notes.length || !traj || !traj.points) return;
+
+        var holder = el("div");
+        body.appendChild(holder);
+        holder.appendChild(el("h6", "mt-3 mb-2", "Driving notes"));
+
+        var list = el("div", "dna-notes");
+        holder.appendChild(list);
+        notes.forEach(function(n) {
+            var item = el("div", "dna-note");
+            item.id = "dna-note-" + n.turn;
+            item.appendChild(el("div", "dna-note-title", n.title));
+            if (n.note) {
+                item.appendChild(el("div", "dna-note-text", n.note));
+            }
+            item.addEventListener("mouseenter", function() {
+                pulseAt(trajAt(traj.points, n.s_apex));
+                highlightTurn(n.turn, true);
+            });
+            item.addEventListener("mouseleave", function() {
+                highlightTurn(n.turn, false);
+            });
+            list.appendChild(item);
+        });
     }
 
     // ---- lap strip: the circuit unrolled --------------------------------------------
@@ -209,13 +261,10 @@ window.TrackDNA = (function() {
         function wireHover(node, type, idx, pos) {
             node.addEventListener("mouseenter", function() {
                 pulseAt(pos);
-                var row = document.getElementById("dna-corner-" + idx);
-                if (type === "corner" && row) row.classList.add("table-active");
+                if (type === "corner") highlightTurn(idx, true);
             });
             node.addEventListener("mouseleave", function() {
-                var row = document.getElementById("dna-corner-" + idx);
-                if (type === "corner" && row)
-                    row.classList.remove("table-active");
+                if (type === "corner") highlightTurn(idx, false);
             });
         }
 
@@ -229,7 +278,7 @@ window.TrackDNA = (function() {
             blocks.forEach(function(node) {
                 wireHover(node, "corner", i + 1, apex);
             });
-            label("C" + (i + 1), c.s_apex, "corner d-none d-sm-block");
+            label("T" + (i + 1), c.s_apex, "corner d-none d-sm-block");
         });
 
         // braking zones: intensity markers at s_trough
@@ -290,21 +339,25 @@ window.TrackDNA = (function() {
         }, { displayModeBar: false, responsive: true });
     }
 
-    // ---- dimension table (collapsed) --------------------------------------------------
+    // ---- Details (collapsed): fingerprint radar + full dimension table ---------------
 
-    function renderDimensions(body, card) {
+    function renderDetails(body, card) {
         var toggle = el("button",
             "btn btn-sm btn-outline-secondary mt-3 mb-2");
         toggle.type = "button";
         toggle.setAttribute("data-bs-toggle", "collapse");
-        toggle.setAttribute("data-bs-target", "#dna-dims");
+        toggle.setAttribute("data-bs-target", "#dna-details");
         toggle.setAttribute("aria-expanded", "false");
-        toggle.innerHTML = '<i class="bi bi-table"></i> All dimensions';
+        toggle.innerHTML = '<i class="bi bi-sliders"></i> Details';
         body.appendChild(toggle);
 
         var col = el("div", "collapse");
-        col.id = "dna-dims";
+        col.id = "dna-details";
         body.appendChild(col);
+
+        // the fingerprint radar lives in here — analyst material,
+        // out of the learner's way
+        loadPlotly(function() { renderRadar(col, card); }, col);
 
         var wrap = el("div", "table-responsive");
         var table = el("table", "table table-hover table-sm mb-0");
@@ -341,25 +394,28 @@ window.TrackDNA = (function() {
         var wrap = el("div", "table-responsive");
         var table = el("table", "table table-hover table-sm mb-0");
         var thead = el("thead");
-        thead.innerHTML = "<tr><th>#</th><th>Type</th><th>Radius</th>"
-            + "<th>Heading change</th><th>Side</th>"
-            + "<th class='d-none d-md-table-cell'>Zone (m)</th></tr>";
+        thead.innerHTML = "<tr><th>Turn</th><th>Type</th>"
+            + "<th>Apex speed</th><th>Side</th></tr>";
         table.appendChild(thead);
         var tbody = el("tbody");
         corners.forEach(function(c, i) {
             var tr = el("tr");
             tr.id = "dna-corner-" + (i + 1);
-            tr.appendChild(el("td", null, "C" + (i + 1)));
+            tr.appendChild(el("td", null, "Turn " + (i + 1)));
             tr.appendChild(el("td", null, c.class || "—"));
-            tr.appendChild(el("td", null, c.radius_m === null
-                ? "—" : c.radius_m + " m"));
-            tr.appendChild(el("td", null, Math.abs(c.delta_theta_deg) + "°"));
+            tr.appendChild(el("td", null,
+                c.apex_speed_kmh
+                    ? "~" + Math.round(c.apex_speed_kmh) + " km/h"
+                    : "—"));
             tr.appendChild(el("td", null, c.sign < 0 ? "Right" : "Left"));
-            tr.appendChild(el("td", "d-none d-md-table-cell",
-                c.s_start + "–" + c.s_end + " m"));
-            // hovering the row pulses the apex on the map
+            // hovering the row pulses the apex on the map and lights
+            // the same turn in the notes and the strip
             tr.addEventListener("mouseenter", function() {
-                pulseAt(trajAt(traj.points, c.s_apex));
+                pulseAt(trajAt(traj && traj.points, c.s_apex));
+                highlightTurn(i + 1, true);
+            });
+            tr.addEventListener("mouseleave", function() {
+                highlightTurn(i + 1, false);
             });
             tbody.appendChild(tr);
         });
@@ -443,6 +499,22 @@ window.TrackDNA = (function() {
         });
         wrap.appendChild(speed);
         if (!canReplay) speed.disabled = true;
+
+        // live callout while the sighting lap plays ("Turn 3 —
+        // medium left · ~52 km/h", BRAKE before zone troughs)
+        var callout = el("div", "dna-callout");
+        wrap.appendChild(callout);
+        replay.callout = callout;
+
+        // where am I losing time? — straight into the raceline tool
+        if (compareSessionId) {
+            var link = el("a", "btn btn-sm btn-outline-primary");
+            link.href = "/dashboard/" + compareSessionId + "#raceline";
+            link.innerHTML = '<i class="bi bi-signpost-split"></i>'
+                + ' Compare your laps to this reference';
+            wrap.appendChild(link);
+        }
+
         body.appendChild(wrap);
 
         btn.addEventListener("click", function() { toggleReplay(); });
@@ -472,6 +544,89 @@ window.TrackDNA = (function() {
             return;
         }
         startReplay();
+    }
+
+    function setCallout(text, brake) {
+        if (!replay.callout) return;
+        replay.callout.textContent = text || "";
+        replay.callout.classList.toggle("dna-callout-brake", !!brake);
+    }
+
+    /* the sighting-lap commentary: name the corner we are in, or the
+     * one coming up, with a BRAKE flash when a zone trough is close */
+    function updateCallout(s) {
+        var support = card.support || {};
+        var consensus = support.consensus || {};
+        var corners = consensus.corners || [];
+        var zones = (support.braking || {}).zones || [];
+        var L = (support.trajectory || {}).length_m || 0;
+        if (!corners.length || !L) { setCallout(""); return; }
+
+        var wrapped = ((s % L) + L) % L;
+        var i, c, start, end, inside;
+
+        // inside a corner right now?
+        for (i = 0; i < corners.length; i++) {
+            c = corners[i];
+            start = ((c.s_start % L) + L) % L;
+            end = ((c.s_end % L) + L) % L;
+            inside = start <= end
+                ? (wrapped >= start && wrapped <= end)
+                : (wrapped >= start || wrapped <= end);
+            if (inside) {
+                var side = c.sign < 0 ? "right" : "left";
+                var text = "Turn " + (i + 1) + " — "
+                    + (c.class || "corner") + " " + side;
+                if (c.apex_speed_kmh)
+                    text += " · ~" + Math.round(c.apex_speed_kmh)
+                        + " km/h";
+                setCallout(text, false);
+                return;
+            }
+        }
+
+        // between corners: the next one by apex
+        var best = Infinity, nextIdx = -1;
+        for (i = 0; i < corners.length; i++) {
+            var d = ((corners[i].s_apex % L) + L) % L - wrapped;
+            if (d <= 0) d += L;
+            if (d > 0 && d < best) { best = d; nextIdx = i; }
+        }
+        if (nextIdx < 0) { setCallout(""); return; }
+        var nc = corners[nextIdx];
+        var nside = nc.sign < 0 ? "right" : "left";
+
+        // brake flash when a zone trough sits just ahead
+        var brake = false;
+        for (i = 0; i < zones.length; i++) {
+            var dz = ((zones[i].s_trough % L) + L) % L - wrapped;
+            if (dz <= 0) dz += L;
+            if (dz <= 35) { brake = true; break; }
+        }
+        setCallout(brake
+            ? "BRAKE — Turn " + (nextIdx + 1) + " ahead"
+            : "Next: Turn " + (nextIdx + 1) + " — "
+              + (nc.class || "corner") + " " + nside, brake);
+    }
+
+    /* light corner blocks on the strip as the replay passes them */
+    function markPassed(s) {
+        var corners = ((card.support || {}).consensus || {}).corners || [];
+        corners.forEach(function(c, i) {
+            var passed = (s > c.s_end)
+                && (c.s_start <= c.s_end || s < c.s_start);
+            document.querySelectorAll(
+                '.strip-seg[data-type="corner"][data-index="'
+                + (i + 1) + '"]')
+                .forEach(function(seg) {
+                    seg.classList.toggle("passed", passed);
+                });
+        });
+    }
+
+    function clearPassed() {
+        document.querySelectorAll(".dna-strip .strip-seg.passed")
+            .forEach(function(seg) { seg.classList.remove("passed"); });
     }
 
     function startReplay() {
@@ -524,6 +679,8 @@ window.TrackDNA = (function() {
                 }
                 if (stripCursor)
                     stripCursor.style.left = (s / L * 100) + "%";
+                updateCallout(s);
+                markPassed(s);
                 replay.raf = requestAnimationFrame(frame);
             }
             replay.raf = requestAnimationFrame(frame);
@@ -537,6 +694,8 @@ window.TrackDNA = (function() {
         setMapInteraction(replay.map, true);
         if (replay.marker) replay.marker.visible = false;
         if (stripCursor) stripCursor.style.display = "none";
+        setCallout("");
+        clearPassed();
         replay.btn.innerHTML = '<i class="bi bi-play-fill"></i>'
             + ' Replay reference lap';
         if (finished) {
@@ -634,13 +793,12 @@ window.TrackDNA = (function() {
 
         renderReplayControls(body, card);
         renderSummary(body, card);
+        renderDrivingNotes(body, card);
         renderLapStrip(body, card);
-        renderDimensions(body, card);
         renderCorners(body, card);
+        renderDetails(body, card);
 
-        // radar + elevation share one Plotly load
         loadPlotly(function() {
-            renderRadar(body, card);
             renderElevation(body, card);
         }, body);
 
@@ -688,6 +846,8 @@ window.TrackDNA = (function() {
         trackId = parseInt(container.dataset.trackId, 10);
         var best = parseFloat(container.dataset.userBestLap);
         userBestLap = isFinite(best) ? best : null;
+        var cs = parseInt(container.dataset.compareSession, 10);
+        compareSessionId = isFinite(cs) ? cs : null;
 
         var skel = null;
         var timer = setTimeout(function() {

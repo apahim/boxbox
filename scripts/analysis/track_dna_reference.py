@@ -122,6 +122,26 @@ class TrackConsensus:
         def _r(value, nd=2):
             return round(float(value), nd)
 
+        # per-corner apex speeds and the lap's max speed (learning-layer
+        # material: humans read km/h, not radii). None without a speed
+        # channel — never a fabricated zero.
+        geo = self.laps[0].geometry
+        speed = getattr(geo, 'speed', None)
+        max_speed_kmh = None
+        if speed is not None and len(speed):
+            vmax = float(np.nanmax(speed))
+            if np.isfinite(vmax):
+                max_speed_kmh = _r(vmax * 3.6, 1)
+
+        def _apex_speed(c):
+            if speed is None or not len(speed):
+                return None
+            s_wrap = float(c.s_apex) % float(geo.length_m)
+            v = float(np.interp(s_wrap, geo.s, speed))
+            if not np.isfinite(v):
+                return None
+            return _r(v * 3.6, 1)
+
         corners = [{
             's_apex': _r(c.s_apex), 's_start': _r(c.s_start),
             's_end': _r(c.s_end),
@@ -130,6 +150,7 @@ class TrackConsensus:
             'class': c.radius_class, 'n_laps': int(c.n_laps),
             'recurrence': _r(c.recurrence, 3),
             'member_corners': int(c.member_corners),
+            'apex_speed_kmh': _apex_speed(c),
             'support_by_user': {int(u): _r(v, 3)
                                 for u, v in sorted(c.support_by_user.items())},
         } for c in self.corners]
@@ -180,6 +201,7 @@ class TrackConsensus:
         }
         return {
             'condition': self.condition,
+            'max_speed_kmh': max_speed_kmh,
             'n_users': len({l.user_id for l in self.laps}),
             'n_sessions': len({l.session_id for l in self.laps}),
             'n_laps': len(self.laps),

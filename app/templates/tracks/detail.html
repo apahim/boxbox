@@ -38,6 +38,27 @@
     .dna-strip-cursor { position: absolute; top: -4px; bottom: 18px; width: 2px;
         background: #f59e0b; border-radius: 1px; box-shadow: 0 0 6px rgba(245,158,11,0.8);
         pointer-events: none; display: none; }
+    .dna-strip .strip-seg.strip-hi { opacity: 1 !important;
+        stroke: #fff; stroke-width: 1; }
+    .dna-strip .strip-seg.passed { opacity: 1 !important; }
+
+    /* driving notes: corner-by-corner walkthrough */
+    .dna-notes { display: grid; gap: 6px; }
+    .dna-note { padding: 6px 10px; border-radius: 8px;
+        border: 1px solid var(--bb-surface-alt); cursor: default;
+        transition: background .15s ease, border-color .15s ease; }
+    .dna-note:hover, .dna-note.dna-note-active {
+        background: rgba(59,130,246,0.08);
+        border-color: rgba(59,130,246,0.4); }
+    .dna-note-title { font-weight: 600; font-size: 0.88rem; }
+    .dna-note-text { font-size: 0.82rem;
+        color: var(--bb-text-muted); }
+
+    /* sighting-lap callout */
+    .dna-callout { flex: 1 1 auto; min-width: 0; font-size: 0.85rem;
+        font-weight: 600; color: var(--bb-text-muted);
+        white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .dna-callout.dna-callout-brake { color: #e74c3c; }
 
     /* DNA card loading skeleton */
     .dna-skel .dna-skel-bar { height: 12px; border-radius: 6px;
@@ -154,7 +175,7 @@
 </div>
 
 {% if is_official %}
-<div id="track-dna" data-track-id="{{ track.id }}" data-user-best-lap="{{ best_lap if best_lap is not none else '' }}" hidden>
+<div id="track-dna" data-track-id="{{ track.id }}" data-user-best-lap="{{ best_lap if best_lap is not none else '' }}"{% if compare_session_id %} data-compare-session="{{ compare_session_id }}"{% endif %} hidden>
     <h5 class="section-heading"><i class="bi bi-fingerprint" style="color:var(--bb-blue)"></i> Track DNA</h5>
     <p class="text-muted" style="font-size:0.82rem;">
         Track character from the admin-selected reference lap — what the

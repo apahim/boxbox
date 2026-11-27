@@ -253,13 +253,17 @@ def summarize_card(card):
         chips.append('{} corners ({} slow / {} medium / {} fast)'.format(
             len(corners), mix.get('slow', 0), mix.get('medium', 0),
             mix.get('fast', 0)))
+    max_speed = (support.get('consensus') or {}).get('max_speed_kmh')
     if val('longest_straight_m') is not None:
-        chips.append(f"longest straight {val('longest_straight_m'):.0f} m")
+        if max_speed:
+            secs = val('longest_straight_m') / (max_speed / 3.6)
+            chips.append(f"~{secs:.0f}s longest straight")
+        else:
+            chips.append(f"longest straight "
+                         f"{val('longest_straight_m'):.0f} m")
     if braking is not None:
         chips.append(f"{len(zones)} heavy braking "
                      f"zone{'s' if len(zones) != 1 else ''}")
-    if val('dc_per_km') is not None:
-        chips.append(f"{val('dc_per_km'):.1f} direction changes/km")
     if elev not in (None, 'Flat'):
         chips.append(f"{elev.lower()} elevation "
                      f"({val('elevation_gain'):.0f} m/km)")
@@ -338,6 +342,82 @@ def summarize_card(card):
     return {'headline': headline, 'chips': chips, 'blurb': blurb}
 
 
+def driving_notes(card):
+    """Corner-by-corner driving notes for someone learning the track.
+
+    Plain language, human units: turn number, side and sharpness, the
+    braking marker feeding it, the apex speed, and what the exit leads
+    into. Degrades gracefully when the speed channel is missing (no
+    speeds, no straight durations — the geometry notes remain).
+    """
+    support = card.support_json or {}
+    consensus = support.get('consensus') or {}
+    corners = consensus.get('corners') or []
+    zones = (support.get('braking') or {}).get('zones') or []
+    if not corners:
+        return []
+
+    length = ((consensus.get('dimensions') or {})
+              .get('track_length_m') or {}).get('value')
+    max_speed = consensus.get('max_speed_kmh')
+    ordered = sorted(corners, key=lambda c: c['s_apex'])
+
+    finite = [c['radius_m'] for c in ordered
+              if c.get('radius_m') is not None
+              and math.isfinite(c['radius_m'])]
+    tightest_radius = min(finite) if finite else None
+
+    def circular_dist(a, b):
+        d = abs(a - b)
+        return min(d, length - d) if length else d
+
+    notes = []
+    n = len(ordered)
+    for i, c in enumerate(ordered):
+        nxt = ordered[(i + 1) % n]
+        heading = abs(c.get('delta_theta_deg') or 0.0)
+        side = 'right' if c.get('sign', 0) < 0 else 'left'
+        if heading >= 120.0:
+            sharp = 'hard'
+        elif heading >= 60.0:
+            sharp = 'medium'
+        else:
+            sharp = 'light'
+        title = f'Turn {i + 1} — {sharp} {side}'
+        if (tightest_radius is not None
+                and c.get('radius_m') == tightest_radius and n > 2):
+            title += ' (tightest on the lap)'
+
+        parts = []
+        # the braking marker feeding this corner
+        for k, z in enumerate(zones):
+            if circular_dist(z['s_trough'], c['s_apex']) <= 40.0:
+                parts.append(f'brake at the B{k + 1} marker')
+                break
+        if c.get('apex_speed_kmh'):
+            parts.append(f"apex ~{c['apex_speed_kmh']:.0f} km/h")
+
+        # what the exit leads into
+        if length:
+            gap = nxt['s_start'] - c['s_end']
+            if i == n - 1:
+                gap += length
+            if max_speed and gap > 50.0:
+                secs = gap / (max_speed / 3.6)
+                parts.append(f'a ~{secs:.0f}s straight follows')
+            elif 0.0 <= gap < 15.0:
+                parts.append(f'flows straight into Turn {i + 2 if i < n - 1 else 1}')
+
+        if parts:
+            # each part reads as its own sentence
+            note = '. '.join(p[0].upper() + p[1:] for p in parts) + '.'
+        else:
+            note = ''
+        notes.append({'turn': i + 1, 'title': title, 'note': note,
+                      's_apex': c['s_apex']})
+    return notes
+
+
 def card_payload(card, track=None):
     """JSON payload for the API (UI input), with live reference state."""
     track = track or card.track
@@ -351,6 +431,7 @@ def card_payload(card, track=None):
                         if card.computed_at else None),
         'overall_score': card.overall_score,
         'summary': summarize_card(card),
+        'driving_notes': driving_notes(card),
         'dimensions': card.dimensions_json,
         'dataset': card.dataset_json,
         'support': card.support_json,

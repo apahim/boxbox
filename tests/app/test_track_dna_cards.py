@@ -175,6 +175,7 @@ def test_card_payload_reference_state(app):
         assert served['summary']['headline']
         assert served['summary']['chips']
         assert served['summary']['blurb']
+        assert served['driving_notes']
 
         # break the reference (delete the session) -> live verdict flips
         db.session.delete(session)
@@ -182,6 +183,56 @@ def test_card_payload_reference_state(app):
         served = card_payload(card, track=track)
         assert served['reference_ok'] is False
         assert served['reference_error']
+
+
+# ---- driving notes ---------------------------------------------------------------
+
+
+def test_driving_notes_content(app):
+    with app.app_context():
+        _a, track, session = _seed_official()
+        _set_reference(track, session)
+        from app.track_dna.cards import build_card, driving_notes
+
+        card, _ = build_card(track.id)
+        notes = driving_notes(card)
+        assert notes
+
+        for i, note in enumerate(notes):
+            assert note['turn'] == i + 1
+            assert note['title'].startswith(f'Turn {i + 1} — ')
+            # side is spelled out, human units
+            assert 'left' in note['title'] or 'right' in note['title']
+            assert note['note'] == note['note'].strip()
+            assert note['note'].endswith('.')
+            # every sentence starts uppercase (no lowercase 'apex')
+            for sent in note['note'].split('. '):
+                assert sent[0].isupper()
+
+        # with the speed channel the notes carry km/h + braking markers
+        assert any('km/h' in n['note'] for n in notes)
+        assert any('B1' in n['note'] for n in notes)
+        # tightest-corner tag: the capsule's two corners tie at the
+        # same radius, so the tag stays off (ties on a 2-corner lap
+        # are not meaningful)
+        assert sum('tightest' in n['title'] for n in notes) in (0, 1)
+
+        import json
+        json.dumps(notes)
+
+
+def test_driving_notes_without_speed(app):
+    with app.app_context():
+        _a, track, session = _seed_official(with_speed=False)
+        _set_reference(track, session)
+        from app.track_dna.cards import build_card, driving_notes
+
+        card, _ = build_card(track.id)
+        notes = driving_notes(card)
+        assert notes
+        # geometry notes remain; speeds never fabricate
+        assert all('km/h' not in n['note'] for n in notes)
+        assert all(n['title'].startswith('Turn ') for n in notes)
 
 
 # ---- interpretation summary -----------------------------------------------------

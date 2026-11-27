@@ -101,6 +101,14 @@ def detail(track_id):
     ).order_by(Session.date.desc(), Session.id.desc()).all()
 
     best_lap = min((s.best_lap_time for s in sessions if s.best_lap_time), default=None)
+    # the session holding that best lap — the raceline comparison
+    # against the reference lap is one click from there
+    compare_session = None
+    for sess in sessions:
+        if sess.best_lap_time and (
+                compare_session is None
+                or sess.best_lap_time < compare_session.best_lap_time):
+            compare_session = sess
     top_speed = max((s.top_speed_kmh for s in sessions if s.top_speed_kmh), default=None)
     total_laps = sum(s.total_laps or 0 for s in sessions)
     last_driven = sessions[0].date if sessions else None
@@ -133,6 +141,8 @@ def detail(track_id):
                            sf_gate_json=json.dumps(sf_gate),
                            sessions=sessions,
                            best_lap=best_lap,
+                           compare_session_id=(compare_session.id
+                                               if compare_session else None),
                            top_speed=top_speed,
                            total_laps=total_laps,
                            last_driven=last_driven,

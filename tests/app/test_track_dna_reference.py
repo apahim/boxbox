@@ -115,6 +115,36 @@ def test_summary_shape():
     json.dumps(summary)
 
 
+def test_summary_apex_speeds_with_speed_channel():
+    """With a speed channel the summary carries per-corner apex
+    speeds and the lap's max speed (km/h) — learning-layer material."""
+    pts = fixture_oval()
+    circuit = reference_from(pts)
+    summary = circuit.summary()
+
+    # the fixture laps at a constant 15 m/s
+    assert summary['max_speed_kmh'] == pytest.approx(54.0, abs=0.1)
+    assert summary['corners']
+    for c in summary['corners']:
+        assert c['apex_speed_kmh'] == pytest.approx(54.0, abs=0.1)
+
+
+def test_summary_apex_speeds_without_speed_channel():
+    """No speed channel: apex speeds and max speed are None — never
+    a fabricated zero."""
+    pts = fixture_oval()
+    geo = analyze_lap(make_lap_input(pts))
+    geo.speed = None
+    record = ConsensusLap(user_id=1, session_id=1, geometry=geo)
+    circuit = reference_consensus(record, DEFAULT_PARAMS)
+    summary = circuit.summary()
+
+    assert summary['max_speed_kmh'] is None
+    assert summary['corners']
+    for c in summary['corners']:
+        assert c['apex_speed_kmh'] is None
+
+
 def test_spun_lap_rejected():
     """A spun reference lap has no circuit geometry — the builder
     raises, the caller turns it into a validation error."""
