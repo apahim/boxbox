@@ -39,11 +39,15 @@ import numpy as np
 
 from scripts.analysis.track_dna import LapGeometry, robust_bbox
 
-# Radius classes for dimensions 5-7 (unchanged from the consensus
-# layer's PROVISIONAL v1.0 thresholds: slow < 20 m, medium 20-40 m,
-# fast >= 40 m).
-SLOW_CORNER_MAX_M = 20.0
-MEDIUM_CORNER_MAX_M = 40.0
+# Radius classes for dimensions 5-7, recalibrated 2026-11-27 for
+# rental karts against a production corner audit (best lap on each of
+# the five official tracks, 44 corners): radii cluster 11-14 m
+# (hairpins, apex 40-47 km/h), 15-25 m (mid corners) and 26 m+
+# (sweepers, apex 54-67 km/h). The old provisional 20/40 thresholds
+# left 'fast' essentially empty (1 of 44 corners) on rental-scale
+# circuits.
+SLOW_CORNER_MAX_M = 15.0
+MEDIUM_CORNER_MAX_M = 26.0
 
 
 @dataclass

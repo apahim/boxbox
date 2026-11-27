@@ -32,7 +32,10 @@ from scripts.analysis.track_dna_score import (
     overall_score,
 )
 
-METHODOLOGY_VERSION = '2.0'
+# v2.1: corner speed classes recalibrated to rental-kart radii
+# (slow < 15 m, medium 15-26 m, fast >= 26 m) — dimensions 5-7
+# proportions shift accordingly
+METHODOLOGY_VERSION = '2.1'
 
 # Cap on the emitted trajectory's point count — enough for a smooth
 # satellite-map polyline at ~3-5 m spacing on a 1 km circuit while
@@ -330,7 +333,7 @@ def summarize_card(card):
     if not sentences:
         sentences.append('A compact lap where positioning and '
                          'consistency beat aggression.')
-    blurb = ' '.join(sentences[:3])
+    blurb = ' '.join(sentences[:4])
 
     return {'headline': headline, 'chips': chips, 'blurb': blurb}
 

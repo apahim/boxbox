@@ -14,6 +14,12 @@ anchors are superseded — engine v1.0 measures straight% ~18 (not 7.9),
 longest straight ~70 m (not 32), DC ~4.1/km (not 3.02), 9 corners
 (not 7).
 
+2026-11-27: the corner speed classes feeding dimensions 5-7 were
+recalibrated to rental-kart radii (slow < 15 m, medium 15-26 m,
+fast >= 26 m, methodology v2.1) from a 44-corner production audit;
+the proportion anchors below are unchanged — they are wide bands and
+remain meaningful under the new mix.
+
 Missing dimensions (e.g. no speed channel -> dimension 9) carry no
 score and no label and are excluded from the overall score — missing
 is never zero (D5/D8).

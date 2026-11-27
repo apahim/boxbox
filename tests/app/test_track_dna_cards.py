@@ -48,7 +48,7 @@ def test_build_card_stores_and_upserts(app):
         assert 'error' not in result
         assert TrackDnaCard.query.count() == 1
         assert card.track_id == track.id
-        assert card.methodology_version == '2.0'
+        assert card.methodology_version == '2.1'
 
         dims = card.dimensions_json
         assert len(dims) == 10
