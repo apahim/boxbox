@@ -20,11 +20,12 @@
     #map-container .mk-map { width: 100%; height: 100%; }
     @media (max-width: 576px) { #map-container { height: 280px; } }
     .section-heading { font-size: 0.95rem; font-weight: 600; margin: 1.5rem 0 0.75rem; display: flex; align-items: center; gap: 6px; }
-    .dna-map-container { width: 100%; height: 380px; position: relative; background: var(--bb-surface-alt);
-        border-radius: 8px; overflow: hidden; }
-    .dna-map-container .dna-map { width: 100%; height: 100%; }
     .dna-elevation { width: 100%; height: 240px; }
-    @media (max-width: 576px) { .dna-map-container { height: 260px; } }
+    .dna-summary { background: var(--bb-surface-alt); border: 1px solid var(--bb-border);
+        border-radius: 8px; padding: 12px 14px; }
+    .dna-headline { font-size: 0.95rem; font-weight: 600; }
+    .dna-chip { font-size: 0.68rem; font-weight: 500; }
+    .dna-blurb { font-size: 0.85rem; color: var(--bb-text); line-height: 1.45; }
 </style>
 {% endblock %}
 
@@ -117,8 +118,8 @@
 <div id="track-dna" data-track-id="{{ track.id }}" hidden>
     <h5 class="section-heading"><i class="bi bi-fingerprint" style="color:var(--bb-blue)"></i> Track DNA</h5>
     <p class="text-muted" style="font-size:0.82rem;">
-        Track character from the admin-selected reference lap —
-        dimensions, corners, braking zones and elevation.
+        Track character from the admin-selected reference lap — what the
+        circuit is like to drive: corners, braking zones and elevation.
     </p>
 </div>
 {% endif %}
@@ -176,6 +177,15 @@
     var sfGate = {{ sf_gate_json | safe }};
     var trackLat = {{ track.lat }};
     var trackLon = {{ track.lon }};
+
+    /* Single-map handshake: track-dna.js adds the reference-lap
+     * trajectory and braking zones to THIS map (never a second map).
+     * The promise resolves once the map exists — mapkit.js is async,
+     * so the DNA fetch and map init can complete in either order. */
+    var resolveTrackMap;
+    window.BBTrackMapPromise = new Promise(function(resolve) {
+        resolveTrackMap = resolve;
+    });
 
     function initMap() {
         var container = document.getElementById('map-container');
@@ -242,6 +252,27 @@
                 (c.trap_lat1 + c.trap_lat2) / 2, (c.trap_lon1 + c.trap_lon2) / 2),
                 c.name || 'T' + (i + 1), '#3498db');
         });
+
+        resolveTrackMap({
+            map: map,
+            addLabel: addLabel,
+            addPolyline: function(coords, style) {
+                map.addOverlay(new mapkit.PolylineOverlay(coords,
+                    { style: new mapkit.Style(style) }));
+            },
+            refit: function(points) {
+                if (!points || !points.length) return;
+                var rl = points.map(function(p) { return p.lat; });
+                var rn = points.map(function(p) { return p.lon; });
+                var pad = 0.001;
+                map.region = new mapkit.BoundingRegion(
+                    Math.max.apply(null, rl) + pad,
+                    Math.max.apply(null, rn) + pad,
+                    Math.min.apply(null, rl) - pad,
+                    Math.min.apply(null, rn) - pad
+                ).toCoordinateRegion();
+            }
+        });
     }
 
     MapHelpers.waitForMapKit(function() {
@@ -249,6 +280,7 @@
         initMap();
     });
 })();
+
 </script>
 {% endif %}
 <script src="{{ url_for('static', filename='js/track-dna.js') }}"></script>

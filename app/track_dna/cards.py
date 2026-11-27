@@ -30,7 +30,6 @@ from scripts.analysis.track_dna_reference import ConsensusLap, \
 from scripts.analysis.track_dna_score import (
     normalise_dimensions,
     overall_score,
-    similarity,
 )
 
 METHODOLOGY_VERSION = '2.0'
@@ -194,6 +193,148 @@ def latest_card(track_id):
             .first())
 
 
+def summarize_card(card):
+    """Plain-language interpretation of a stored card.
+
+    Derived on the fly from ``dimensions_json`` + ``support_json`` (no
+    stored summary, so existing cards get it without a recompute):
+    a one-line headline verdict, a handful of fact chips and a short
+    blurb that connects the dimensions into driving meaning. All
+    pieces degrade gracefully when a dimension is missing.
+    """
+    dims = {d['key']: d for d in (card.dimensions_json or [])}
+    support = card.support_json or {}
+    corners = (support.get('consensus') or {}).get('corners') or []
+    zones = (support.get('braking') or {}).get('zones') or []
+
+    def val(key):
+        d = dims.get(key) or {}
+        return d.get('value')
+
+    def cls(key):
+        d = dims.get(key) or {}
+        return d.get('class')
+
+    # ---- headline: pace character + braking + elevation --------------------
+    straight = cls('straight_pct')
+    if straight in ('Straight', 'Very straight'):
+        pace = 'Fast, flowing circuit'
+    elif straight in ('Twisty', 'Very twisty'):
+        pace = 'Tight, technical circuit'
+    else:
+        pace = 'Balanced circuit'
+
+    braking = val('heavy_braking_freq')
+    if braking is None:
+        stop = 'no braking data'
+    elif braking < 1.0:
+        stop = 'light braking'
+    elif braking < 2.5:
+        stop = 'a few heavy stops'
+    else:
+        stop = 'several heavy braking zones'
+
+    elev = cls('elevation_gain')
+    ground = ('flat' if elev in (None, 'Flat') else elev.lower())
+
+    headline = f'{pace} — {stop}, on {ground} ground.'
+
+    # ---- chips: the standout facts -----------------------------------------
+    chips = []
+    if val('track_length_m') is not None:
+        chips.append(f"{val('track_length_m'):.0f} m lap")
+    if corners:
+        mix = {'slow': 0, 'medium': 0, 'fast': 0}
+        for c in corners:
+            mix[c.get('class')] = mix.get(c.get('class'), 0) + 1
+        chips.append('{} corners ({} slow / {} medium / {} fast)'.format(
+            len(corners), mix.get('slow', 0), mix.get('medium', 0),
+            mix.get('fast', 0)))
+    if val('longest_straight_m') is not None:
+        chips.append(f"longest straight {val('longest_straight_m'):.0f} m")
+    if braking is not None:
+        chips.append(f"{len(zones)} heavy braking "
+                     f"zone{'s' if len(zones) != 1 else ''}")
+    if val('dc_per_km') is not None:
+        chips.append(f"{val('dc_per_km'):.1f} direction changes/km")
+    if elev not in (None, 'Flat'):
+        chips.append(f"{elev.lower()} elevation "
+                     f"({val('elevation_gain'):.0f} m/km)")
+    rights = sum(1 for c in corners if c.get('sign', 0) < 0)
+    lefts = len(corners) - rights
+    if corners and rights != lefts:
+        chips.append(f"{'right' if rights > lefts else 'left'}-hand "
+                     f"bias ({rights}R / {lefts}L)")
+
+    # ---- blurb: connect the dimensions into driving meaning ----------------
+    sentences = []
+
+    # the longest straight, and whether its end is the biggest stop
+    length = ((support.get('consensus') or {}).get('dimensions')
+              or {}).get('track_length_m', {}).get('value')
+    if corners and length and len(corners) > 1:
+        ordered = sorted(corners, key=lambda c: c['s_apex'])
+        gaps = []
+        for i, c in enumerate(ordered):
+            nxt = ordered[(i + 1) % len(ordered)]
+            gap = nxt['s_start'] - c['s_end']
+            if i == len(ordered) - 1:
+                gap += length
+            gaps.append((gap, c, nxt))
+        gaps.sort(key=lambda g: -g[0])
+        gap, _c, after = gaps[0]
+        if gap > 30.0:
+            if zones:
+                strongest = max(zones, key=lambda z: z['reduction_pct'])
+                in_gap = (after['s_start'] - gap) <= strongest['s_trough'] \
+                    <= after['s_start']
+                if in_gap:
+                    sentences.append(
+                        "The longest straight feeds the circuit's "
+                        "biggest stop — a "
+                        f"{strongest['reduction_pct']:.0f}% slowdown "
+                        "into the next corner.")
+                else:
+                    sentences.append(
+                        "The longest straight ends without a heavy "
+                        "stop — carried speed counts for more than "
+                        "braking there.")
+            else:
+                sentences.append(
+                    "The longest straight runs clear of heavy "
+                    "braking.")
+
+    dc = cls('dc_per_km')
+    if dc in ('High', 'Very high'):
+        sentences.append('Direction changes come thick and fast — a '
+                         'rhythm track where momentum matters more '
+                         'than outright power.')
+    elif dc in ('Low', 'Very low'):
+        sentences.append('With few direction changes, the lap is built '
+                         'around a handful of decisive corners.')
+
+    slow = val('slow_corner_prop')
+    fast = val('fast_corner_prop')
+    if slow is not None and fast is not None:
+        if slow >= 45.0:
+            sentences.append('Most corners are slow and tight — '
+                             'traction on corner exit defines the lap.')
+        elif fast >= 45.0:
+            sentences.append('Most corners are fast and sweeping — '
+                             'commitment and a clean line carry the lap.')
+
+    if elev in ('Rolling', 'Hilly', 'Very hilly'):
+        sentences.append('The elevation changes add load-transfer '
+                         'work on both brake and throttle.')
+
+    if not sentences:
+        sentences.append('A compact lap where positioning and '
+                         'consistency beat aggression.')
+    blurb = ' '.join(sentences[:3])
+
+    return {'headline': headline, 'chips': chips, 'blurb': blurb}
+
+
 def card_payload(card, track=None):
     """JSON payload for the API (UI input), with live reference state."""
     track = track or card.track
@@ -206,46 +347,10 @@ def card_payload(card, track=None):
         'computed_at': (card.computed_at.isoformat()
                         if card.computed_at else None),
         'overall_score': card.overall_score,
+        'summary': summarize_card(card),
         'dimensions': card.dimensions_json,
         'dataset': card.dataset_json,
         'support': card.support_json,
         'reference_ok': verdict['ok'],
         'reference_error': verdict.get('error'),
-    }
-
-
-def similar_payload(track_id):
-    """On-the-fly weighted-Manhattan similarity: the track's
-    latest-version card vs every other track's card of the same
-    methodology version.
-
-    Cards only exist on official tracks, which every authenticated
-    user can see — no visibility filtering needed.
-    """
-    mine = latest_card(track_id)
-    if mine is None:
-        return None
-
-    others = (TrackDnaCard.query
-              .filter(TrackDnaCard.track_id != track_id,
-                      TrackDnaCard.methodology_version
-                      == mine.methodology_version)
-              .order_by(TrackDnaCard.track_id)
-              .all())
-
-    comparisons = []
-    for other in others:
-        sim = similarity(mine.dimensions_json, other.dimensions_json)
-        comparisons.append({
-            'track_id': other.track_id,
-            'track_name': other.track.name,
-            'similarity_pct': sim['similarity_pct'],
-            'coverage': sim['coverage'],
-            'contributions': sim['contributions'],
-        })
-    comparisons.sort(key=lambda c: -(c['similarity_pct'] or 0.0))
-    return {
-        'track_id': track_id,
-        'methodology_version': mine.methodology_version,
-        'comparisons': comparisons,
     }

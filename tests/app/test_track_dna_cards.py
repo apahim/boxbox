@@ -172,6 +172,9 @@ def test_card_payload_reference_state(app):
         assert served['dataset']['source'] == 'reference-lap'
         assert served['track_id'] == track.id
         assert 'methodology_version' in served
+        assert served['summary']['headline']
+        assert served['summary']['chips']
+        assert served['summary']['blurb']
 
         # break the reference (delete the session) -> live verdict flips
         db.session.delete(session)
@@ -181,61 +184,76 @@ def test_card_payload_reference_state(app):
         assert served['reference_error']
 
 
-# ---- similarity -------------------------------------------------------------------
+# ---- interpretation summary -----------------------------------------------------
 
 
-def test_similar_payload_across_tracks(app):
+def test_summarize_card_shape(app):
     with app.app_context():
-        _a, track_a, session_a = _seed_official(name='Circuit A')
-        _b, track_b, session_b = _seed_official(name='Circuit B')
+        _admin, track, session = _seed_official()
+        _set_reference(track, session)
+        from app.track_dna.cards import build_card, summarize_card
+
+        card, _ = build_card(track.id)
+        summary = summarize_card(card)
+        # headline: pace character + braking + ground
+        assert summary['headline'].endswith('.')
+        assert 'circuit' in summary['headline'].lower()
+        # chips: lap length, corner mix, braking zones at minimum
+        assert any('m lap' in c for c in summary['chips'])
+        assert any('corners' in c for c in summary['chips'])
+        assert any('braking zone' in c for c in summary['chips'])
+        # blurb: plain sentences, no leading/trailing whitespace
+        assert summary['blurb']
+        assert summary['blurb'] == summary['blurb'].strip()
+        import json
+        json.dumps(summary)
+
+
+def test_summarize_card_flat_vs_hilly(app):
+    with app.app_context():
+        _a, track_a, session_a = _seed_official(name='Flat Circuit',
+                                                height_m=0.5)
+        _b, track_b, session_b = _seed_official(name='Hilly Circuit',
+                                                height_m=25.0)
         _set_reference(track_a, session_a)
         _set_reference(track_b, session_b)
+        from app.track_dna.cards import build_card, summarize_card
 
-        from app.track_dna.cards import build_card, similar_payload
-
-        assert build_card(track_a.id)[0] is not None
-        assert build_card(track_b.id)[0] is not None
-
-        payload = similar_payload(track_a.id)
-        assert [c['track_id'] for c in payload['comparisons']] == \
-            [track_b.id]
-        only = payload['comparisons'][0]
-        assert only['track_name'] == 'Circuit B'
-        assert only['similarity_pct'] == pytest.approx(100.0)
-        assert only['coverage'] == 1.0
-
-        # a track without a card gets None
-        _c, track_c, _session_c = _seed_official(name='Circuit C')
-        assert similar_payload(track_c.id) is None
+        flat = summarize_card(build_card(track_a.id)[0])
+        hilly = summarize_card(build_card(track_b.id)[0])
+        assert 'flat' in flat['headline'].lower()
+        assert 'flat' not in hilly['headline'].lower()
+        assert any('elevation' in c for c in hilly['chips'])
+        assert not any('elevation' in c for c in flat['chips'])
+        assert 'load-transfer' in hilly['blurb']
 
 
-def test_similar_payload_ignores_other_versions(app):
+def test_summarize_card_missing_dimensions(app):
+    """No speed channel -> dimension 9 missing: the summary degrades
+    gracefully (no braking chip, honest headline wording)."""
     with app.app_context():
-        _a, track_a, session_a = _seed_official(name='Circuit A')
-        _b, track_b, session_b = _seed_official(name='Circuit B')
-        _set_reference(track_a, session_a)
-        _set_reference(track_b, session_b)
+        _admin, track, session = _seed_official(with_speed=False)
+        _set_reference(track, session)
+        from app.track_dna.cards import build_card, summarize_card
 
-        from app.track_dna import cards as cards_mod
+        card, _ = build_card(track.id)
+        summary = summarize_card(card)
+        assert 'no braking data' in summary['headline']
+        assert not any('braking zone' in c for c in summary['chips'])
+        assert summary['blurb']
 
-        try:
-            cards_mod.METHODOLOGY_VERSION = '1.9'
-            old, _ = cards_mod.build_card(track_a.id)
-            assert old is not None
-            assert old.methodology_version == '1.9'
-        finally:
-            cards_mod.METHODOLOGY_VERSION = '2.0'
-        from app.track_dna.cards import build_card, latest_card, \
-            similar_payload
 
-        assert build_card(track_a.id)[0] is not None
-        assert build_card(track_b.id)[0] is not None
+def test_summarize_card_technical_track(app):
+    """A twisty capsule (short straights) reads as technical in the
+    headline and the blurb mentions the lap character."""
+    with app.app_context():
+        _admin, track, session = _seed_official(name='Twisty')
+        _set_reference(track, session)
+        from app.track_dna.cards import build_card, summarize_card
 
-        # latest card for A is 2.0; comparisons only match versions
-        assert latest_card(track_a.id).methodology_version == '2.0'
-        payload = similar_payload(track_a.id)
-        assert [c['track_id'] for c in payload['comparisons']] == \
-            [track_b.id]
+        summary = summarize_card(build_card(track.id)[0])
+        assert 'circuit' in summary['headline'].lower()
+        assert summary['chips']
 
 
 # ---- CLI ---------------------------------------------------------------------------

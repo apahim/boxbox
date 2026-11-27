@@ -1,11 +1,9 @@
-"""Track DNA scorecard normalisation and similarity (plan Phase 7,
-spec Section 19).
+"""Track DNA scorecard normalisation (plan Phase 7, spec Section 19).
 
 Pure module (NumPy only — no app imports): the engine-scale anchor
 ladders that turn the ten raw dimension values into 0-10 scores and
 five-level labels, the agreed weight split (geometry 75 / braking 15 /
-elevation 10), the overall weighted score, and the weighted-Manhattan
-similarity with coverage.
+elevation 10) and the overall weighted score.
 
 Owner-confirmed 2026-11-26 (plan 19.1/19.4, resolving the 16.4g gate):
 the original requirements doc's bands were never committed, so this
@@ -17,8 +15,8 @@ longest straight ~70 m (not 32), DC ~4.1/km (not 3.02), 9 corners
 (not 7).
 
 Missing dimensions (e.g. no speed channel -> dimension 9) carry no
-score and no label, are excluded from the overall score, and shrink
-similarity coverage — missing is never zero (D5/D8).
+score and no label and are excluded from the overall score — missing
+is never zero (D5/D8).
 """
 
 import numpy as np
@@ -158,41 +156,3 @@ def overall_score(dimensions):
             total += dim['score'] * dim['weight']
             weight += dim['weight']
     return round(total / weight, 2) if weight else None
-
-
-def similarity(dimensions_a, dimensions_b):
-    """Weighted-Manhattan similarity with coverage (plan Section 19.3).
-
-    Over dimensions present on BOTH cards:
-    ``sim = 100 * (1 - sum(w_i * |s_a - s_b|) / (10 * sum(w_i)))`` —
-    symmetric by construction, 100 for identical cards, in [0, 100].
-    ``coverage`` is the shared weight over the total (100); each
-    contribution is the percentage points a dimension adds to the
-    distance. Missing dimensions never count as zero.
-    """
-    a = {d['key']: d for d in dimensions_a}
-    b = {d['key']: d for d in dimensions_b}
-    shared_weight = 0.0
-    distance = 0.0
-    contributions = {}
-    for key, spec in DIMENSIONS.items():
-        da, db = a.get(key), b.get(key)
-        if da is None or db is None:
-            continue
-        if da['score'] is None or db['score'] is None:
-            continue
-        shared_weight += spec['weight']
-        delta = abs(da['score'] - db['score'])
-        distance += spec['weight'] * delta
-        contributions[key] = spec['weight'] * delta
-    if shared_weight <= 0:
-        return {'similarity_pct': None, 'coverage': 0.0,
-                'contributions': {}}
-    scaled = {key: round(100.0 * v / (10.0 * shared_weight), 2)
-              for key, v in contributions.items()}
-    return {
-        'similarity_pct': round(100.0 * (1.0 - distance
-                                         / (10.0 * shared_weight)), 2),
-        'coverage': round(shared_weight / TOTAL_WEIGHT, 3),
-        'contributions': scaled,
-    }

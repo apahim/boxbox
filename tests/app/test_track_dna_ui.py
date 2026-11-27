@@ -373,26 +373,17 @@ def test_api_dna_card_lifecycle(app, client):
     assert card['reference_ok'] is True
 
 
-def test_api_similar_no_condition(app, client):
+def test_api_similar_gone(app, client):
+    """The similarity comparison was dropped: the endpoint 404s."""
     with app.app_context():
-        _a, track_a, session_a = _seed_official(name='Circuit A')
-        _b, track_b, session_b = _seed_official(name='Circuit B')
-        _set_reference(track_a, session_a)
-        _set_reference(track_b, session_b)
-        from app.track_dna.cards import build_card
-
-        assert build_card(track_a.id)[0] is not None
-        assert build_card(track_b.id)[0] is not None
+        _a, track, session = _seed_official()
+        _set_reference(track, session)
         db.session.commit()
-        id_a, admin_id = track_a.id, _a.id
+        track_id, admin_id = track.id, _a.id
 
     _login(client, admin_id)
-    resp = client.get(f'/api/tracks/{id_a}/dna/similar')
-    assert resp.status_code == 200
-    payload = resp.get_json()
-    assert [c['track_name'] for c in payload['comparisons']] == \
-        ['Circuit B']
-    assert payload['comparisons'][0]['similarity_pct'] == 100.0
+    resp = client.get(f'/api/tracks/{track_id}/dna/similar')
+    assert resp.status_code == 404
 
 
 # ---- track-detail section shell ------------------------------------------

@@ -1,4 +1,4 @@
-"""Tests for Track DNA normalisation and similarity (plan Phase 7,
+"""Tests for Track DNA normalisation (plan Phase 7,
 spec Section 19). Pure module — no database."""
 
 import pytest
@@ -11,7 +11,6 @@ from scripts.analysis.track_dna_score import (
     normalise_dimensions,
     overall_score,
     score_for,
-    similarity,
 )
 
 
@@ -108,49 +107,3 @@ def test_normalise_missing_dimension():
     # missing never counts as zero: overall excludes it
     assert overall_score(dims) == pytest.approx(4.1)
     assert overall_score(normalise_dimensions({})) is None
-
-
-def test_similarity_identical_cards_100():
-    dims = normalise_dimensions({
-        'track_length_m': 992.0, 'straight_pct': 18.3,
-        'longest_straight_m': 70.0, 'corner_density_per_km': 9.07,
-        'slow_corner_prop': 66.7, 'medium_corner_prop': 33.3,
-        'fast_corner_prop': 0.0, 'dc_per_km': 4.06,
-        'heavy_braking_freq': 0.0, 'elevation_gain': 6.25})
-    sim = similarity(dims, dims)
-    assert sim['similarity_pct'] == 100.0
-    assert sim['coverage'] == 1.0
-    assert all(v == 0.0 for v in sim['contributions'].values())
-
-
-def test_similarity_symmetric_and_bounded():
-    a = normalise_dimensions({'track_length_m': 992.0, 'dc_per_km': 4.06})
-    b = normalise_dimensions({'track_length_m': 1500.0, 'dc_per_km': 12.0})
-    ab = similarity(a, b)
-    ba = similarity(b, a)
-    assert ab['similarity_pct'] == ba['similarity_pct']
-    assert ab['coverage'] == ba['coverage']
-    assert 0.0 <= ab['similarity_pct'] <= 100.0
-    # contributions sum to the distance (coverage-weighted)
-    distance = 100.0 - ab['similarity_pct']
-    assert sum(ab['contributions'].values()) == pytest.approx(
-        distance, abs=0.05)
-
-
-def test_similarity_opposite_ends_zero():
-    low = normalise_dimensions({'track_length_m': 400.0})
-    high = normalise_dimensions({'track_length_m': 3000.0})
-    assert similarity(low, high)['similarity_pct'] == 0.0
-
-
-def test_similarity_coverage_missing_dimension():
-    full = normalise_dimensions({'track_length_m': 992.0,
-                                 'heavy_braking_freq': 0.0})
-    partial = normalise_dimensions({'track_length_m': 992.0})
-    sim = similarity(full, partial)
-    # only length is shared: coverage 10/100
-    assert sim['coverage'] == pytest.approx(0.1)
-    assert set(sim['contributions']) == {'track_length_m'}
-    assert sim['similarity_pct'] == 100.0   # on the shared space
-    # a dimension missing on one side never contributes distance
-    assert 'heavy_braking_freq' not in sim['contributions']

@@ -1,9 +1,10 @@
 /* Track DNA card section (reference-lap methodology).
  *
- * Fetches /api/tracks/<id>/dna and renders the card: dimension table,
- * DNA corner table, braking zones + minor zones + DNA corners on a
- * MapKit map (via the stored reference-lap trajectory), the elevation
- * profile (Plotly, loaded on demand) and the similarity section.
+ * Fetches /api/tracks/<id>/dna and renders the card: the
+ * interpretation block (headline, chips, blurb), dimension table,
+ * DNA corner table, braking zones on the page's single MapKit map
+ * (overlays added through the BBTrackMap handshake in detail.html)
+ * and the elevation profile (Plotly, loaded on demand).
  * Tracks without a card show nothing — the section starts hidden and
  * is only revealed when a card exists.
  */
@@ -93,8 +94,8 @@ window.TrackDNA = (function() {
         var table = el("table", "table table-hover table-sm mb-0");
         var thead = el("thead");
         thead.innerHTML = "<tr><th>#</th><th>Type</th><th>Radius</th>"
-            + "<th>Heading change</th><th>Side</th><th>Recurrence</th>"
-            + "<th>Laps</th><th class='d-none d-md-table-cell'>Zone (m)</th></tr>";
+            + "<th>Heading change</th><th>Side</th>"
+            + "<th class='d-none d-md-table-cell'>Zone (m)</th></tr>";
         table.appendChild(thead);
         var tbody = el("tbody");
         corners.forEach(function(c, i) {
@@ -105,9 +106,6 @@ window.TrackDNA = (function() {
                 ? "—" : c.radius_m + " m"));
             tr.appendChild(el("td", null, Math.abs(c.delta_theta_deg) + "°"));
             tr.appendChild(el("td", null, c.sign < 0 ? "Right" : "Left"));
-            tr.appendChild(el("td", null,
-                Math.round(100 * c.recurrence) + "%"));
-            tr.appendChild(el("td", null, c.n_laps));
             tr.appendChild(el("td", "d-none d-md-table-cell",
                 c.s_start + "–" + c.s_end + " m"));
             tbody.appendChild(tr);
@@ -117,102 +115,49 @@ window.TrackDNA = (function() {
         holder.appendChild(wrap);
     }
 
-    // ---- MapKit map: trajectory + zones + corners --------------------------------
+    // ---- map overlays: trajectory + braking zones on the page map -----------------
+    //
+    // The page has ONE map (detail.html's #map-container, showing the
+    // S/F gate and corner trap lines). The DNA card adds its overlays
+    // to it through the BBTrackMap handshake; without a map (no MapKit
+    // token) the card renders fine, just without map layers.
 
-    function addMapLabel(map, coord, text, bg, title) {
-        var ann = new mapkit.Annotation(coord, function() {
-            var node = document.createElement("div");
-            node.textContent = text;
-            node.style.cssText = "font-size:11px;font-weight:bold;color:#fff;"
-                + "background:" + bg + ";padding:1px 6px;border-radius:10px;"
-                + "white-space:nowrap;pointer-events:none;";
-            return node;
-        }, { draggable: false, enabled: false,
-             displayPriority: mapkit.Annotation.DisplayPriority.Required });
-        if (title) ann.title = title;
-        map.addAnnotation(ann);
-    }
-
-    function buildMap(holder, card) {
+    function addDnaOverlays(card) {
         var traj = card.support && card.support.trajectory;
-        if (!traj || !traj.points || !traj.points.length) {
-            hint(holder, "Map overlay needs a recomputed scorecard "
-                + "(no stored trajectory).");
-            return;
-        }
-        if (!window.BB_MAPKIT_TOKEN || !window.MapHelpers) return;
-        MapHelpers.waitForMapKit(function() {
-            mapkit.init({ authorizationCallback: function(done) {
-                done(window.BB_MAPKIT_TOKEN);
-            } });
-
-            var mapDiv = el("div", "dna-map");
-            var mapHolder = el("div", "dna-map-container mb-3");
-            mapHolder.appendChild(mapDiv);
-            holder.insertBefore(mapHolder, holder.firstChild);
-
-            var lats = traj.points.map(function(p) { return p[1]; });
-            var lons = traj.points.map(function(p) { return p[2]; });
-            var map = new mapkit.Map(mapDiv, {
-                center: new mapkit.Coordinate(
-                    (Math.min.apply(null, lats) + Math.max.apply(null, lats)) / 2,
-                    (Math.min.apply(null, lons) + Math.max.apply(null, lons)) / 2),
-                mapType: mapkit.Map.MapTypes.Satellite,
-                showsCompass: mapkit.FeatureVisibility.Hidden,
-                showsMapTypeControl: false,
-                showsZoomControl: true,
-                isRotationEnabled: false
-            });
-            var pad = 0.001;
-            map.region = new mapkit.BoundingRegion(
-                Math.max.apply(null, lats) + pad,
-                Math.max.apply(null, lons) + pad,
-                Math.min.apply(null, lats) - pad,
-                Math.min.apply(null, lons) - pad
-            ).toCoordinateRegion();
-
-            // consensus trajectory (median line), loop closed implicitly
+        if (!traj || !traj.points || !traj.points.length) return;
+        if (!window.BBTrackMapPromise) return;
+        window.BBTrackMapPromise.then(function(tm) {
+            // trajectory (the reference lap's line), loop closed
+            // implicitly
             var coords = traj.points.map(function(p) {
                 return new mapkit.Coordinate(p[1], p[2]);
             });
             coords.push(coords[0]);
-            map.addOverlay(new mapkit.PolylineOverlay(coords, {
-                style: new mapkit.Style({ lineWidth: 3,
-                    strokeColor: "#3b82f6", strokeOpacity: 0.95 })
-            }));
-
-            // DNA corners at s_apex
-            var corners = (card.support.consensus
-                && card.support.consensus.corners) || [];
-            corners.forEach(function(c, i) {
-                var pos = trajAt(traj.points, c.s_apex);
-                if (!pos) return;
-                addMapLabel(map, new mapkit.Coordinate(pos.lat, pos.lon),
-                    "C" + (i + 1), "#3498db",
-                    (c.class || "corner") + ", radius "
-                    + (c.radius_m === null ? "—" : c.radius_m + " m")
-                    + ", " + Math.round(100 * c.recurrence) + "% of laps");
-            });
+            tm.addPolyline(coords, { lineWidth: 3,
+                strokeColor: "#3b82f6", strokeOpacity: 0.95 });
 
             // braking zones + minor zones at s_trough
             var braking = card.support.braking || {};
             (braking.zones || []).forEach(function(z, i) {
                 var pos = trajAt(traj.points, z.s_trough);
                 if (!pos) return;
-                addMapLabel(map, new mapkit.Coordinate(pos.lat, pos.lon),
+                tm.addLabel(new mapkit.Coordinate(pos.lat, pos.lon),
                     "B" + (i + 1), "#e74c3c",
-                    "Braking zone: " + z.reduction_pct + "% speed reduction, "
-                    + Math.round(100 * z.recurrence) + "% of laps");
+                    "Braking zone: " + z.reduction_pct
+                    + "% speed reduction");
             });
             (braking.minor_zones || []).forEach(function(z, i) {
                 var pos = trajAt(traj.points, z.s_trough);
                 if (!pos) return;
-                addMapLabel(map, new mapkit.Coordinate(pos.lat, pos.lon),
+                tm.addLabel(new mapkit.Coordinate(pos.lat, pos.lon),
                     "b" + (i + 1), "#e67e22",
                     "Minor braking zone: " + z.reduction_pct
-                    + "% speed reduction, "
-                    + Math.round(100 * z.recurrence) + "% of laps");
+                    + "% speed reduction");
             });
+
+            tm.refit(traj.points.map(function(p) {
+                return { lat: p[1], lon: p[2] };
+            }));
         });
     }
 
@@ -260,52 +205,28 @@ window.TrackDNA = (function() {
         }, holder);
     }
 
-    // ---- similarity ----------------------------------------------------------------
+    // ---- interpretation block ------------------------------------------------------
 
-    function renderSimilarity(holder) {
-        api("/dna/similar").then(function(payload) {
-            if (!payload || !payload.comparisons
-                || !payload.comparisons.length) return;
-            holder.appendChild(el("h6", "mt-3 mb-2", "Similar Tracks"));
-            var wrap = el("div", "table-responsive");
-            var table = el("table",
-                "table table-hover table-sm mb-0 dna-similarity");
-            var thead = el("thead");
-            thead.innerHTML = "<tr><th>Track</th>"
-                + "<th>Similarity</th><th>Coverage</th></tr>";
-            table.appendChild(thead);
-            var tbody = el("tbody");
-            payload.comparisons.forEach(function(cmp) {
-                var tr = el("tr");
-                var tdName = el("td");
-                var link = el("a", null, cmp.track_name);
-                link.href = "/tracks/" + cmp.track_id;
-                tdName.appendChild(link);
-                tr.appendChild(tdName);
-                var tdSim = el("td");
-                tdSim.appendChild(el("strong", null,
-                    cmp.similarity_pct.toFixed(1) + "%"));
-                var top = Object.keys(cmp.contributions || {})
-                    .map(function(k) { return [k, cmp.contributions[k]]; })
-                    .sort(function(a, b) { return b[1] - a[1]; })
-                    .slice(0, 3)
-                    .map(function(kv) {
-                        return kv[0].replace(/_/g, " ") + " "
-                            + kv[1].toFixed(1) + " pp";
-                    }).join(", ");
-                if (top) {
-                    tdSim.appendChild(el("div", "text-muted",
-                        "differs on: " + top));
-                }
-                tr.appendChild(tdSim);
-                tr.appendChild(el("td", null,
-                    Math.round(100 * cmp.coverage) + "%"));
-                tbody.appendChild(tr);
+    function renderSummary(body, card) {
+        var sum = card.summary;
+        if (!sum) return;
+        var block = el("div", "dna-summary mb-3");
+        if (sum.headline) {
+            block.appendChild(el("div", "dna-headline", sum.headline));
+        }
+        if (sum.chips && sum.chips.length) {
+            var chips = el("div", "d-flex flex-wrap gap-1 mt-2");
+            sum.chips.forEach(function(text) {
+                chips.appendChild(el("span",
+                    "badge bg-secondary-subtle text-secondary-emphasis "
+                    + "border border-secondary-subtle dna-chip", text));
             });
-            table.appendChild(tbody);
-            wrap.appendChild(table);
-            holder.appendChild(wrap);
-        });
+            block.appendChild(chips);
+        }
+        if (sum.blurb) {
+            block.appendChild(el("div", "dna-blurb mt-2", sum.blurb));
+        }
+        body.appendChild(block);
     }
 
     // ---- card rendering ---------------------------------------------------------
@@ -350,11 +271,11 @@ window.TrackDNA = (function() {
         header.appendChild(meta);
         body.appendChild(header);
 
+        renderSummary(body, card);
         renderDimensions(body, card);
-        buildMap(body, card);
         renderCorners(body, card);
         renderElevation(body, card);
-        renderSimilarity(body);
+        addDnaOverlays(card);
     }
 
     function render() {

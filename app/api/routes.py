@@ -353,22 +353,3 @@ def track_dna(track_id):
     if card is None:
         return jsonify(track_id=track_id, card=None)
     return jsonify(track_id=track_id, card=card_payload(card, track=track))
-
-
-@bp.route('/tracks/<int:track_id>/dna/similar')
-def track_dna_similar(track_id):
-    """On-the-fly weighted-Manhattan similarity for the track's card
-    against every other track's card of the same methodology version."""
-    if not current_user.is_authenticated:
-        return jsonify(error='Authentication required'), 401
-
-    track = db.session.get(Track, track_id)
-    if track is None or track.created_by is not None:
-        return jsonify(error='Track not found'), 404
-
-    from app.track_dna.cards import similar_payload
-
-    payload = similar_payload(track_id)
-    if payload is None:
-        return jsonify(error='No Track DNA card computed for this track'), 404
-    return jsonify(payload)
