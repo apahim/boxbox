@@ -71,6 +71,8 @@ jobs:
             cd ~/boxbox
             docker compose -f docker-compose.prod.yml --env-file .env.production pull web
             docker compose -f docker-compose.prod.yml --env-file .env.production up -d web
-            docker compose -f docker-compose.prod.yml --env-file .env.production exec web flask db upgrade
+            # Migrations run in the container entrypoint (entrypoint.sh);
+            # running them here too races the entrypoint's own run and
+            # fails with duplicate DDL when a migration is pending.
             sleep 5
             docker compose -f docker-compose.prod.yml --env-file .env.production exec web curl -f http://localhost:5000/health

@@ -54,7 +54,7 @@ venv/bin/podman-compose exec web python -m pytest tests/ -x -q # run tests in co
 ## Deployment
 
 - Production is a single droplet running the app with docker compose (`docker-compose.prod.yml` + `.env.production`); the repo is checked out at `~/boxbox` on the server
-- Deploys are fully automated: push to `main` → GitHub Actions (`.github/workflows/deploy.yml`) runs the test suite, builds the image as `ghcr.io/apahim/boxbox` (tagged `latest` + commit SHA), then SSHes to the droplet to pull the image, restart `web`, run `flask db upgrade`, and health-check `/health`
+- Deploys are fully automated: push to `main` → GitHub Actions (`.github/workflows/deploy.yml`) runs the test suite, builds the image as `ghcr.io/apahim/boxbox` (tagged `latest` + commit SHA), then SSHes to the droplet to pull the image, restart `web`, and health-check `/health`. Migrations run in the container entrypoint (`entrypoint.sh` runs `flask db upgrade` before exec'ing the server) — the workflow must NOT run `flask db upgrade` itself or it races the entrypoint and fails with duplicate DDL when a migration is pending
 - Never deploy by hand (no manual image pushes, no manual restarts) — all changes reach production via git push to `main`
 - Deploy credentials live in GitHub Actions secrets (`DROPLET_HOST`, `DROPLET_USER`, `DROPLET_SSH_KEY`)
 - The MapKit JS token (`MAPKIT_TOKEN`) expires roughly every 6 months — when it does, track maps stop loading while everything else keeps working. Check the Admin dashboard (Data Health → MapKit token) or startup logs. Regenerate with `venv/bin/python scripts/generate_mapkit_token.py --team-id <TEAM_ID>` (key: `config/AuthKey_*.p8`), update `.env.production` on the droplet, and restart `web`
@@ -75,7 +75,8 @@ docker compose -f docker-compose.prod.yml --env-file .env.production exec web py
 # Flask shell (interactive)
 docker compose -f docker-compose.prod.yml --env-file .env.production exec web flask shell
 
-# Run pending migrations manually (Actions does this on every deploy)
+# Run pending migrations manually (normally the container entrypoint
+# does this on every start; this is only for manual intervention)
 docker compose -f docker-compose.prod.yml --env-file .env.production exec web flask db upgrade
 ```
 
